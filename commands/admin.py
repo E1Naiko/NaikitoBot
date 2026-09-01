@@ -22,17 +22,28 @@ from config import (
 
 from modules.ssf.services import (
     revivir_participante,
+    iniciar_desafio,
 )
 
+
+# ============================================================
+# COG ADMIN
+# ============================================================
 
 class Admin(commands.GroupCog, group_name="admin"):
     """Comandos administrativos del bot."""
 
-    def __init__(
-        self,
-        bot: commands.Bot,
-    ):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    # ========================================================
+    # GRUPO SSF
+    # ========================================================
+
+    ssf = app_commands.Group(
+        name="ssf",
+        description="Comandos administrativos de SeptSinFP.",
+    )
 
     # ========================================================
     # INFO
@@ -113,7 +124,7 @@ class Admin(commands.GroupCog, group_name="admin"):
         self,
         interaction: discord.Interaction,
     ):
-        """Muestra estadísticas generales del servidor."""
+        """Muestra estadísticas generales."""
 
         if interaction.user.id not in ADMIN_USER_IDS:
             await interaction.response.send_message(
@@ -124,8 +135,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
         if interaction.guild is None:
             await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor.",
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
                 ephemeral=True,
             )
             return
@@ -183,7 +193,7 @@ class Admin(commands.GroupCog, group_name="admin"):
         self,
         interaction: discord.Interaction,
     ):
-        """Muestra el ranking histórico del servidor."""
+        """Muestra el ranking histórico."""
 
         if interaction.user.id not in ADMIN_USER_IDS:
             await interaction.response.send_message(
@@ -194,8 +204,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
         if interaction.guild is None:
             await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor.",
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
                 ephemeral=True,
             )
             return
@@ -264,10 +273,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
     @app_commands.command(
         name="resetdia",
-        description=(
-            "Elimina el registro de Madrugue de "
-            "un usuario para una fecha."
-        ),
+        description="Elimina el registro de Madrugue de un usuario para una fecha.",
     )
     @app_commands.describe(
         usuario="Usuario cuyo registro quieres eliminar.",
@@ -279,7 +285,7 @@ class Admin(commands.GroupCog, group_name="admin"):
         usuario: discord.Member,
         fecha: str,
     ):
-        """Elimina el registro de un usuario para una fecha."""
+        """Elimina un registro diario."""
 
         if interaction.user.id not in ADMIN_USER_IDS:
             await interaction.response.send_message(
@@ -290,8 +296,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
         if interaction.guild is None:
             await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor.",
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
                 ephemeral=True,
             )
             return
@@ -352,10 +357,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
     @app_commands.command(
         name="resetusuario",
-        description=(
-            "Elimina todos los registros de Madrugue "
-            "de un usuario."
-        ),
+        description="Elimina todos los registros de Madrugue de un usuario.",
     )
     @app_commands.describe(
         usuario="Usuario cuyos registros quieres eliminar.",
@@ -376,8 +378,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
         if interaction.guild is None:
             await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor.",
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
                 ephemeral=True,
             )
             return
@@ -424,24 +425,15 @@ class Admin(commands.GroupCog, group_name="admin"):
 
     @app_commands.command(
         name="resettotal",
-        description=(
-            "Elimina todos los registros de "
-            "Madrugue del servidor."
-        ),
+        description="Elimina todos los registros de Madrugue del servidor.",
     )
     @app_commands.describe(
         confirmar="Confirma el borrado total.",
     )
     @app_commands.choices(
         confirmar=[
-            app_commands.Choice(
-                name="SI",
-                value="SI",
-            ),
-            app_commands.Choice(
-                name="NO",
-                value="NO",
-            ),
+            app_commands.Choice(name="SI", value="SI"),
+            app_commands.Choice(name="NO", value="NO"),
         ]
     )
     async def resettotal(
@@ -460,8 +452,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
         if interaction.guild is None:
             await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor.",
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
                 ephemeral=True,
             )
             return
@@ -482,8 +473,7 @@ class Admin(commands.GroupCog, group_name="admin"):
 
         if registros == 0:
             await interaction.response.send_message(
-                "ℹ️ No hay registros de Madrugue "
-                "para eliminar en este servidor.",
+                "ℹ️ No hay registros de Madrugue para eliminar en este servidor.",
                 ephemeral=True,
             )
             return
@@ -500,15 +490,6 @@ class Admin(commands.GroupCog, group_name="admin"):
             f"🏆 Puntos eliminados: **{puntos:.1f}**",
             ephemeral=True,
         )
-
-    # ========================================================
-    # GRUPO SSF
-    # ========================================================
-
-    ssf = app_commands.Group(
-        name="ssf",
-        description="Comandos administrativos de SeptSinFP.",
-    )
 
     # ========================================================
     # SSF - REVIVIR
@@ -528,11 +509,7 @@ class Admin(commands.GroupCog, group_name="admin"):
         usuario: discord.Member,
         fecha: str,
     ):
-        """Revive a un participante de SeptSinFP."""
-
-        # ----------------------------------------------------
-        # PERMISOS
-        # ----------------------------------------------------
+        """Revive un participante."""
 
         if interaction.user.id not in ADMIN_USER_IDS:
             await interaction.response.send_message(
@@ -541,21 +518,12 @@ class Admin(commands.GroupCog, group_name="admin"):
             )
             return
 
-        # ----------------------------------------------------
-        # SERVIDOR
-        # ----------------------------------------------------
-
         if interaction.guild is None:
             await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor.",
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
                 ephemeral=True,
             )
             return
-
-        # ----------------------------------------------------
-        # VALIDAR FECHA
-        # ----------------------------------------------------
 
         try:
             fecha_obj = date.fromisoformat(fecha)
@@ -569,67 +537,47 @@ class Admin(commands.GroupCog, group_name="admin"):
             )
             return
 
-        # ----------------------------------------------------
-        # REVIVIR
-        # ----------------------------------------------------
-
         resultado = revivir_participante(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
             fecha=fecha_obj,
         )
 
-        # ----------------------------------------------------
-        # RESULTADOS
-        # ----------------------------------------------------
-
         if not resultado["exitoso"]:
 
-            if resultado["motivo"] == "sin_desafio":
-                mensaje = (
+            motivos = {
+                "sin_desafio": (
                     "⚠️ No hay un desafío SeptSinFP activo."
-                )
-
-            elif resultado["motivo"] == "fuera_de_fecha":
-                mensaje = (
+                ),
+                "fuera_de_fecha": (
                     "⚠️ La fecha indicada está fuera "
                     "del período del desafío."
-                )
-
-            elif resultado["motivo"] == "no_participante":
-                mensaje = (
+                ),
+                "no_participante": (
                     f"ℹ️ **{usuario.display_name}** "
                     "no está registrado como participante "
                     "de SeptSinFP."
-                )
-
-            elif resultado["motivo"] == "no_eliminado":
-                mensaje = (
+                ),
+                "no_eliminado": (
                     f"ℹ️ **{usuario.display_name}** "
                     "no está eliminado.\n"
                     "No es necesario revivirlo."
-                )
-
-            elif resultado["motivo"] == "ya_registrado":
-                mensaje = (
+                ),
+                "ya_registrado": (
                     f"ℹ️ **{usuario.display_name}** "
                     f"ya tiene registrado el día **{fecha}**."
-                )
-
-            else:
-                mensaje = (
-                    "⚠️ No se pudo revivir al participante."
-                )
+                ),
+            }
 
             await interaction.response.send_message(
-                mensaje,
+                motivos.get(
+                    resultado["motivo"],
+                    "⚠️ No se pudo revivir al participante.",
+                ),
                 ephemeral=True,
             )
-            return
 
-        # ----------------------------------------------------
-        # ÉXITO
-        # ----------------------------------------------------
+            return
 
         await interaction.response.send_message(
             f"💚 **Participante revivido correctamente.**\n\n"
@@ -643,14 +591,86 @@ class Admin(commands.GroupCog, group_name="admin"):
             "volver a utilizar `/ssf sobrevivi` normalmente."
         )
 
+    # ========================================================
+    # SSF - INICIAR
+    # ========================================================
+
+    @ssf.command(
+        name="iniciar",
+        description="Inicia un nuevo desafío SeptSinFP.",
+    )
+    @app_commands.describe(
+        canal="Canal donde se utilizarán los comandos de SeptSinFP.",
+    )
+    async def ssf_iniciar(
+        self,
+        interaction: discord.Interaction,
+        canal: discord.TextChannel,
+    ):
+        """Inicia un nuevo desafío."""
+
+        if interaction.user.id not in ADMIN_USER_IDS:
+            await interaction.response.send_message(
+                "⛔ No tienes permisos para utilizar este comando.",
+                ephemeral=True,
+            )
+            return
+
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
+                ephemeral=True,
+            )
+            return
+
+        fecha_inicio = "2026-09-01"
+        fecha_fin = "2026-09-30"
+
+        resultado = iniciar_desafio(
+            guild_id=interaction.guild.id,
+            nombre="SeptSinFP 2026",
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            canal_id=canal.id,
+        )
+
+        if not resultado["exitoso"]:
+
+            if resultado["motivo"] == "ya_existe":
+                mensaje = (
+                    "⚠️ Ya existe un desafío SeptSinFP "
+                    "activo en este servidor."
+                )
+            else:
+                mensaje = (
+                    "⚠️ No se pudo iniciar el desafío."
+                )
+
+            await interaction.response.send_message(
+                mensaje,
+                ephemeral=True,
+            )
+
+            return
+
+        await interaction.response.send_message(
+            f"🎯 **SeptSinFP iniciado correctamente.**\n\n"
+            f"📋 Desafío: **SeptSinFP 2026**\n"
+            f"🗓️ Inicio: **{fecha_inicio}**\n"
+            f"🏁 Fin: **{fecha_fin}**\n"
+            f"📢 Canal: {canal.mention}\n"
+            f"🆔 ID del desafío: "
+            f"**{resultado['desafio_id']}**\n\n"
+            f"Los participantes ya pueden utilizar "
+            f"**/ssf registrar** en {canal.mention}."
+        )
+
 
 # ============================================================
 # SETUP
 # ============================================================
 
-async def setup(
-    bot: commands.Bot,
-):
+async def setup(bot: commands.Bot):
     """Carga el Cog administrativo."""
 
     await bot.add_cog(

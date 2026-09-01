@@ -2,6 +2,7 @@ import discord
 
 from datetime import timedelta
 
+from discord import app_commands
 from discord.ext import commands, tasks
 
 from config import GUILD_TEST, PREFIX
@@ -15,10 +16,12 @@ from modules.ssf.services import (
 
 from modules.ssf.database import inicializar_db
 
+
 class NaikitoBot(commands.Bot):
     """Clase principal del bot."""
 
     def __init__(self):
+
         intents = discord.Intents.default()
         intents.message_content = True
 
@@ -31,24 +34,27 @@ class NaikitoBot(commands.Bot):
         # Última fecha procesada por el sistema automático de SSF.
         self.ssf_ultima_revision = None
 
+    # ========================================================
+    # SETUP
+    # ========================================================
+
     async def setup_hook(self):
-        """Carga los módulos, sincroniza comandos e inicia tareas."""
-
-        print("Configurando Naikito Bot...")
+        """Carga módulos, sincroniza comandos e inicia tareas."""
 
         print("Configurando Naikito Bot...")
 
         # ====================================================
-        # INICIALIZAR BASE DE DATOS SSF
+        # BASE DE DATOS SSF
         # ====================================================
-        
+
         inicializar_db()
-        
+
         print("Base de datos SSF inicializada.")
-        
+
         # ====================================================
         # CARGAR COMANDOS
         # ====================================================
+
         await self.load_extension(
             "commands.general"
         )
@@ -60,6 +66,25 @@ class NaikitoBot(commands.Bot):
         await self.load_extension(
             "commands.admin"
         )
+        
+        admin_cog = self.get_cog("Admin")
+
+        print()
+        print("========== ADMIN LOCAL ==========")
+        
+        if admin_cog:
+            print("Admin encontrado:", admin_cog)
+        
+            print("App commands del Admin:")
+        
+            for comando in admin_cog.walk_app_commands():
+                print(
+                    f"- {comando.qualified_name} | "
+                    f"tipo={type(comando).__name__}"
+                )
+        
+        print("=================================")
+        print()
 
         await self.load_extension(
             "commands.ssf"
@@ -70,6 +95,7 @@ class NaikitoBot(commands.Bot):
         # ====================================================
 
         if GUILD_TEST:
+
             guild = discord.Object(
                 id=GUILD_TEST
             )
@@ -81,20 +107,38 @@ class NaikitoBot(commands.Bot):
             comandos = await self.tree.sync(
                 guild=guild
             )
-            
+
+            print()
             print("COMANDOS REGISTRADOS:")
+            print("=" * 60)
 
             for comando in comandos:
+
                 print(
                     f"- {comando.name} | "
                     f"tipo={type(comando).__name__}"
                 )
             
-                if hasattr(comando, "commands"):
+                if isinstance(comando, app_commands.Group):
+            
                     for subcomando in comando.commands:
+            
                         print(
-                            f"    └── {subcomando.name}"
+                            f"    └── {subcomando.name} | "
+                            f"tipo={type(subcomando).__name__}"
                         )
+            
+                        if isinstance(subcomando, app_commands.Group):
+            
+                            for subsubcomando in subcomando.commands:
+            
+                                print(
+                                    f"        └── {subsubcomando.name} | "
+                                    f"tipo={type(subsubcomando).__name__}"
+                                )
+
+            print("=" * 60)
+            print()
 
             print(
                 "Comandos sincronizados en servidor "
@@ -102,6 +146,7 @@ class NaikitoBot(commands.Bot):
             )
 
         else:
+
             comandos = await self.tree.sync()
 
             print(
@@ -109,8 +154,47 @@ class NaikitoBot(commands.Bot):
                 f"{len(comandos)}"
             )
 
+            print()
+            print("COMANDOS REGISTRADOS:")
+            print("=" * 60)
+
+            for comando in comandos:
+
+                print(
+                    f"- {comando.name} | "
+                    f"tipo={type(comando).__name__}"
+                )
+
+                if isinstance(
+                    comando,
+                    app_commands.Group,
+                ):
+
+                    for subcomando in comando.commands:
+
+                        print(
+                            f"    └── {subcomando.name} | "
+                            f"tipo={type(subcomando).__name__}"
+                        )
+
+                        if isinstance(
+                            subcomando,
+                            app_commands.Group,
+                        ):
+
+                            for subsubcomando in subcomando.commands:
+
+                                print(
+                                    f"        └── "
+                                    f"{subsubcomando.name} | "
+                                    f"tipo={type(subsubcomando).__name__}"
+                                )
+
+            print("=" * 60)
+            print()
+
         # ====================================================
-        # INICIAR TAREA AUTOMÁTICA DE SSF
+        # INICIAR TAREA AUTOMÁTICA
         # ====================================================
 
         self.procesar_ssf_automatico.start()
@@ -127,14 +211,14 @@ class NaikitoBot(commands.Bot):
         Después de las 00:05:
         - Revisa el día anterior.
         - Elimina participantes que no sobrevivieron.
-        - Publica el resumen en el canal correspondiente.
-        - Cierra desafíos que hayan finalizado.
+        - Publica el resumen.
+        - Cierra desafíos finalizados.
         """
 
         ahora_actual = ahora()
 
         # ====================================================
-        # ANTES DE LAS 00:05 NO HACER NADA
+        # ANTES DE LAS 00:05
         # ====================================================
 
         if (
@@ -153,7 +237,7 @@ class NaikitoBot(commands.Bot):
         )
 
         # ====================================================
-        # EVITAR PROCESAR LA MISMA FECHA DOS VECES
+        # EVITAR DUPLICADOS
         # ====================================================
 
         if self.ssf_ultima_revision == fecha_a_revisar:
@@ -177,7 +261,7 @@ class NaikitoBot(commands.Bot):
             )
 
             # =================================================
-            # PROCESAR CADA DESAFÍO
+            # PROCESAR DESAFÍOS
             # =================================================
 
             for resultado in resultados:
@@ -193,7 +277,7 @@ class NaikitoBot(commands.Bot):
                 )
 
                 # =============================================
-                # BUSCAR SERVIDOR
+                # SERVIDOR
                 # =============================================
 
                 guild = self.get_guild(
@@ -201,14 +285,16 @@ class NaikitoBot(commands.Bot):
                 )
 
                 if guild is None:
+
                     print(
                         "[SSF] ⚠️ No se encontró el "
                         f"servidor {resultado['guild_id']}."
                     )
+
                     continue
 
                 # =============================================
-                # BUSCAR CANAL
+                # CANAL
                 # =============================================
 
                 canal = guild.get_channel(
@@ -216,15 +302,17 @@ class NaikitoBot(commands.Bot):
                 )
 
                 if canal is None:
+
                     print(
                         "[SSF] ⚠️ No se encontró el "
                         f"canal {resultado['canal_id']} "
                         f"en {guild.name}."
                     )
+
                     continue
 
                 # =============================================
-                # CREAR EMBED
+                # EMBED
                 # =============================================
 
                 embed = discord.Embed(
@@ -240,6 +328,7 @@ class NaikitoBot(commands.Bot):
                     nombres = []
 
                     for participante in eliminados:
+
                         nombres.append(
                             f"💀 **{participante['username']}**"
                         )
@@ -311,7 +400,7 @@ class NaikitoBot(commands.Bot):
                     )
 
             # =================================================
-            # CERRAR DESAFÍOS FINALIZADOS
+            # CERRAR DESAFÍOS
             # =================================================
 
             try:
@@ -321,6 +410,7 @@ class NaikitoBot(commands.Bot):
                 )
 
                 if cerrados:
+
                     print(
                         "[SSF] 🔒 Desafíos finalizados cerrados: "
                         f"{cerrados}"
@@ -334,7 +424,7 @@ class NaikitoBot(commands.Bot):
                 )
 
             # =================================================
-            # MARCAR FECHA COMO PROCESADA
+            # MARCAR COMO PROCESADO
             # =================================================
 
             self.ssf_ultima_revision = fecha_a_revisar
@@ -357,7 +447,6 @@ class NaikitoBot(commands.Bot):
 
     @procesar_ssf_automatico.before_loop
     async def antes_de_procesar_ssf(self):
-        """Espera hasta que el bot esté conectado."""
 
         await self.wait_until_ready()
 
@@ -366,7 +455,6 @@ class NaikitoBot(commands.Bot):
     # ========================================================
 
     async def on_ready(self):
-        """Se ejecuta cuando el bot está conectado."""
 
         print(
             f"Naikito Bot conectado como {self.user}"
