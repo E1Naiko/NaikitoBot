@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from config import (
     BONUS_MAXIMO,
@@ -110,3 +110,125 @@ def calcular_multiplicador_horario(hora_actual):
     return 1.0 + calcular_bonus_horario(
         hora_actual
     )
+
+
+# ============================================================
+# RACHA ACTUAL
+# ============================================================
+
+def calcular_racha_actual(
+    fechas_registradas,
+    fecha_actual,
+):
+    """
+    Calcula la racha actual a partir de un conjunto
+    de fechas registradas.
+
+    La racha solo está activa si existe un registro
+    para la fecha actual.
+    """
+
+    if not fechas_registradas:
+        return 0
+
+    fechas = set(fechas_registradas)
+
+    if fecha_actual not in fechas:
+        return 0
+
+    racha = 0
+    fecha_comprobar = fecha_actual
+
+    while fecha_comprobar in fechas:
+
+        racha += 1
+
+        fecha_comprobar -= timedelta(
+            days=1
+        )
+
+    return racha
+
+# ============================================================
+# MEJOR RACHA
+# ============================================================
+
+def calcular_mejor_racha(
+    fechas_registradas,
+):
+    """
+    Calcula la mejor racha histórica
+    a partir de las fechas registradas.
+    """
+
+    if not fechas_registradas:
+        return 0
+
+    fechas = sorted(fechas_registradas)
+
+    mejor = 1
+    actual = 1
+
+    for i in range(
+        1,
+        len(fechas),
+    ):
+
+        diferencia = (
+            fechas[i] -
+            fechas[i - 1]
+        )
+
+        if diferencia == timedelta(days=1):
+
+            actual += 1
+
+        else:
+
+            actual = 1
+
+        mejor = max(
+            mejor,
+            actual,
+        )
+
+    return mejor
+
+# ============================================================
+# RACHA PARA NUEVO REGISTRO
+# ============================================================
+
+def calcular_racha_para_nuevo_registro(
+    fechas_registradas,
+    fecha,
+):
+    """
+    Calcula la racha que tendrá un nuevo registro.
+
+    Si existe un registro ayer, cuenta hacia atrás
+    desde ayer para determinar la racha anterior
+    y suma el registro nuevo.
+
+    Si no existe registro ayer, la racha comienza
+    en 1.
+    """
+
+    ayer = fecha - timedelta(days=1)
+
+    fechas = set(fechas_registradas)
+
+    if ayer not in fechas:
+        return 1
+
+    racha = 1
+    fecha_comprobar = ayer
+
+    while fecha_comprobar in fechas:
+
+        racha += 1
+
+        fecha_comprobar -= timedelta(
+            days=1
+        )
+
+    return racha

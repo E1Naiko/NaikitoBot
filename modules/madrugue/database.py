@@ -1,4 +1,5 @@
 from core.database import conectar_db
+from datetime import date
 
 
 # ============================================================
@@ -171,7 +172,7 @@ def obtener_fechas_registradas(
     user_id,
     orden="DESC",
 ):
-    """Devuelve las fechas registradas de un usuario."""
+    """Devuelve las fechas registradas de un usuario como objetos date."""
 
     if orden not in ("ASC", "DESC"):
         raise ValueError(
@@ -179,7 +180,7 @@ def obtener_fechas_registradas(
         )
 
     with conectar_db() as db:
-        return db.execute(f"""
+        filas = db.execute(f"""
             SELECT fecha
             FROM registros
             WHERE guild_id = ?
@@ -189,6 +190,11 @@ def obtener_fechas_registradas(
             guild_id,
             user_id,
         )).fetchall()
+
+    return [
+        date.fromisoformat(fila[0])
+        for fila in filas
+    ]
 
 
 # ============================================================
