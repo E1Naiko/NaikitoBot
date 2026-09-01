@@ -18,12 +18,24 @@ class NaikitoBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        """Se ejecuta antes de que el bot se conecte a Discord."""
+        """Carga los módulos del bot antes de conectarse."""
 
         print("Configurando Naikito Bot...")
+
+        await self.load_extension(
+            "commands.general"
+        )
+
+        await self.tree.sync()
+
+        print("Comandos de aplicación sincronizados.")
 
     async def on_ready(self):
         """Se ejecuta cuando el bot está conectado."""
 
-        print(f"Naikito Bot conectado como {self.user}")
-        print(f"ID: {self.user.id}")
+        print(
+            f"Naikito Bot conectado como {self.user}"
+        )
+        print(
+            f"ID: {self.user.id}"
+        )
