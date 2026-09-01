@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 
-from config import PREFIX
+from config import GUILD_TEST, PREFIX
 
 
 class NaikitoBot(commands.Bot):
@@ -18,7 +18,7 @@ class NaikitoBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        """Carga los módulos del bot antes de conectarse."""
+        """Carga los módulos y sincroniza los comandos."""
 
         print("Configurando Naikito Bot...")
 
@@ -26,9 +26,33 @@ class NaikitoBot(commands.Bot):
             "commands.general"
         )
 
-        await self.tree.sync()
+        await self.load_extension(
+            "commands.madrugue"
+        )
 
-        print("Comandos de aplicación sincronizados.")
+        if GUILD_TEST:
+            guild = discord.Object(id=GUILD_TEST)
+
+            self.tree.copy_global_to(
+                guild=guild
+            )
+
+            comandos = await self.tree.sync(
+                guild=guild
+            )
+
+            print(
+                f"Comandos sincronizados en servidor de prueba: "
+                f"{len(comandos)}"
+            )
+
+        else:
+            comandos = await self.tree.sync()
+
+            print(
+                f"Comandos globales sincronizados: "
+                f"{len(comandos)}"
+            )
 
     async def on_ready(self):
         """Se ejecuta cuando el bot está conectado."""
