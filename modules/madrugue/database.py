@@ -448,6 +448,23 @@ def eliminar_registros_usuario(
 
         return cursor.rowcount
 
+def eliminar_registros_servidor(
+    guild_id,
+):
+    """Elimina todos los registros de Madrugue de un servidor."""
+
+    with conectar_db() as db:
+
+        cursor = db.execute("""
+            DELETE FROM registros
+            WHERE guild_id = ?
+        """, (
+            guild_id,
+        ))
+
+        db.commit()
+
+        return cursor.rowcount
 
 def eliminar_registros_servidor(
     guild_id,
