@@ -6,6 +6,7 @@ from core.utils import ahora
 
 from modules.madrugue.services import (
     obtener_stats_madrugue,
+    obtener_top_madrugue,
     registrar_madrugue,
 )
 
@@ -113,6 +114,77 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
             f"**{stats['total_puntos']:.1f}**\n"
             f"🔥 Mejor racha: "
             f"**{stats['mejor_racha']} días**"
+        )
+
+    @app_commands.command(
+        name="top",
+        description="Muestra el TOP de Madrugue del servidor.",
+    )
+    async def top(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Muestra el ranking histórico de Madrugue."""
+
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "⚠️ Este comando solo puede utilizarse "
+                "dentro de un servidor."
+            )
+            return
+
+        resultados = obtener_top_madrugue(
+            interaction.guild.id,
+            limite=10,
+        )
+
+        if not resultados:
+            await interaction.response.send_message(
+                "🏆 Todavía no hay madrugadores registrados."
+            )
+            return
+
+        embed = discord.Embed(
+            title="🏆 TOP Madrugadores",
+            description="Ranking histórico del servidor.",
+        )
+
+        medallas = {
+            1: "🥇",
+            2: "🥈",
+            3: "🥉",
+        }
+
+        lineas = []
+
+        for posicion, (
+            user_id,
+            username,
+            puntos,
+        ) in enumerate(resultados, start=1):
+
+            medalla = medallas.get(
+                posicion,
+                f"**{posicion}.**",
+            )
+
+            lineas.append(
+                f"{medalla} **{username}** — "
+                f"**{puntos:.0f} puntos**"
+            )
+
+        embed.add_field(
+            name="Ranking",
+            value="\n".join(lineas),
+            inline=False,
+        )
+
+        embed.set_footer(
+            text=f"Servidor: {interaction.guild.name}"
+        )
+
+        await interaction.response.send_message(
+            embed=embed
         )
 
 

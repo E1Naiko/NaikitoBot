@@ -5,6 +5,7 @@ from modules.madrugue.database import (
     guardar_registro,
     obtener_fechas_registradas,
     obtener_registro_del_dia,
+    obtener_top_madrugadores,
     obtener_total_puntos,
 )
 
@@ -170,3 +171,16 @@ def obtener_stats_madrugue(
         "total_puntos": total_puntos,
         "mejor_racha": mejor_racha,
     }
+    
+def obtener_top_madrugue(
+    guild_id,
+    limite=10,
+):
+    """
+    Obtiene el TOP de Madrugue de un servidor.
+    """
+
+    return obtener_top_madrugadores(
+        guild_id,
+        limite,
+    )
