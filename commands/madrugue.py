@@ -11,21 +11,25 @@ from modules.madrugue.services import (
 )
 
 
-class Madrugue(commands.GroupCog, group_name="madrugue"):
+class Madrugue(commands.Cog):
     """Comandos del sistema Madrugue."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    # ========================================================
+    # /madrugue
+    # ========================================================
+
     @app_commands.command(
-        name="registrar",
-        description="Registra tu madrugue.",
+        name="madrugue",
+        description="Registra tu madrugada.",
     )
-    async def registrar(
+    async def madrugue(
         self,
         interaction: discord.Interaction,
     ):
-        """Registra una madrugada."""
+        """Registra directamente una madrugada."""
 
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -85,8 +89,12 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
             f"**{resultado.total_puntos:.1f}**"
         )
 
+    # ========================================================
+    # /madrugue_stats
+    # ========================================================
+
     @app_commands.command(
-        name="stats",
+        name="madrugue_stats",
         description="Muestra tus estadísticas de Madrugue.",
     )
     async def stats(
@@ -116,8 +124,12 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
             f"**{stats['mejor_racha']} días**"
         )
 
+    # ========================================================
+    # /madrugue_top
+    # ========================================================
+
     @app_commands.command(
-        name="top",
+        name="madrugue_top",
         description="Muestra el TOP de Madrugue del servidor.",
     )
     async def top(
@@ -187,8 +199,12 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
             embed=embed
         )
 
+    # ========================================================
+    # /madrugue_ayuda
+    # ========================================================
+
     @app_commands.command(
-        name="ayuda",
+        name="madrugue_ayuda",
         description="Muestra los comandos de Madrugue.",
     )
     async def ayuda(
@@ -205,7 +221,7 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
         )
 
         embed.add_field(
-            name="🌅 /madrugue registrar",
+            name="🌅 /madrugue",
             value=(
                 "Registra tu madrugada y obtiene los puntos "
                 "correspondientes a la hora."
@@ -214,7 +230,7 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
         )
 
         embed.add_field(
-            name="📊 /madrugue stats",
+            name="📊 /madrugue_stats",
             value=(
                 "Muestra tus puntos acumulados y tu mejor racha."
             ),
@@ -222,7 +238,7 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
         )
 
         embed.add_field(
-            name="🏆 /madrugue top",
+            name="🏆 /madrugue_top",
             value=(
                 "Muestra el ranking histórico de madrugadores "
                 "del servidor."
@@ -251,14 +267,17 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
         )
 
         embed.set_footer(
-            text=f"Servidor: {interaction.guild.name}"
-            if interaction.guild
-            else "Madrugue"
+            text=(
+                f"Servidor: {interaction.guild.name}"
+                if interaction.guild
+                else "Madrugue"
+            )
         )
 
         await interaction.response.send_message(
             embed=embed
         )
+
 
 async def setup(bot: commands.Bot):
     """Carga el Cog de Madrugue."""

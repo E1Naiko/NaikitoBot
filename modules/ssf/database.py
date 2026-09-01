@@ -72,6 +72,19 @@ def inicializar_db():
             )
         """)
 
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS ssf_revisiones (
+                desafio_id INTEGER PRIMARY KEY,
+                ultima_fecha TEXT NOT NULL,
+
+                FOREIGN KEY (
+                    desafio_id
+                )
+                REFERENCES ssf_desafios(id)
+                ON DELETE CASCADE
+            )
+        """)
+
         db.commit()
 
 
@@ -452,7 +465,7 @@ def reactivar_participante(
         ))
 
         db.commit()
-        
+
 def obtener_desafios_activos():
     """Obtiene todos los desafíos activos."""
 
@@ -471,3 +484,91 @@ def obtener_desafios_activos():
             WHERE activo = 1
             ORDER BY id ASC
         """).fetchall()
+
+# ============================================================
+# CONTROL DE REVISIONES AUTOMÁTICAS
+# ============================================================
+
+def obtener_ultima_revision_ssf(desafio_id):
+    """Obtiene la última fecha procesada automáticamente."""
+
+    with conectar_db() as db:
+
+        resultado = db.execute("""
+            SELECT ultima_fecha
+            FROM ssf_revisiones
+            WHERE desafio_id = ?
+        """, (
+            desafio_id,
+        )).fetchone()
+
+    if resultado is None:
+        return None
+
+    return resultado[0]
+
+
+def guardar_ultima_revision_ssf(
+    desafio_id,
+    fecha,
+):
+    """Guarda la última fecha procesada automáticamente."""
+
+    with conectar_db() as db:
+
+        db.execute("""
+            INSERT INTO ssf_revisiones (
+                desafio_id,
+                ultima_fecha
+            )
+            VALUES (?, ?)
+            ON CONFLICT(desafio_id)
+            DO UPDATE SET
+                ultima_fecha = excluded.ultima_fecha
+        """, (
+            desafio_id,
+            fecha,
+        ))
+
+        db.commit()
+
+def obtener_ranking_final(desafio_id):
+    """Obtiene el ranking final de un desafío."""
+
+    with conectar_db() as db:
+
+        return db.execute("""
+            SELECT
+                user_id,
+                username,
+                eliminado,
+                racha_actual,
+                mejor_racha
+            FROM ssf_participantes
+            WHERE desafio_id = ?
+            ORDER BY
+                eliminado ASC,
+                mejor_racha DESC,
+                username COLLATE NOCASE ASC
+        """, (
+            desafio_id,
+        )).fetchall()
+
+
+def marcar_desafio_cerrado(desafio_id):
+    """Marca un desafío como cerrado."""
+
+    with conectar_db() as db:
+
+        cursor = db.execute("""
+            UPDATE ssf_desafios
+            SET activo = 0
+            WHERE id = ?
+            AND activo = 1
+        """, (
+            desafio_id,
+        ))
+
+        db.commit()
+
+        return cursor.rowcount

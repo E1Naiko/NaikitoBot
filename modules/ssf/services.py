@@ -6,7 +6,6 @@ from modules.ssf.database import (
     eliminar_participante,
     guardar_registro,
     obtener_desafio_activo,
-    obtener_desafios_activos,
     obtener_estadisticas_desafio,
     obtener_participante,
     obtener_participantes,
@@ -15,6 +14,10 @@ from modules.ssf.database import (
     tiene_registro,
     actualizar_participante,
     reactivar_participante,
+    obtener_ultima_revision_ssf,
+    guardar_ultima_revision_ssf,
+    obtener_ranking_final,
+    marcar_desafio_cerrado,
 )
 
 from modules.ssf.logic import (
@@ -23,6 +26,8 @@ from modules.ssf.logic import (
     fecha_anterior,
     fecha_dentro_del_desafio,
 )
+
+from core.database import conectar_db
 
 
 def iniciar_desafio(
@@ -596,5 +601,269 @@ def procesar_eliminaciones_diarias(fecha):
                 "eliminados": eliminados,
             }
         )
+
+    return resultados
+
+# ============================================================
+# ELIMINACIÓN AUTOMÁTICA
+# ============================================================
+
+def procesar_eliminaciones_diarias(fecha):
+    """
+    Procesa la eliminación automática de todos los desafíos
+    SSF activos.
+
+    Cada desafío se procesa de manera independiente.
+    """
+
+    from modules.ssf.database import conectar_db
+
+    resultados = []
+
+    with conectar_db() as db:
+
+        desafios = db.execute("""
+            SELECT
+                id,
+                guild_id,
+                nombre,
+                fecha_inicio,
+                fecha_fin,
+                canal_id,
+                activo
+            FROM ssf_desafios
+            WHERE activo = 1
+        """).fetchall()
+
+    for desafio in desafios:
+
+        (
+            desafio_id,
+            guild_id,
+            nombre,
+            fecha_inicio,
+            fecha_fin,
+            canal_id,
+            activo,
+        ) = desafio
+
+        # ----------------------------------------------------
+        # COMPROBAR QUE LA FECHA PERTENECE AL DESAFÍO
+        # ----------------------------------------------------
+
+        if not fecha_dentro_del_desafio(
+            fecha,
+            fecha_inicio,
+            fecha_fin,
+        ):
+            continue
+
+        # ----------------------------------------------------
+        # EVITAR PROCESAR DOS VECES LA MISMA FECHA
+        # ----------------------------------------------------
+
+        ultima_revision = (
+            obtener_ultima_revision_ssf(
+                desafio_id
+            )
+        )
+
+        if ultima_revision is not None:
+
+            ultima_revision_obj = date.fromisoformat(
+                ultima_revision
+            )
+
+            if fecha <= ultima_revision_obj:
+                continue
+
+        # ----------------------------------------------------
+        # OBTENER PARTICIPANTES
+        # ----------------------------------------------------
+
+        participantes = obtener_participantes(
+            desafio_id
+        )
+
+        eliminados = []
+
+        for participante in participantes:
+
+            (
+                user_id,
+                username,
+                _fecha_registro,
+                eliminado,
+                _fecha_eliminacion,
+                _racha_actual,
+                _mejor_racha,
+            ) = participante
+
+            # Ya eliminado → no tocar.
+            if eliminado:
+                continue
+
+            # Tiene supervivencia → continúa.
+            if tiene_registro(
+                desafio_id,
+                user_id,
+                fecha.isoformat(),
+            ):
+                continue
+
+            # No registró → eliminar.
+            eliminar_participante(
+                desafio_id=desafio_id,
+                user_id=user_id,
+                fecha_eliminacion=fecha.isoformat(),
+            )
+
+            eliminados.append({
+                "user_id": user_id,
+                "username": username,
+            })
+
+        # ----------------------------------------------------
+        # GUARDAR FECHA PROCESADA
+        # ----------------------------------------------------
+
+        guardar_ultima_revision_ssf(
+            desafio_id=desafio_id,
+            fecha=fecha.isoformat(),
+        )
+
+        resultados.append({
+            "desafio_id": desafio_id,
+            "guild_id": guild_id,
+            "nombre": nombre,
+            "canal_id": canal_id,
+            "fecha": fecha,
+            "eliminados": eliminados,
+        })
+
+    return resultados
+
+# ============================================================
+# CIERRE AUTOMÁTICO
+# ============================================================
+
+def cerrar_desafios_finalizados(fecha):
+    """
+    Cierra automáticamente los desafíos cuya fecha de fin
+    ya fue procesada.
+
+    Devuelve la información necesaria para publicar
+    el resultado final.
+    """
+
+    resultados = []
+
+    with conectar_db() as db:
+
+        desafios = db.execute("""
+            SELECT
+                id,
+                guild_id,
+                nombre,
+                fecha_inicio,
+                fecha_fin,
+                canal_id,
+                activo
+            FROM ssf_desafios
+            WHERE activo = 1
+        """).fetchall()
+
+    for desafio in desafios:
+
+        (
+            desafio_id,
+            guild_id,
+            nombre,
+            fecha_inicio,
+            fecha_fin,
+            canal_id,
+            activo,
+        ) = desafio
+
+        fecha_fin_obj = date.fromisoformat(
+            fecha_fin
+        )
+
+        # ----------------------------------------------------
+        # TODAVÍA NO TERMINÓ
+        # ----------------------------------------------------
+
+        if fecha <= fecha_fin_obj:
+            continue
+
+        # ----------------------------------------------------
+        # EL ÚLTIMO DÍA TIENE QUE HABER SIDO PROCESADO
+        # ----------------------------------------------------
+
+        ultima_revision = (
+            obtener_ultima_revision_ssf(
+                desafio_id
+            )
+        )
+
+        if ultima_revision is None:
+            continue
+
+        ultima_revision_obj = date.fromisoformat(
+            ultima_revision
+        )
+
+        if ultima_revision_obj < fecha_fin_obj:
+            continue
+
+        # ----------------------------------------------------
+        # OBTENER RANKING FINAL
+        # ----------------------------------------------------
+
+        ranking = obtener_ranking_final(
+            desafio_id
+        )
+
+        total = len(ranking)
+
+        sobrevivientes = [
+            participante
+            for participante in ranking
+            if not participante[2]
+        ]
+
+        eliminados = [
+            participante
+            for participante in ranking
+            if participante[2]
+        ]
+
+        # ----------------------------------------------------
+        # CERRAR DESAFÍO
+        # ----------------------------------------------------
+
+        cerrado = marcar_desafio_cerrado(
+            desafio_id
+        )
+
+        if cerrado == 0:
+            continue
+
+        # ----------------------------------------------------
+        # GUARDAR RESULTADO
+        # ----------------------------------------------------
+
+        resultados.append({
+            "desafio_id": desafio_id,
+            "guild_id": guild_id,
+            "nombre": nombre,
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin,
+            "canal_id": canal_id,
+            "total": total,
+            "sobrevivientes": sobrevivientes,
+            "eliminados": eliminados,
+            "ranking": ranking,
+        })
 
     return resultados
