@@ -1,0 +1,14 @@
+from .settings import (
+    ADMIN_USER_IDS,
+    BONUS_MAXIMO,
+    BONUS_MINIMO,
+    DATABASE,
+    FIN_MADRUGADA,
+    GUILD_SERVIDOR,
+    GUILD_TEST,
+    PUNTOS_100_DESDE,
+    PUNTOS_25_DESDE,
+    PUNTOS_5_DESDE,
+    PREFIX,
+    TIMEZONE,
+)
