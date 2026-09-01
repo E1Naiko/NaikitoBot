@@ -430,7 +430,7 @@ def obtener_estadisticas_desafio(
         activos,
         eliminados,
     )
-    
+
 def reactivar_participante(
     desafio_id,
     user_id,
@@ -452,3 +452,22 @@ def reactivar_participante(
         ))
 
         db.commit()
+        
+def obtener_desafios_activos():
+    """Obtiene todos los desafíos activos."""
+
+    with conectar_db() as db:
+
+        return db.execute("""
+            SELECT
+                id,
+                guild_id,
+                nombre,
+                fecha_inicio,
+                fecha_fin,
+                canal_id,
+                activo
+            FROM ssf_desafios
+            WHERE activo = 1
+            ORDER BY id ASC
+        """).fetchall()

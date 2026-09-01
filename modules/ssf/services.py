@@ -6,6 +6,7 @@ from modules.ssf.database import (
     eliminar_participante,
     guardar_registro,
     obtener_desafio_activo,
+    obtener_desafios_activos,
     obtener_estadisticas_desafio,
     obtener_participante,
     obtener_participantes,
@@ -505,3 +506,95 @@ def revivir_participante(
         "mejor_racha": mejor_racha,
         "fecha": fecha,
     }
+
+def procesar_eliminaciones_diarias(fecha):
+    """
+    Elimina automáticamente a los participantes que no
+    registraron /ssf sobrevivi durante la fecha indicada.
+
+    Procesa todos los desafíos activos.
+    """
+
+    resultados = []
+
+    desafios = obtener_desafios_activos()
+
+    for desafio in desafios:
+
+        (
+            desafio_id,
+            guild_id,
+            nombre,
+            fecha_inicio,
+            fecha_fin,
+            canal_id,
+            activo,
+        ) = desafio
+
+        # ----------------------------------------------------
+        # Convertir fechas almacenadas en SQLite
+        # ----------------------------------------------------
+
+        inicio = date.fromisoformat(fecha_inicio)
+        fin = date.fromisoformat(fecha_fin)
+
+        # ----------------------------------------------------
+        # Solo procesar fechas dentro del desafío
+        # ----------------------------------------------------
+
+        if fecha < inicio or fecha > fin:
+            continue
+
+        # ----------------------------------------------------
+        # Obtener participantes
+        # ----------------------------------------------------
+
+        participantes = obtener_participantes(
+            desafio_id
+        )
+
+        eliminados = []
+
+        for participante in participantes:
+
+            user_id = participante[0]
+            username = participante[1]
+            eliminado = participante[3]
+
+            # Ya estaba eliminado.
+            if eliminado:
+                continue
+
+            # Tiene registro de supervivencia.
+            if tiene_registro(
+                desafio_id,
+                user_id,
+                fecha.isoformat(),
+            ):
+                continue
+
+            # No registró: eliminar.
+            eliminar_participante(
+                desafio_id=desafio_id,
+                user_id=user_id,
+                fecha_eliminacion=fecha.isoformat(),
+            )
+
+            eliminados.append(
+                {
+                    "user_id": user_id,
+                    "username": username,
+                }
+            )
+
+        resultados.append(
+            {
+                "desafio_id": desafio_id,
+                "guild_id": guild_id,
+                "nombre": nombre,
+                "fecha": fecha,
+                "eliminados": eliminados,
+            }
+        )
+
+    return resultados

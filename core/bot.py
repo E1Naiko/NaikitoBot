@@ -22,6 +22,10 @@ class NaikitoBot(commands.Bot):
 
         print("Configurando Naikito Bot...")
 
+        # ====================================================
+        # CARGAR COMANDOS
+        # ====================================================
+
         await self.load_extension(
             "commands.general"
         )
@@ -33,12 +37,19 @@ class NaikitoBot(commands.Bot):
         await self.load_extension(
             "commands.admin"
         )
+
         await self.load_extension(
             "commands.ssf"
         )
 
+        # ====================================================
+        # SINCRONIZAR COMANDOS
+        # ====================================================
+
         if GUILD_TEST:
-            guild = discord.Object(id=GUILD_TEST)
+            guild = discord.Object(
+                id=GUILD_TEST
+            )
 
             self.tree.copy_global_to(
                 guild=guild
@@ -49,15 +60,15 @@ class NaikitoBot(commands.Bot):
             )
 
             print(
-                f"Comandos sincronizados en servidor de prueba: "
-                f"{len(comandos)}"
+                "Comandos sincronizados en servidor "
+                f"de prueba: {len(comandos)}"
             )
 
         else:
             comandos = await self.tree.sync()
 
             print(
-                f"Comandos globales sincronizados: "
+                "Comandos sincronizados globalmente: "
                 f"{len(comandos)}"
             )
 
@@ -67,6 +78,7 @@ class NaikitoBot(commands.Bot):
         print(
             f"Naikito Bot conectado como {self.user}"
         )
+
         print(
             f"ID: {self.user.id}"
         )
