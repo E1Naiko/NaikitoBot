@@ -1,0 +1,19 @@
+# Entorno
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Base de datos
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+Thumbs.db
+.DS_Store
