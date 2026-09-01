@@ -1,5 +1,6 @@
-from core.database import conectar_db
 from datetime import date
+
+from core.database import conectar_db
 
 
 # ============================================================
@@ -262,6 +263,7 @@ def obtener_estadisticas(
                     ),
                     0
                 ),
+
                 COALESCE(
                     SUM(
                         CASE
@@ -272,6 +274,7 @@ def obtener_estadisticas(
                     ),
                     0
                 ),
+
                 COALESCE(
                     SUM(
                         CASE
@@ -340,7 +343,9 @@ def obtener_estadisticas(
 # ADMINISTRACIÓN
 # ============================================================
 
-def obtener_estadisticas_servidor(guild_id):
+def obtener_estadisticas_servidor(
+    guild_id,
+):
     """Devuelve estadísticas generales de un servidor."""
 
     with conectar_db() as db:
@@ -349,32 +354,43 @@ def obtener_estadisticas_servidor(guild_id):
             SELECT COUNT(DISTINCT user_id)
             FROM registros
             WHERE guild_id = ?
-        """, (guild_id,)).fetchone()[0]
+        """, (
+            guild_id,
+        )).fetchone()[0]
 
         registros = db.execute("""
             SELECT COUNT(*)
             FROM registros
             WHERE guild_id = ?
-        """, (guild_id,)).fetchone()[0]
+        """, (
+            guild_id,
+        )).fetchone()[0]
 
         puntos = db.execute("""
-            SELECT COALESCE(SUM(puntos_finales), 0)
+            SELECT COALESCE(
+                SUM(puntos_finales),
+                0
+            )
             FROM registros
             WHERE guild_id = ?
-        """, (guild_id,)).fetchone()[0]
+        """, (
+            guild_id,
+        )).fetchone()[0]
 
-        return (
-            madrugadores,
-            registros,
-            puntos,
-        )
+    return (
+        madrugadores,
+        registros,
+        puntos,
+    )
 
 
-def obtener_registros_de_hoy(guild_id, fecha):
+def obtener_registros_de_hoy(
+    guild_id,
+    fecha,
+):
     """Devuelve la cantidad de registros de un día."""
 
     with conectar_db() as db:
-
         return db.execute("""
             SELECT COUNT(*)
             FROM registros
@@ -433,6 +449,25 @@ def eliminar_registros_usuario(
         return cursor.rowcount
 
 
+def eliminar_registros_servidor(
+    guild_id,
+):
+    """Elimina todos los registros de Madrugue de un servidor."""
+
+    with conectar_db() as db:
+
+        cursor = db.execute("""
+            DELETE FROM registros
+            WHERE guild_id = ?
+        """, (
+            guild_id,
+        ))
+
+        db.commit()
+
+        return cursor.rowcount
+
+
 def obtener_resumen_usuario(
     guild_id,
     user_id,
@@ -444,7 +479,10 @@ def obtener_resumen_usuario(
         resultado = db.execute("""
             SELECT
                 COUNT(*),
-                COALESCE(SUM(puntos_finales), 0),
+                COALESCE(
+                    SUM(puntos_finales),
+                    0
+                ),
                 MIN(fecha),
                 MAX(fecha)
             FROM registros
@@ -540,7 +578,10 @@ def obtener_resumen_usuario_por_id(
         return db.execute("""
             SELECT
                 COUNT(*),
-                COALESCE(SUM(puntos_finales), 0),
+                COALESCE(
+                    SUM(puntos_finales),
+                    0
+                ),
                 MIN(fecha),
                 MAX(fecha)
             FROM registros
