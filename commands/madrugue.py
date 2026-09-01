@@ -187,6 +187,78 @@ class Madrugue(commands.GroupCog, group_name="madrugue"):
             embed=embed
         )
 
+    @app_commands.command(
+        name="ayuda",
+        description="Muestra los comandos de Madrugue.",
+    )
+    async def ayuda(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Muestra la ayuda del sistema Madrugue."""
+
+        embed = discord.Embed(
+            title="🌅 Ayuda de Madrugue",
+            description=(
+                "Sistema de registro y ranking de madrugadores."
+            ),
+        )
+
+        embed.add_field(
+            name="🌅 /madrugue registrar",
+            value=(
+                "Registra tu madrugada y obtiene los puntos "
+                "correspondientes a la hora."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="📊 /madrugue stats",
+            value=(
+                "Muestra tus puntos acumulados y tu mejor racha."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🏆 /madrugue top",
+            value=(
+                "Muestra el ranking histórico de madrugadores "
+                "del servidor."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="⏰ Horarios",
+            value=(
+                "**05:30 – 06:59** → 100 puntos\n"
+                "**07:00 – 08:59** → 25 puntos\n"
+                "**09:00 – 09:59** → 5 puntos\n"
+                "**10:00 en adelante** → fuera de horario"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="⭐ Multiplicador",
+            value=(
+                "Cuanto más temprano registres tu madrugada, "
+                "mayor será el multiplicador."
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(
+            text=f"Servidor: {interaction.guild.name}"
+            if interaction.guild
+            else "Madrugue"
+        )
+
+        await interaction.response.send_message(
+            embed=embed
+        )
 
 async def setup(bot: commands.Bot):
     """Carga el Cog de Madrugue."""

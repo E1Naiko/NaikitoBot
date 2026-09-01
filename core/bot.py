@@ -30,6 +30,10 @@ class NaikitoBot(commands.Bot):
             "commands.madrugue"
         )
 
+        await self.load_extension(
+            "commands.admin"
+        )
+
         if GUILD_TEST:
             guild = discord.Object(id=GUILD_TEST)
 
