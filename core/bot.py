@@ -13,6 +13,7 @@ from modules.ssf.services import (
     cerrar_desafios_finalizados,
 )
 
+from modules.ssf.database import inicializar_db
 
 class NaikitoBot(commands.Bot):
     """Clase principal del bot."""
@@ -35,10 +36,19 @@ class NaikitoBot(commands.Bot):
 
         print("Configurando Naikito Bot...")
 
+        print("Configurando Naikito Bot...")
+
+        # ====================================================
+        # INICIALIZAR BASE DE DATOS SSF
+        # ====================================================
+        
+        inicializar_db()
+        
+        print("Base de datos SSF inicializada.")
+        
         # ====================================================
         # CARGAR COMANDOS
         # ====================================================
-
         await self.load_extension(
             "commands.general"
         )
