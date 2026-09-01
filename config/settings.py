@@ -78,3 +78,23 @@ ADMIN_USER_IDS = {
 
 GUILD_SERVIDOR = int(os.getenv("GUILD_SERVIDOR", "0"))
 GUILD_TEST = int(os.getenv("GUILD_TEST", "0"))
+
+# ============================================================
+# CONFIGURACIÓN DE SEPTIEMBRESINFAP
+# ============================================================
+
+SSF_CANALES_ID = {
+    int(canal_id.strip())
+    for canal_id in os.getenv("SSF_CANALES_ID", "").split(",")
+    if canal_id.strip()
+}
+
+SSF_FECHA_INICIO = os.getenv(
+    "SSF_FECHA_INICIO",
+    "2026-09-01",
+)
+
+SSF_FECHA_FIN = os.getenv(
+    "SSF_FECHA_FIN",
+    "2026-09-30",
+)

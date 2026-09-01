@@ -1,3 +1,5 @@
+from datetime import date
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -16,6 +18,10 @@ from config import (
     ADMIN_USER_IDS,
     GUILD_SERVIDOR,
     GUILD_TEST,
+)
+
+from modules.ssf.services import (
+    revivir_participante,
 )
 
 
@@ -290,8 +296,6 @@ class Admin(commands.GroupCog, group_name="admin"):
             )
             return
 
-        from datetime import date
-
         try:
             fecha_obj = date.fromisoformat(fecha)
 
@@ -495,6 +499,148 @@ class Admin(commands.GroupCog, group_name="admin"):
             f"📋 Registros eliminados: **{eliminado}**\n"
             f"🏆 Puntos eliminados: **{puntos:.1f}**",
             ephemeral=True,
+        )
+
+    # ========================================================
+    # GRUPO SSF
+    # ========================================================
+
+    ssf = app_commands.Group(
+        name="ssf",
+        description="Comandos administrativos de SeptSinFP.",
+    )
+
+    # ========================================================
+    # SSF - REVIVIR
+    # ========================================================
+
+    @ssf.command(
+        name="revivir",
+        description="Revive a un participante eliminado de SeptSinFP.",
+    )
+    @app_commands.describe(
+        usuario="Usuario eliminado que quieres revivir.",
+        fecha="Día que olvidó registrar, en formato YYYY-MM-DD.",
+    )
+    async def ssf_revivir(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        fecha: str,
+    ):
+        """Revive a un participante de SeptSinFP."""
+
+        # ----------------------------------------------------
+        # PERMISOS
+        # ----------------------------------------------------
+
+        if interaction.user.id not in ADMIN_USER_IDS:
+            await interaction.response.send_message(
+                "⛔ No tienes permisos para utilizar este comando.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # SERVIDOR
+        # ----------------------------------------------------
+
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "⚠️ Este comando solo puede utilizarse "
+                "dentro de un servidor.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # VALIDAR FECHA
+        # ----------------------------------------------------
+
+        try:
+            fecha_obj = date.fromisoformat(fecha)
+
+        except ValueError:
+            await interaction.response.send_message(
+                "⚠️ La fecha no es válida.\n"
+                "Utiliza el formato **YYYY-MM-DD**.\n"
+                "Ejemplo: `2026-09-01`.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # REVIVIR
+        # ----------------------------------------------------
+
+        resultado = revivir_participante(
+            guild_id=interaction.guild.id,
+            user_id=usuario.id,
+            fecha=fecha_obj,
+        )
+
+        # ----------------------------------------------------
+        # RESULTADOS
+        # ----------------------------------------------------
+
+        if not resultado["exitoso"]:
+
+            if resultado["motivo"] == "sin_desafio":
+                mensaje = (
+                    "⚠️ No hay un desafío SeptSinFP activo."
+                )
+
+            elif resultado["motivo"] == "fuera_de_fecha":
+                mensaje = (
+                    "⚠️ La fecha indicada está fuera "
+                    "del período del desafío."
+                )
+
+            elif resultado["motivo"] == "no_participante":
+                mensaje = (
+                    f"ℹ️ **{usuario.display_name}** "
+                    "no está registrado como participante "
+                    "de SeptSinFP."
+                )
+
+            elif resultado["motivo"] == "no_eliminado":
+                mensaje = (
+                    f"ℹ️ **{usuario.display_name}** "
+                    "no está eliminado.\n"
+                    "No es necesario revivirlo."
+                )
+
+            elif resultado["motivo"] == "ya_registrado":
+                mensaje = (
+                    f"ℹ️ **{usuario.display_name}** "
+                    f"ya tiene registrado el día **{fecha}**."
+                )
+
+            else:
+                mensaje = (
+                    "⚠️ No se pudo revivir al participante."
+                )
+
+            await interaction.response.send_message(
+                mensaje,
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # ÉXITO
+        # ----------------------------------------------------
+
+        await interaction.response.send_message(
+            f"💚 **Participante revivido correctamente.**\n\n"
+            f"👤 Usuario: **{usuario.display_name}**\n"
+            f"📅 Día recuperado: **{fecha}**\n"
+            f"🔥 Racha actual: "
+            f"**{resultado['racha']} días**\n"
+            f"🏆 Mejor racha: "
+            f"**{resultado['mejor_racha']} días**\n\n"
+            f"🫡 **{usuario.display_name}** puede "
+            "volver a utilizar `/ssf sobrevivi` normalmente."
         )
 
 

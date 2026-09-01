@@ -33,6 +33,9 @@ class NaikitoBot(commands.Bot):
         await self.load_extension(
             "commands.admin"
         )
+        await self.load_extension(
+            "commands.ssf"
+        )
 
         if GUILD_TEST:
             guild = discord.Object(id=GUILD_TEST)

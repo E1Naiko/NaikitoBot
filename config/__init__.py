@@ -10,5 +10,8 @@ from .settings import (
     PUNTOS_25_DESDE,
     PUNTOS_5_DESDE,
     PREFIX,
+    SSF_CANALES_ID,
+    SSF_FECHA_FIN,
+    SSF_FECHA_INICIO,
     TIMEZONE,
 )
