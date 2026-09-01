@@ -11,6 +11,7 @@ from modules.madrugue.database import (
 from modules.madrugue.logic import (
     calcular_multiplicador_horario,
     calcular_racha_para_nuevo_registro as calcular_racha_logic,
+    calcular_mejor_racha,
     obtener_puntos_base,
 )
 
@@ -142,3 +143,30 @@ def registrar_madrugue(
         racha=racha,
         total_puntos=total_puntos,
     )
+
+def obtener_stats_madrugue(
+    guild_id,
+    user_id,
+):
+    """
+    Obtiene las estadísticas de Madrugue de un usuario.
+    """
+
+    total_puntos = obtener_total_puntos(
+        guild_id,
+        user_id,
+    )
+
+    fechas = obtener_fechas_registradas(
+        guild_id,
+        user_id,
+    )
+    
+    mejor_racha = calcular_mejor_racha(
+        fechas,
+    )
+
+    return {
+        "total_puntos": total_puntos,
+        "mejor_racha": mejor_racha,
+    }
