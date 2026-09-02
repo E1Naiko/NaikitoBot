@@ -31,7 +31,21 @@ class RestrictedCommandTree(app_commands.CommandTree):
         if command_name != "box":
             return True
 
-        return bool(BOX_CHANNEL_IDS) and interaction.channel_id in BOX_CHANNEL_IDS
+        if BOX_CHANNEL_IDS and interaction.channel_id in BOX_CHANNEL_IDS:
+            return True
+
+        canales = ", ".join(
+            f"<#{canal_id}>"
+            for canal_id in sorted(BOX_CHANNEL_IDS)
+        )
+        mensaje = (
+            "⚠️ Los comandos de Box solo pueden utilizarse en: "
+            f"{canales}."
+            if canales
+            else "⚠️ Box no tiene ningún canal configurado."
+        )
+        await interaction.response.send_message(mensaje, ephemeral=True)
+        return False
 
 
 class NaikitoBot(commands.Bot):
