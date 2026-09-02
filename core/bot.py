@@ -60,8 +60,12 @@ class RestrictedCommandTree(app_commands.CommandTree):
         channel_id = interaction.channel_id
         command_path = self._command_path(data)
 
-        if channel_id in GENERAL_CHANNEL_IDS:
-            permitido = command_name in {"ping", "admin", "box"}
+        if command_name == "admin":
+            permitido = True
+            zona = "administración"
+            canales = set()
+        elif channel_id in GENERAL_CHANNEL_IDS:
+            permitido = command_name in {"ping", "box"}
             zona = "general, Box y administración"
             canales = GENERAL_CHANNEL_IDS
         elif channel_id in MADRUGUE_CHANNEL_IDS:

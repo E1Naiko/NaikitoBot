@@ -131,7 +131,6 @@ class ChallengeView(discord.ui.View):
             )
 
 
-@app_commands.default_permissions()
 class Box(commands.GroupCog, group_name="box"):
     """Acciones temporizadas de progreso y economía."""
 
