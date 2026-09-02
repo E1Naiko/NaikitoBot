@@ -1,11 +1,13 @@
 import os
 from datetime import time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 # ============================================================
@@ -26,7 +28,7 @@ TIMEZONE = ZoneInfo(
 # BASE DE DATOS
 # ============================================================
 
-DATABASE = "naikito.db"
+DATABASE = os.getenv("DATABASE", "naikito.db")
 
 
 # ============================================================

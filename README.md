@@ -16,7 +16,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Crear un archivo `.env` en la raíz del proyecto:
+Crear un archivo `.env` en la raíz del proyecto a partir de `.env.example`.
+No subas `.env` al repositorio: contiene el token del bot.
 
 ```dotenv
 DISCORD_TOKEN=<TOKEN_DEL_BOT>
@@ -30,6 +31,10 @@ SSF_FECHA_FIN=YYYY-MM-DD
 BOX_EXPERIENCIA_POR_MINUTO=10
 BOX_DINERO_POR_MINUTO=100
 ```
+
+En el proveedor de despliegue, configura estas mismas variables como variables
+de entorno. No es necesario subir el archivo `.env`; el bot también funciona
+con variables definidas directamente por la plataforma.
 
 Iniciar el bot:
 
