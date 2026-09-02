@@ -76,8 +76,7 @@ ADMIN_USER_IDS = {
 # SERVIDORES DE DISCORD
 # ============================================================
 
-GUILD_SERVIDOR = int(os.getenv("GUILD_SERVIDOR", "0"))
-GUILD_TEST = int(os.getenv("GUILD_TEST", "0"))
+GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 
 # ============================================================
 # CONFIGURACIÓN DE SEPTIEMBRESINFAP

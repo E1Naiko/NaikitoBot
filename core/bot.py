@@ -5,7 +5,7 @@ from datetime import timedelta
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from config import GUILD_TEST, PREFIX
+from config import GUILD_ID, PREFIX
 
 from core.utils import ahora
 
@@ -94,10 +94,10 @@ class NaikitoBot(commands.Bot):
         # SINCRONIZAR COMANDOS
         # ====================================================
 
-        if GUILD_TEST:
+        if GUILD_ID:
 
             guild = discord.Object(
-                id=GUILD_TEST
+                id=GUILD_ID
             )
 
             self.tree.copy_global_to(
@@ -141,8 +141,8 @@ class NaikitoBot(commands.Bot):
             print()
 
             print(
-                "Comandos sincronizados en servidor "
-                f"de prueba: {len(comandos)}"
+                "Comandos sincronizados en GUILD_ID: "
+                f"{GUILD_ID} ({len(comandos)} comandos)"
             )
 
         else:

@@ -16,8 +16,7 @@ from modules.madrugue.database import (
 
 from config import (
     ADMIN_USER_IDS,
-    GUILD_SERVIDOR,
-    GUILD_TEST,
+    GUILD_ID,
 )
 
 from modules.ssf.services import (
@@ -78,20 +77,10 @@ class Admin(commands.GroupCog, group_name="admin"):
         )
 
         embed.add_field(
-            name="🏠 Servidor principal",
+            name="🏠 Servidor configurado",
             value=(
-                str(GUILD_SERVIDOR)
-                if GUILD_SERVIDOR
-                else "No configurado"
-            ),
-            inline=True,
-        )
-
-        embed.add_field(
-            name="🧪 Servidor de pruebas",
-            value=(
-                str(GUILD_TEST)
-                if GUILD_TEST
+                str(GUILD_ID)
+                if GUILD_ID
                 else "No configurado"
             ),
             inline=True,
