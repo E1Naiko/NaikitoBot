@@ -67,7 +67,6 @@ class _FileExecutionInteraction:
 # COG ADMIN
 # ============================================================
 
-@app_commands.default_permissions()
 class Admin(commands.GroupCog, group_name="admin"):
     """Comandos administrativos del bot."""
 
