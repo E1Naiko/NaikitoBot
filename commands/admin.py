@@ -1,15 +1,20 @@
-from datetime import date
+from datetime import date, datetime
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from core.utils import ahora
+
 from modules.madrugue.database import (
+    guardar_registro,
     eliminar_registros_usuario,
     eliminar_registros_servidor,
     eliminar_registro_del_dia,
     obtener_estadisticas_servidor,
     obtener_registro_del_dia_admin,
+    obtener_registro_del_dia,
+    obtener_fechas_registradas,
     obtener_resumen_usuario,
     obtener_top_madrugadores,
 )
@@ -19,9 +24,10 @@ from config import (
     GUILD_ID,
 )
 
-from modules.ssf.services import (
-    revivir_participante,
-    iniciar_desafio,
+from modules.madrugue.logic import (
+    calcular_multiplicador_horario,
+    calcular_racha_para_nuevo_registro,
+    obtener_puntos_base,
 )
 
 
@@ -653,6 +659,188 @@ class Admin(commands.GroupCog, group_name="admin"):
             f"**{resultado['desafio_id']}**\n\n"
             f"Los participantes ya pueden utilizar "
             f"**/ssf registrar** en {canal.mention}."
+        )
+            # ========================================================
+    # MANUAL ADD
+    # ========================================================
+
+    @app_commands.command(
+        name="manualadd",
+        description="Agrega manualmente la madrugada de un usuario.",
+    )
+    @app_commands.describe(
+        usuario="Usuario al que se le agregará el registro.",
+        hora="Hora de la madrugada en formato HH:MM.",
+    )
+    async def manualadd(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        hora: str,
+    ):
+        """Agrega manualmente una madrugada."""
+
+        # ----------------------------------------------------
+        # VERIFICAR PERMISOS
+        # ----------------------------------------------------
+
+        if interaction.user.id not in ADMIN_USER_IDS:
+            await interaction.response.send_message(
+                "⛔ No tienes permisos para utilizar este comando.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # VERIFICAR SERVIDOR
+        # ----------------------------------------------------
+
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "⚠️ Este comando solo puede utilizarse "
+                "dentro de un servidor.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # VALIDAR HORA
+        # ----------------------------------------------------
+
+        try:
+            hora_obj = datetime.strptime(
+                hora,
+                "%H:%M",
+            ).time()
+
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Hora inválida.\n"
+                "Usá el formato **HH:MM**.\n\n"
+                "Ejemplo: `05:45`",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # FECHA ACTUAL
+        # ----------------------------------------------------
+
+        fecha = ahora().date()
+
+        # ----------------------------------------------------
+        # COMPROBAR REGISTRO EXISTENTE
+        # ----------------------------------------------------
+
+        registro_existente = obtener_registro_del_dia(
+            interaction.guild.id,
+            usuario.id,
+            fecha,
+        )
+
+        if registro_existente:
+            hora_anterior, puntos = registro_existente
+
+            await interaction.response.send_message(
+                "⚠️ **EL USUARIO YA TIENE REGISTRO HOY**\n\n"
+                f"👤 Usuario: **{usuario.display_name}**\n"
+                f"📅 Fecha: **{fecha.isoformat()}**\n"
+                f"⏰ Hora registrada: **{hora_anterior}**\n"
+                f"🏆 Puntos: **{puntos:.1f}**\n\n"
+                "Si querés modificarlo, primero eliminá "
+                "el registro del día.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # CALCULAR PUNTOS BASE
+        # ----------------------------------------------------
+
+        puntos_base = obtener_puntos_base(
+            hora_obj
+        )
+
+        if puntos_base == 0:
+            await interaction.response.send_message(
+                "❌ La hora indicada está fuera "
+                "del horario válido.\n\n"
+                "El horario permitido es "
+                "**05:30 a 10:00**.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # CALCULAR RACHA
+        # ----------------------------------------------------
+
+        fechas_registradas = obtener_fechas_registradas(
+            interaction.guild.id,
+            usuario.id,
+        )
+        
+        racha = calcular_racha_para_nuevo_registro(
+            fechas_registradas,
+            fecha,
+        )
+
+        # ----------------------------------------------------
+        # CALCULAR MULTIPLICADOR
+        # ----------------------------------------------------
+
+        multiplicador = calcular_multiplicador_horario(
+            hora_obj
+        )
+
+        puntos_finales = (
+            puntos_base * multiplicador
+        )
+
+        # ----------------------------------------------------
+        # GUARDAR REGISTRO
+        # ----------------------------------------------------
+
+        guardar_registro(
+            guild_id=interaction.guild.id,
+            user_id=usuario.id,
+            username=usuario.display_name,
+            fecha=fecha,
+            hora=hora_obj.strftime("%H:%M"),
+            puntos_base=puntos_base,
+            multiplicador=multiplicador,
+            puntos_finales=puntos_finales,
+        )
+
+        # ----------------------------------------------------
+        # EMOJI
+        # ----------------------------------------------------
+
+        if puntos_base == 100:
+            emoji = "🥇"
+        elif puntos_base == 25:
+            emoji = "🥈"
+        else:
+            emoji = "🥉"
+
+        # ----------------------------------------------------
+        # CONFIRMACIÓN
+        # ----------------------------------------------------
+
+        await interaction.response.send_message(
+            "🔧 **REGISTRO MANUAL AGREGADO**\n\n"
+            f"👤 Usuario: **{usuario.display_name}**\n"
+            f"🆔 ID: `{usuario.id}`\n"
+            f"📅 Fecha: **{fecha.isoformat()}**\n"
+            f"⏰ Hora registrada: "
+            f"**{hora_obj.strftime('%H:%M')}**\n\n"
+            f"{emoji} Puntos base: **{puntos_base}**\n"
+            f"🔥 Racha: **{racha} días**\n"
+            f"⭐ Multiplicador: "
+            f"**×{multiplicador:.3f}**\n"
+            f"🏆 Puntos obtenidos: "
+            f"**{puntos_finales:.3f}**",
+            ephemeral=True,
         )
 
 
