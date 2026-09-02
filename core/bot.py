@@ -14,8 +14,13 @@ from modules.ssf.services import (
     cerrar_desafios_finalizados,
 )
 
-from modules.ssf.database import inicializar_db
+from modules.madrugue.database import (
+    inicializar_db as inicializar_db_madrugue,
+)
 
+from modules.ssf.database import (
+    inicializar_db as inicializar_db_ssf,
+)
 
 class NaikitoBot(commands.Bot):
     """Clase principal del bot."""
@@ -47,10 +52,12 @@ class NaikitoBot(commands.Bot):
         # BASE DE DATOS SSF
         # ====================================================
 
-        inicializar_db()
+        inicializar_db_madrugue()
+        print("Base de datos Madrugue inicializada.")
 
+        inicializar_db_ssf()
         print("Base de datos SSF inicializada.")
-
+        
         # ====================================================
         # CARGAR COMANDOS
         # ====================================================
