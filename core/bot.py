@@ -111,41 +111,62 @@ class NaikitoBot(commands.Bot):
                 guild=guild
             )
 
+            manualadd = self.tree.get_command(
+                "admin"
+            )
+            
+            print()
+            print("========== DEBUG MANUALADD ==========")
+            
+            if isinstance(manualadd, app_commands.Group):
+                print("Admin encontrado en Tree")
+
+                for subcomando in manualadd.commands:
+                    print(
+                        f"Subcomando: {subcomando.name}"
+                    )
+
+                    if (
+                        subcomando.name == "manualadd"
+                        and isinstance(subcomando, app_commands.Command)
+                    ):
+                        print("PARÁMETROS MANUALADD:")
+
+                        for parametro in subcomando.parameters:
+                            print(
+                                f"- {parametro.name} | "
+                                f"requerido={parametro.required} | "
+                                f"tipo={parametro.type}"
+                            )
+            
+            print("=====================================")
+
+            print()
             comandos = await self.tree.sync(
                 guild=guild
             )
 
-            print()
-            print("COMANDOS REGISTRADOS:")
+            print("COMANDOS REGISTRADOS EN DISCORD:")
             print("=" * 60)
 
             for comando in comandos:
+                print(f"- {comando.name}")
 
-                print(
-                    f"- {comando.name} | "
-                    f"tipo={type(comando).__name__}"
-                )
-            
                 if isinstance(comando, app_commands.Group):
-            
                     for subcomando in comando.commands:
-            
-                        print(
-                            f"    └── {subcomando.name} | "
-                            f"tipo={type(subcomando).__name__}"
-                        )
-            
-                        if isinstance(subcomando, app_commands.Group):
-            
-                            for subsubcomando in subcomando.commands:
-            
+                        print(f"  └── {subcomando.name}")
+
+                        if isinstance(subcomando, app_commands.Command):
+                            print("      OPCIONES:")
+
+                            for opcion in subcomando.parameters:
                                 print(
-                                    f"        └── {subsubcomando.name} | "
-                                    f"tipo={type(subsubcomando).__name__}"
+                                    f"      - {opcion.name} | "
+                                    f"tipo={opcion.type} | "
+                                    f"requerido={opcion.required}"
                                 )
 
             print("=" * 60)
-            print()
 
             print(
                 "Comandos sincronizados en GUILD_ID: "
@@ -316,6 +337,7 @@ class NaikitoBot(commands.Bot):
                         f"en {guild.name}."
                     )
 
+                if not isinstance(canal, discord.abc.Messageable):
                     continue
 
                 # =============================================
@@ -467,6 +489,7 @@ class NaikitoBot(commands.Bot):
             f"Naikito Bot conectado como {self.user}"
         )
 
-        print(
-            f"ID: {self.user.id}"
-        )
+        if self.user is not None:
+            print(
+                f"ID: {self.user.id}"
+            )
