@@ -1,38 +1,108 @@
 import sqlite3
+import shutil
 from pathlib import Path
 
 
-DB_VIEJA = Path("madrugue.db")
-DB_NUEVA = Path("naikito.db")
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
+
+ORIGEN = Path("madrugue.db")
+DESTINO = Path("naikito.db")
+BACKUP = Path("naikito_backup_antes_madrugue.db")
 
 
-def migrar():
-    print("=" * 60)
-    print("MIGRACIÓN DE MADRUGUE")
-    print("=" * 60)
+# ============================================================
+# COMPROBACIONES
+# ============================================================
 
-    if not DB_VIEJA.exists():
-        print(f"❌ No existe: {DB_VIEJA}")
-        return
+if not ORIGEN.exists():
+    raise FileNotFoundError(
+        f"No se encontró la base de origen: {ORIGEN}"
+    )
 
-    if not DB_NUEVA.exists():
-        print(f"❌ No existe: {DB_NUEVA}")
-        return
+if not DESTINO.exists():
+    raise FileNotFoundError(
+        f"No se encontró la base de destino: {DESTINO}"
+    )
 
-    # --------------------------------------------------------
-    # CONEXIONES
-    # --------------------------------------------------------
 
-    db_vieja = sqlite3.connect(DB_VIEJA)
-    db_nueva = sqlite3.connect(DB_NUEVA)
+# ============================================================
+# BACKUP
+# ============================================================
+
+print("=" * 60)
+print("MIGRACIÓN DE MADRUGUE")
+print("=" * 60)
+
+print("\n📦 Creando backup de naikito.db...")
+
+shutil.copy2(DESTINO, BACKUP)
+
+print(f"✅ Backup creado: {BACKUP}")
+
+
+# ============================================================
+# LEER BASE DE MADRUGUE
+# ============================================================
+
+print("\n📖 Leyendo madrugue.db...")
+
+db_origen = sqlite3.connect(ORIGEN)
+
+registros = db_origen.execute("""
+    SELECT
+        guild_id,
+        user_id,
+        username,
+        fecha,
+        hora,
+        puntos_base,
+        multiplicador,
+        puntos_finales
+    FROM registros
+    ORDER BY fecha, hora
+""").fetchall()
+
+db_origen.close()
+
+print(f"📊 Registros encontrados: {len(registros)}")
+
+
+# ============================================================
+# INSERTAR EN NAIKITOBOT
+# ============================================================
+
+print("\n💾 Insertando registros en naikito.db...")
+
+db_destino = sqlite3.connect(DESTINO)
+
+# Verificar que exista la tabla
+tabla = db_destino.execute("""
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table'
+      AND name = 'registros'
+""").fetchone()
+
+if tabla is None:
+    db_destino.close()
+
+    raise RuntimeError(
+        "La tabla 'registros' no existe en naikito.db.\n"
+        "Iniciá el bot una vez para que se cree."
+    )
+
+
+insertados = 0
+omitidos = 0
+
+for registro in registros:
 
     try:
-        # ----------------------------------------------------
-        # LEER REGISTROS DE LA BASE VIEJA
-        # ----------------------------------------------------
 
-        registros = db_vieja.execute("""
-            SELECT
+        cursor = db_destino.execute("""
+            INSERT INTO registros (
                 guild_id,
                 user_id,
                 username,
@@ -41,164 +111,48 @@ def migrar():
                 puntos_base,
                 multiplicador,
                 puntos_finales
-            FROM registros
-            ORDER BY id ASC
-        """).fetchall()
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, registro)
 
-        print(
-            f"\n📦 Registros encontrados en madrugue.db: "
-            f"{len(registros)}"
-        )
+        if cursor.rowcount > 0:
+            insertados += 1
 
-        # ----------------------------------------------------
-        # CONTADORES
-        # ----------------------------------------------------
+    except sqlite3.IntegrityError:
 
-        importados = 0
-        duplicados = 0
-        errores = 0
-
-        # ----------------------------------------------------
-        # IMPORTAR
-        # ----------------------------------------------------
-
-        for registro in registros:
-
-            (
-                guild_id,
-                user_id,
-                username,
-                fecha,
-                hora,
-                puntos_base,
-                multiplicador,
-                puntos_finales,
-            ) = registro
-
-            # -----------------------------------------------
-            # COMPROBAR SI YA EXISTE
-            # -----------------------------------------------
-
-            existente = db_nueva.execute("""
-                SELECT id
-                FROM registros
-                WHERE guild_id = ?
-                AND user_id = ?
-                AND fecha = ?
-            """, (
-                guild_id,
-                user_id,
-                fecha,
-            )).fetchone()
-
-            if existente is not None:
-                duplicados += 1
-
-                print(
-                    f"⏭️ Ya existe: "
-                    f"{username} | "
-                    f"{fecha} | "
-                    f"{hora}"
-                )
-
-                continue
-
-            # -----------------------------------------------
-            # INSERTAR
-            # -----------------------------------------------
-
-            try:
-
-                db_nueva.execute("""
-                    INSERT INTO registros (
-                        guild_id,
-                        user_id,
-                        username,
-                        fecha,
-                        hora,
-                        puntos_base,
-                        multiplicador,
-                        puntos_finales
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    guild_id,
-                    user_id,
-                    username,
-                    fecha,
-                    hora,
-                    puntos_base,
-                    multiplicador,
-                    puntos_finales,
-                ))
-
-                importados += 1
-
-                print(
-                    f"✅ Importado: "
-                    f"{username} | "
-                    f"{fecha} | "
-                    f"{hora} | "
-                    f"{puntos_finales:.3f} pts"
-                )
-
-            except sqlite3.Error as error:
-
-                errores += 1
-
-                print(
-                    f"❌ Error importando "
-                    f"{username} | {fecha}: "
-                    f"{error}"
-                )
-
-        # ----------------------------------------------------
-        # GUARDAR
-        # ----------------------------------------------------
-
-        db_nueva.commit()
-
-        # ----------------------------------------------------
-        # RESULTADO
-        # ----------------------------------------------------
-
-        print("\n" + "=" * 60)
-        print("MIGRACIÓN FINALIZADA")
-        print("=" * 60)
-
-        print(
-            f"📦 Registros encontrados: {len(registros)}"
-        )
-
-        print(
-            f"✅ Registros importados: {importados}"
-        )
-
-        print(
-            f"⏭️ Registros ya existentes: {duplicados}"
-        )
-
-        print(
-            f"❌ Errores: {errores}"
-        )
-
-        print("=" * 60)
-
-    except sqlite3.Error as error:
-
-        db_nueva.rollback()
-
-        print(
-            "\n❌ ERROR DURANTE LA MIGRACIÓN:"
-        )
-
-        print(error)
-
-    finally:
-
-        db_vieja.close()
-        db_nueva.close()
+        # Ya existe un registro para ese
+        # servidor / usuario / fecha.
+        omitidos += 1
 
 
-if __name__ == "__main__":
-    migrar()
+db_destino.commit()
+
+
+# ============================================================
+# VERIFICACIÓN
+# ============================================================
+
+total = db_destino.execute("""
+    SELECT COUNT(*)
+    FROM registros
+""").fetchone()[0]
+
+
+db_destino.close()
+
+
+# ============================================================
+# RESULTADO
+# ============================================================
+
+print("\n" + "=" * 60)
+print("RESULTADO")
+print("=" * 60)
+
+print(f"📥 Registros encontrados: {len(registros)}")
+print(f"✅ Registros insertados:  {insertados}")
+print(f"⏭️ Registros omitidos:    {omitidos}")
+print(f"📊 Total en naikito.db:   {total}")
+
+print("\n✅ Migración terminada.")
+print(f"🛡️ Backup disponible en: {BACKUP}")

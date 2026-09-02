@@ -660,7 +660,7 @@ class Admin(commands.GroupCog, group_name="admin"):
             f"Los participantes ya pueden utilizar "
             f"**/ssf registrar** en {canal.mention}."
         )
-            # ========================================================
+        # ========================================================
     # MANUAL ADD
     # ========================================================
 
@@ -670,12 +670,14 @@ class Admin(commands.GroupCog, group_name="admin"):
     )
     @app_commands.describe(
         usuario="Usuario al que se le agregará el registro.",
+        fecha="Fecha del registro en formato YYYY-MM-DD.",
         hora="Hora de la madrugada en formato HH:MM.",
     )
     async def manualadd(
         self,
         interaction: discord.Interaction,
         usuario: discord.Member,
+        fecha: str,
         hora: str,
     ):
         """Agrega manualmente una madrugada."""
@@ -704,6 +706,38 @@ class Admin(commands.GroupCog, group_name="admin"):
             return
 
         # ----------------------------------------------------
+        # VALIDAR FECHA
+        # ----------------------------------------------------
+
+        try:
+            fecha_obj = datetime.strptime(
+                fecha,
+                "%Y-%m-%d",
+            ).date()
+
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Fecha inválida.\n"
+                "Usá el formato **YYYY-MM-DD**.\n\n"
+                "Ejemplo: `2026-07-01`",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
+        # RECHAZAR FECHAS FUTURAS
+        # ----------------------------------------------------
+
+        fecha_actual = ahora().date()
+
+        if fecha_obj > fecha_actual:
+            await interaction.response.send_message(
+                "❌ No podés registrar una fecha futura.",
+                ephemeral=True,
+            )
+            return
+
+        # ----------------------------------------------------
         # VALIDAR HORA
         # ----------------------------------------------------
 
@@ -723,28 +757,22 @@ class Admin(commands.GroupCog, group_name="admin"):
             return
 
         # ----------------------------------------------------
-        # FECHA ACTUAL
-        # ----------------------------------------------------
-
-        fecha = ahora().date()
-
-        # ----------------------------------------------------
         # COMPROBAR REGISTRO EXISTENTE
         # ----------------------------------------------------
 
         registro_existente = obtener_registro_del_dia(
             interaction.guild.id,
             usuario.id,
-            fecha,
+            fecha_obj,
         )
 
         if registro_existente:
             hora_anterior, puntos = registro_existente
 
             await interaction.response.send_message(
-                "⚠️ **EL USUARIO YA TIENE REGISTRO HOY**\n\n"
+                "⚠️ **EL USUARIO YA TIENE REGISTRO EN ESA FECHA**\n\n"
                 f"👤 Usuario: **{usuario.display_name}**\n"
-                f"📅 Fecha: **{fecha.isoformat()}**\n"
+                f"📅 Fecha: **{fecha_obj.isoformat()}**\n"
                 f"⏰ Hora registrada: **{hora_anterior}**\n"
                 f"🏆 Puntos: **{puntos:.1f}**\n\n"
                 "Si querés modificarlo, primero eliminá "
@@ -779,10 +807,10 @@ class Admin(commands.GroupCog, group_name="admin"):
             interaction.guild.id,
             usuario.id,
         )
-        
+
         racha = calcular_racha_para_nuevo_registro(
             fechas_registradas,
-            fecha,
+            fecha_obj,
         )
 
         # ----------------------------------------------------
@@ -805,7 +833,7 @@ class Admin(commands.GroupCog, group_name="admin"):
             guild_id=interaction.guild.id,
             user_id=usuario.id,
             username=usuario.display_name,
-            fecha=fecha,
+            fecha=fecha_obj,
             hora=hora_obj.strftime("%H:%M"),
             puntos_base=puntos_base,
             multiplicador=multiplicador,
@@ -831,7 +859,7 @@ class Admin(commands.GroupCog, group_name="admin"):
             "🔧 **REGISTRO MANUAL AGREGADO**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🆔 ID: `{usuario.id}`\n"
-            f"📅 Fecha: **{fecha.isoformat()}**\n"
+            f"📅 Fecha: **{fecha_obj.isoformat()}**\n"
             f"⏰ Hora registrada: "
             f"**{hora_obj.strftime('%H:%M')}**\n\n"
             f"{emoji} Puntos base: **{puntos_base}**\n"
