@@ -5,7 +5,7 @@ from datetime import timedelta
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from config import GUILD_ID, PREFIX
+from config import BOX_CHANNEL_IDS, GUILD_ID, PREFIX
 
 from core.utils import ahora
 
@@ -22,6 +22,17 @@ from modules.ssf.database import (
     inicializar_db as inicializar_db_ssf,
 )
 
+
+class RestrictedCommandTree(app_commands.CommandTree):
+    """Permite comandos slash únicamente en el canal configurado."""
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return (
+            bool(BOX_CHANNEL_IDS)
+            and interaction.channel_id in BOX_CHANNEL_IDS
+        )
+
+
 class NaikitoBot(commands.Bot):
     """Clase principal del bot."""
 
@@ -35,6 +46,7 @@ class NaikitoBot(commands.Bot):
             command_prefix=PREFIX,
             intents=intents,
             help_command=None,
+            tree_cls=RestrictedCommandTree,
         )
 
         # Última fecha procesada por el sistema automático de SSF.
@@ -96,6 +108,10 @@ class NaikitoBot(commands.Bot):
 
         await self.load_extension(
             "commands.ssf"
+        )
+
+        await self.load_extension(
+            "commands.box"
         )
 
         # ====================================================
@@ -326,8 +342,16 @@ class NaikitoBot(commands.Bot):
                 # CANAL
                 # =============================================
 
-                canal = guild.get_channel(
-                    resultado["canal_id"]
+                canal = next(
+                    (
+                        self.get_channel(canal_id)
+                        for canal_id in BOX_CHANNEL_IDS
+                        if isinstance(
+                            self.get_channel(canal_id),
+                            discord.abc.Messageable,
+                        )
+                    ),
+                    None,
                 )
 
                 if canal is None:

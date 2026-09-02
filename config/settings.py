@@ -78,6 +78,12 @@ ADMIN_USER_IDS = {
 
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 
+BOX_CHANNEL_IDS = {
+    int(canal_id.strip())
+    for canal_id in os.getenv("BOX_CHANNEL_ID", "").split(",")
+    if canal_id.strip()
+}
+
 # ============================================================
 # CONFIGURACIÓN DE SEPTIEMBRESINFAP
 # ============================================================
@@ -96,4 +102,16 @@ SSF_FECHA_INICIO = os.getenv(
 SSF_FECHA_FIN = os.getenv(
     "SSF_FECHA_FIN",
     "2026-09-30",
+)
+
+# ============================================================
+# CONFIGURACIÓN DE BOX
+# ============================================================
+
+BOX_EXPERIENCIA_POR_MINUTO = int(
+    os.getenv("BOX_EXPERIENCIA_POR_MINUTO", "10")
+)
+
+BOX_DINERO_POR_MINUTO = int(
+    os.getenv("BOX_DINERO_POR_MINUTO", "100")
 )
