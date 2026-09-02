@@ -210,9 +210,10 @@ class Box(commands.GroupCog, group_name="box"):
     async def _comenzar_accion(
         self,
         interaction: discord.Interaction,
-        minutos: int,
+        minutos: int | None,
         tipo: str,
         recompensa_por_minuto: int,
+        hasta: str | None = None,
     ):
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -228,6 +229,43 @@ class Box(commands.GroupCog, group_name="box"):
         if lesionado_hasta and datetime.fromisoformat(lesionado_hasta) > ahora():
             await interaction.response.send_message(
                 f"🚑 Estás lesionado hasta <t:{int(datetime.fromisoformat(lesionado_hasta).timestamp())}:R>.",
+                ephemeral=True,
+            )
+            return
+
+        iniciado_en = ahora()
+        if minutos is not None and hasta is not None:
+            await interaction.response.send_message(
+                "⚠️ Indica minutos o una hora de finalización, no ambas opciones.",
+                ephemeral=True,
+            )
+            return
+
+        if hasta is not None:
+            try:
+                hora_fin = datetime.strptime(hasta.strip(), "%H:%M").time()
+            except ValueError:
+                await interaction.response.send_message(
+                    "⚠️ La hora debe tener el formato HH:MM, por ejemplo 18:30.",
+                    ephemeral=True,
+                )
+                return
+
+            finaliza_en = datetime.combine(
+                iniciado_en.date(),
+                hora_fin,
+                tzinfo=iniciado_en.tzinfo,
+            )
+            if finaliza_en <= iniciado_en:
+                finaliza_en += timedelta(days=1)
+            minutos = math.ceil(
+                (finaliza_en - iniciado_en).total_seconds() / 60
+            )
+        elif minutos is not None:
+            finaliza_en = iniciado_en + timedelta(minutes=minutos)
+        else:
+            await interaction.response.send_message(
+                "⚠️ Debes indicar minutos o una hora de finalización.",
                 ephemeral=True,
             )
             return
@@ -253,8 +291,6 @@ class Box(commands.GroupCog, group_name="box"):
             )
             return
 
-        iniciado_en = ahora()
-        finaliza_en = iniciado_en + timedelta(minutes=minutos)
         recompensa = minutos * recompensa_por_minuto
 
         if not iniciar_accion(
@@ -282,8 +318,16 @@ class Box(commands.GroupCog, group_name="box"):
         name="entrenar",
         description="Entrena durante un tiempo para obtener experiencia.",
     )
-    @app_commands.describe(minutos="Cantidad de minutos de entrenamiento.")
-    async def entrenar(self, interaction: discord.Interaction, minutos: int):
+    @app_commands.describe(
+        minutos="Cantidad de minutos de entrenamiento.",
+        hasta="Hora de finalización en formato HH:MM.",
+    )
+    async def entrenar(
+        self,
+        interaction: discord.Interaction,
+        minutos: int | None = None,
+        hasta: str | None = None,
+    ):
         nivel = obtener_nivel_mejora(
             interaction.guild.id,
             interaction.user.id,
@@ -294,14 +338,23 @@ class Box(commands.GroupCog, group_name="box"):
             minutos,
             "ENTRENANDO",
             BOX_EXPERIENCIA_POR_MINUTO + nivel * 5,
+            hasta,
         )
 
     @app_commands.command(
         name="trabajar",
         description="Trabaja durante un tiempo para obtener dinero.",
     )
-    @app_commands.describe(minutos="Cantidad de minutos de trabajo.")
-    async def trabajar(self, interaction: discord.Interaction, minutos: int):
+    @app_commands.describe(
+        minutos="Cantidad de minutos de trabajo.",
+        hasta="Hora de finalización en formato HH:MM.",
+    )
+    async def trabajar(
+        self,
+        interaction: discord.Interaction,
+        minutos: int | None = None,
+        hasta: str | None = None,
+    ):
         nivel = obtener_nivel_mejora(
             interaction.guild.id,
             interaction.user.id,
@@ -312,6 +365,43 @@ class Box(commands.GroupCog, group_name="box"):
             minutos,
             "TRABAJANDO",
             BOX_DINERO_POR_MINUTO + nivel * 50,
+            hasta,
+        )
+
+    @app_commands.command(
+        name="ayuda",
+        description="Envía por mensaje directo la ayuda de Box.",
+    )
+    async def ayuda(self, interaction: discord.Interaction):
+        ayuda = (
+            "🥊 **Ayuda de Box**\n\n"
+            "`/box entrenar minutos` — Entrena y gana experiencia.\n"
+            "`/box trabajar minutos` — Trabaja y gana dinero.\n"
+            "`/box sparring contrincante` — Desafía a sparring.\n"
+            "`/box desafio contrincante` — Desafía a una pelea.\n"
+            "`/box saldo` — Muestra tu experiencia y dinero.\n"
+            "`/box stats` — Muestra tus estadísticas privadas.\n"
+            "`/box tienda` — Muestra mejoras y tratamientos.\n"
+            "`/box comprar mejora` — Compra una mejora.\n"
+            "`/box tratamiento tipo` — Cura una lesión.\n"
+            "`/box descanso` — Reinicia la probabilidad de lesión.\n"
+            "`/box topdesafios` — Muestra el ranking de desafíos.\n\n"
+            "Las acciones duran el tiempo indicado y continúan aunque el bot se reinicie."
+        )
+
+        try:
+            await interaction.user.send(ayuda)
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "⚠️ No pude enviarte un mensaje directo. "
+                "Activa los mensajes directos de este servidor e inténtalo otra vez.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            "✅ Te envié la ayuda de Box por mensaje directo.",
+            ephemeral=True,
         )
 
     @app_commands.command(

@@ -93,8 +93,8 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 
 | Comando | Parámetros | Descripción |
 | --- | --- | --- |
-| `/box entrenar` | `minutos` | Entrena durante el tiempo indicado y otorga experiencia al finalizar. |
-| `/box trabajar` | `minutos` | Trabaja durante el tiempo indicado y otorga dinero al finalizar. |
+| `/box entrenar` | `minutos` o `hasta` | Entrena durante el tiempo indicado o hasta una hora `HH:MM`. |
+| `/box trabajar` | `minutos` o `hasta` | Trabaja durante el tiempo indicado o hasta una hora `HH:MM`. |
 | `/box sparring` | `contrincante` | Envía un desafío de sparring de una hora a otro usuario. |
 | `/box desafio` | `contrincante` | Envía un desafío de pelea de una hora a otro usuario. |
 | `/box tienda` | Ninguno | Muestra las mejoras y el nivel actual del usuario. |
@@ -104,6 +104,7 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
 | `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
+| `/box ayuda` | Ninguno | Envía por mensaje directo la lista de comandos de Box. |
 
 La duración debe estar entre 1 y 1440 minutos. Mientras una acción está activa,
 el usuario no puede iniciar otra acción de Box. Las recompensas se calculan con
