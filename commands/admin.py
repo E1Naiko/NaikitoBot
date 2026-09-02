@@ -30,6 +30,11 @@ from modules.madrugue.logic import (
     obtener_puntos_base,
 )
 
+from modules.ssf.services import (
+    revivir_participante,
+    iniciar_desafio,
+)
+
 
 # ============================================================
 # COG ADMIN
