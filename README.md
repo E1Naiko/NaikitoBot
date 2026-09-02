@@ -44,9 +44,10 @@ python main.py
 
 ## Comandos generales
 
-Todos los comandos y respuestas del bot están limitados a los canales cuyos IDs
-se configuren en `BOX_CHANNEL_ID`, separados por comas. En cualquier otro
-canal, el bot ignora los comandos slash sin responder.
+Los comandos de Box y sus respuestas están limitados a los canales cuyos IDs
+se configuren en `BOX_CHANNEL_ID`, separados por comas. Los comandos generales,
+administrativos y de Madrugue funcionan en cualquier canal del servidor. Los
+comandos de SeptSinFP utilizan los canales definidos en `SSF_CANALES_ID`.
 
 | Comando | Descripción |
 | --- | --- |

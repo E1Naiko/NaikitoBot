@@ -24,13 +24,14 @@ from modules.ssf.database import (
 
 
 class RestrictedCommandTree(app_commands.CommandTree):
-    """Permite comandos slash únicamente en el canal configurado."""
+    """Restringe únicamente los comandos de Box a sus canales configurados."""
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return (
-            bool(BOX_CHANNEL_IDS)
-            and interaction.channel_id in BOX_CHANNEL_IDS
-        )
+        command_name = (interaction.data or {}).get("name")
+        if command_name != "box":
+            return True
+
+        return bool(BOX_CHANNEL_IDS) and interaction.channel_id in BOX_CHANNEL_IDS
 
 
 class NaikitoBot(commands.Bot):
