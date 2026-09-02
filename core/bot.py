@@ -150,8 +150,6 @@ class NaikitoBot(commands.Bot):
                 flush=True,
             )
 
-        await super().on_interaction(interaction)
-
     async def on_app_command_completion(
         self,
         interaction: discord.Interaction,
