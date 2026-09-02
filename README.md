@@ -23,6 +23,8 @@ No subas `.env` al repositorio: contiene el token del bot.
 DISCORD_TOKEN=<TOKEN_DEL_BOT>
 ADMIN_USER_IDS=<ID_USUARIO_ADMIN>[,<ID_USUARIO_ADMIN_2>]
 GUILD_ID=<ID_SERVIDOR>
+GENERAL_CHANNEL_ID=<ID_CANAL_GENERAL>
+MADRUGUE_CHANNEL_ID=<ID_CANAL_MADRUGUE>
 BOX_CHANNEL_ID=<ID_CANAL_1>[,<ID_CANAL_2>]
 SSF_CANALES_ID=<ID_CANAL>[,<ID_CANAL_2>]
 TIMEZONE=America/Argentina/Buenos_Aires
@@ -44,10 +46,10 @@ python main.py
 
 ## Comandos generales
 
-Los comandos de Box y sus respuestas están limitados a los canales cuyos IDs
-se configuren en `BOX_CHANNEL_ID`, separados por comas. Los comandos generales,
-administrativos y de Madrugue funcionan en cualquier canal del servidor. Los
-comandos de SeptSinFP utilizan los canales definidos en `SSF_CANALES_ID`.
+Los comandos están separados por canales: `GENERAL_CHANNEL_ID` permite los
+comandos generales, administrativos y de Box; `MADRUGUE_CHANNEL_ID` permite
+solo Madrugue; y `SSF_CANALES_ID` permite solo SeptSinFP. Los IDs pueden
+separarse por comas.
 
 | Comando | Descripción |
 | --- | --- |

@@ -5,7 +5,14 @@ from datetime import timedelta
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from config import BOX_CHANNEL_IDS, GUILD_ID, PREFIX
+from config import (
+    BOX_CHANNEL_IDS,
+    GENERAL_CHANNEL_IDS,
+    GUILD_ID,
+    MADRUGUE_CHANNEL_IDS,
+    PREFIX,
+    SSF_CANALES_ID,
+)
 
 from core.utils import ahora
 
@@ -24,25 +31,44 @@ from modules.ssf.database import (
 
 
 class RestrictedCommandTree(app_commands.CommandTree):
-    """Restringe únicamente los comandos de Box a sus canales configurados."""
+    """Restringe cada grupo de comandos a su canal correspondiente."""
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         command_name = (interaction.data or {}).get("name")
-        if command_name != "box":
+        channel_id = interaction.channel_id
+
+        if channel_id in GENERAL_CHANNEL_IDS:
+            permitido = command_name in {"ping", "admin", "box"}
+            zona = "general, Box y administración"
+            canales = GENERAL_CHANNEL_IDS
+        elif channel_id in MADRUGUE_CHANNEL_IDS:
+            permitido = bool(command_name and command_name.startswith("madrugue"))
+            zona = "Madrugue"
+            canales = MADRUGUE_CHANNEL_IDS
+        elif channel_id in SSF_CANALES_ID:
+            permitido = command_name == "ssf"
+            zona = "SeptSinFP"
+            canales = SSF_CANALES_ID
+        else:
+            permitido = False
+            zona = "ningún comando"
+            canales = (
+                GENERAL_CHANNEL_IDS
+                | MADRUGUE_CHANNEL_IDS
+                | SSF_CANALES_ID
+            )
+
+        if permitido:
             return True
 
-        if BOX_CHANNEL_IDS and interaction.channel_id in BOX_CHANNEL_IDS:
-            return True
-
-        canales = ", ".join(
+        canales_texto = ", ".join(
             f"<#{canal_id}>"
-            for canal_id in sorted(BOX_CHANNEL_IDS)
+            for canal_id in sorted(canales)
         )
         mensaje = (
-            "⚠️ Los comandos de Box solo pueden utilizarse en: "
-            f"{canales}."
-            if canales
-            else "⚠️ Box no tiene ningún canal configurado."
+            f"⚠️ Este canal solo permite comandos de {zona}."
+            if canales_texto
+            else "⚠️ Este canal no tiene comandos configurados."
         )
         await interaction.response.send_message(mensaje, ephemeral=True)
         return False

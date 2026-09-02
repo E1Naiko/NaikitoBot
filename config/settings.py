@@ -80,6 +80,21 @@ ADMIN_USER_IDS = {
 
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 
+GENERAL_CHANNEL_IDS = {
+    int(canal_id.strip())
+    for canal_id in os.getenv(
+        "GENERAL_CHANNEL_ID",
+        os.getenv("BOX_CHANNEL_ID", ""),
+    ).split(",")
+    if canal_id.strip()
+}
+
+MADRUGUE_CHANNEL_IDS = {
+    int(canal_id.strip())
+    for canal_id in os.getenv("MADRUGUE_CHANNEL_ID", "").split(",")
+    if canal_id.strip()
+}
+
 BOX_CHANNEL_IDS = {
     int(canal_id.strip())
     for canal_id in os.getenv("BOX_CHANNEL_ID", "").split(",")
