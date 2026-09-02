@@ -665,7 +665,8 @@ class Admin(commands.GroupCog, group_name="admin"):
             f"Los participantes ya pueden utilizar "
             f"**/ssf registrar** en {canal.mention}."
         )
-        # ========================================================
+
+    # ========================================================
     # MANUAL ADD
     # ========================================================
 
