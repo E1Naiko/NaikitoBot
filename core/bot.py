@@ -33,9 +33,39 @@ from modules.ssf.database import (
 class RestrictedCommandTree(app_commands.CommandTree):
     """Restringe cada grupo de comandos a su canal correspondiente."""
 
+    @staticmethod
+    def _command_path(data: dict) -> str:
+        partes = []
+        actual = data
+
+        while isinstance(actual, dict) and actual.get("name"):
+            partes.append(str(actual["name"]))
+            opciones = actual.get("options", [])
+            actual = next(
+                (
+                    opcion
+                    for opcion in opciones
+                    if isinstance(opcion, dict)
+                    and opcion.get("type") in {1, 2}
+                    and "name" in opcion
+                ),
+                None,
+            )
+
+        return "/" + " ".join(partes)
+
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        command_name = (interaction.data or {}).get("name")
+        data = interaction.data or {}
+        command_name = data.get("name")
         channel_id = interaction.channel_id
+        command_path = self._command_path(data)
+        user = interaction.user
+        print(
+            f"[COMANDO] recibido={command_path} "
+            f"usuario={user}({user.id}) "
+            f"servidor={interaction.guild_id} canal={channel_id}",
+            flush=True,
+        )
 
         if channel_id in GENERAL_CHANNEL_IDS:
             permitido = command_name in {"ping", "admin", "box"}
@@ -59,6 +89,7 @@ class RestrictedCommandTree(app_commands.CommandTree):
             )
 
         if permitido:
+            print(f"[COMANDO] permitido={command_path}", flush=True)
             return True
 
         canales_texto = ", ".join(
@@ -71,7 +102,21 @@ class RestrictedCommandTree(app_commands.CommandTree):
             else "⚠️ Este canal no tiene comandos configurados."
         )
         await interaction.response.send_message(mensaje, ephemeral=True)
+        print(f"[COMANDO] rechazado={command_path} canal={channel_id}", flush=True)
         return False
+
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        command_path = self._command_path(interaction.data or {})
+        print(
+            f"[COMANDO] error={command_path} "
+            f"tipo={type(error).__name__}: {error}",
+            flush=True,
+        )
+        await super().on_error(interaction, error)
 
 
 class NaikitoBot(commands.Bot):
