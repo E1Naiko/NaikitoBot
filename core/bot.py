@@ -59,13 +59,6 @@ class RestrictedCommandTree(app_commands.CommandTree):
         command_name = data.get("name")
         channel_id = interaction.channel_id
         command_path = self._command_path(data)
-        user = interaction.user
-        print(
-            f"[COMANDO] recibido={command_path} "
-            f"usuario={user}({user.id}) "
-            f"servidor={interaction.guild_id} canal={channel_id}",
-            flush=True,
-        )
 
         if channel_id in GENERAL_CHANNEL_IDS:
             permitido = command_name in {"ping", "admin", "box"}
@@ -137,6 +130,40 @@ class NaikitoBot(commands.Bot):
 
         # Última fecha procesada por el sistema automático de SSF.
         self.ssf_ultima_revision = None
+
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Registra en consola cada comando slash recibido por el bot."""
+
+        if interaction.type == discord.InteractionType.application_command:
+            command_path = RestrictedCommandTree._command_path(
+                interaction.data or {}
+            )
+            print(
+                f"[COMANDO] recibido={command_path} "
+                f"usuario={interaction.user}({interaction.user.id}) "
+                f"servidor={interaction.guild_id} "
+                f"canal={interaction.channel_id}",
+                flush=True,
+            )
+
+        await super().on_interaction(interaction)
+
+    async def on_app_command_completion(
+        self,
+        interaction: discord.Interaction,
+        command: app_commands.Command,
+    ):
+        """Registra en consola los comandos slash completados."""
+
+        command_path = RestrictedCommandTree._command_path(
+            interaction.data or {}
+        )
+        print(
+            f"[COMANDO] completado={command_path} "
+            f"usuario={interaction.user.id} "
+            f"canal={interaction.channel_id}",
+            flush=True,
+        )
 
     # ========================================================
     # SETUP
