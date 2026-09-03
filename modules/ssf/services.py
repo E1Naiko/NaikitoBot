@@ -23,6 +23,7 @@ from modules.ssf.database import (
 from modules.ssf.logic import (
     calcular_mejor_racha,
     calcular_racha,
+    calcular_rango,
     fecha_anterior,
     fecha_dentro_del_desafio,
 )
@@ -141,6 +142,7 @@ def registrar_usuario(
         "nombre": nombre,
         "fecha_inicio": fecha_inicio,
         "fecha_fin": fecha_fin,
+        "rango": calcular_rango(0),
     }
 
 
@@ -253,6 +255,7 @@ def registrar_sobrevivi(
         "nombre": nombre,
         "racha": racha,
         "mejor_racha": mejor_racha,
+        "rango": calcular_rango(racha),
         "fecha": fecha,
         "hora": ahora,
     }
@@ -292,6 +295,7 @@ def obtener_estado_usuario(
         "fecha_eliminacion": participante[5],
         "racha_actual": participante[6],
         "mejor_racha": participante[7],
+        "rango": calcular_rango(participante[6]),
     }
 
 
@@ -509,6 +513,7 @@ def revivir_participante(
         "nombre": nombre,
         "racha": racha,
         "mejor_racha": mejor_racha,
+        "rango": calcular_rango(racha),
         "fecha": fecha,
     }
 

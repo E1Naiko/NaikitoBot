@@ -1,6 +1,38 @@
 from datetime import date, timedelta
 
 
+RANGOS = (
+    (0, "Soldado 🪖"),
+    (3, "Cabo 🎗️"),
+    (5, "Tercer Sargento 🥉"),
+    (7, "Segundo Sargento 🥈"),
+    (9, "Primer Sargento 🥇"),
+    (11, "Subteniente 🛡️"),
+    (13, "APS ⚔️"),
+    (15, "Segundo Teniente 🎖️"),
+    (17, "Primer Teniente 🎖️⭐"),
+    (19, "Capitán 🎖️⭐ 🎖️⭐"),
+    (21, "Mayor 🎖️⭐ 🎖️⭐ 🎖️⭐"),
+    (23, "Coronel ⭐"),
+    (25, "General 🌟"),
+    (27, "Rey 👑"),
+    (29, "Monje ♾️"),
+)
+
+
+def calcular_rango(dias_racha):
+    """Devuelve el rango correspondiente a los días de racha."""
+
+    rango = RANGOS[0][1]
+
+    for dias_minimos, nombre in RANGOS:
+        if dias_racha < dias_minimos:
+            break
+        rango = nombre
+
+    return rango
+
+
 def calcular_racha(
     fechas_registradas,
     fecha_actual,

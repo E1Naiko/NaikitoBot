@@ -1,11 +1,11 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 from core.bot import NaikitoBot
-
-
-load_dotenv()
 
 
 def main():

@@ -5,7 +5,14 @@ from datetime import timedelta
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from config import BOX_CHANNEL_IDS, GUILD_ID, PREFIX
+from config import (
+    BOX_CHANNEL_IDS,
+    GENERAL_CHANNEL_IDS,
+    GUILD_ID,
+    MADRUGUE_CHANNEL_IDS,
+    PREFIX,
+    SSF_CANALES_ID,
+)
 
 from core.utils import ahora
 
@@ -24,13 +31,89 @@ from modules.ssf.database import (
 
 
 class RestrictedCommandTree(app_commands.CommandTree):
-    """Permite comandos slash únicamente en el canal configurado."""
+    """Restringe cada grupo de comandos a su canal correspondiente."""
+
+    @staticmethod
+    def _command_path(data: dict) -> str:
+        partes = []
+        actual = data
+
+        while isinstance(actual, dict) and actual.get("name"):
+            partes.append(str(actual["name"]))
+            opciones = actual.get("options", [])
+            actual = next(
+                (
+                    opcion
+                    for opcion in opciones
+                    if isinstance(opcion, dict)
+                    and opcion.get("type") in {1, 2}
+                    and "name" in opcion
+                ),
+                None,
+            )
+
+        return "/" + " ".join(partes)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return (
-            bool(BOX_CHANNEL_IDS)
-            and interaction.channel_id in BOX_CHANNEL_IDS
+        data = interaction.data or {}
+        command_name = data.get("name")
+        channel_id = interaction.channel_id
+        command_path = self._command_path(data)
+
+        if command_name == "admin":
+            permitido = True
+            zona = "administración"
+            canales = set()
+        elif channel_id in GENERAL_CHANNEL_IDS:
+            permitido = command_name in {"ping", "box"}
+            zona = "general, Box y administración"
+            canales = GENERAL_CHANNEL_IDS
+        elif channel_id in MADRUGUE_CHANNEL_IDS:
+            permitido = bool(command_name and command_name.startswith("madrugue"))
+            zona = "Madrugue"
+            canales = MADRUGUE_CHANNEL_IDS
+        elif channel_id in SSF_CANALES_ID:
+            permitido = command_name == "ssf"
+            zona = "SeptSinFP"
+            canales = SSF_CANALES_ID
+        else:
+            permitido = False
+            zona = "ningún comando"
+            canales = (
+                GENERAL_CHANNEL_IDS
+                | MADRUGUE_CHANNEL_IDS
+                | SSF_CANALES_ID
+            )
+
+        if permitido:
+            print(f"[COMANDO] permitido={command_path}", flush=True)
+            return True
+
+        canales_texto = ", ".join(
+            f"<#{canal_id}>"
+            for canal_id in sorted(canales)
         )
+        mensaje = (
+            f"⚠️ Este canal solo permite comandos de {zona}."
+            if canales_texto
+            else "⚠️ Este canal no tiene comandos configurados."
+        )
+        await interaction.response.send_message(mensaje, ephemeral=True)
+        print(f"[COMANDO] rechazado={command_path} canal={channel_id}", flush=True)
+        return False
+
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        command_path = self._command_path(interaction.data or {})
+        print(
+            f"[COMANDO] error={command_path} "
+            f"tipo={type(error).__name__}: {error}",
+            flush=True,
+        )
+        await super().on_error(interaction, error)
 
 
 class NaikitoBot(commands.Bot):
@@ -51,6 +134,38 @@ class NaikitoBot(commands.Bot):
 
         # Última fecha procesada por el sistema automático de SSF.
         self.ssf_ultima_revision = None
+
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Registra en consola cada comando slash recibido por el bot."""
+
+        if interaction.type == discord.InteractionType.application_command:
+            command_path = RestrictedCommandTree._command_path(
+                interaction.data or {}
+            )
+            print(
+                f"[COMANDO] recibido={command_path} "
+                f"usuario={interaction.user}({interaction.user.id}) "
+                f"servidor={interaction.guild_id} "
+                f"canal={interaction.channel_id}",
+                flush=True,
+            )
+
+    async def on_app_command_completion(
+        self,
+        interaction: discord.Interaction,
+        command: app_commands.Command,
+    ):
+        """Registra en consola los comandos slash completados."""
+
+        command_path = RestrictedCommandTree._command_path(
+            interaction.data or {}
+        )
+        print(
+            f"[COMANDO] completado={command_path} "
+            f"usuario={interaction.user.id} "
+            f"canal={interaction.channel_id}",
+            flush=True,
+        )
 
     # ========================================================
     # SETUP

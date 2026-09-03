@@ -6,6 +6,8 @@ from core.utils import ahora
 
 from config import SSF_CANALES_ID
 
+from modules.ssf.logic import calcular_rango
+
 from modules.ssf.services import (
     registrar_usuario,
     registrar_sobrevivi,
@@ -106,6 +108,7 @@ class SSF(commands.GroupCog, group_name="ssf"):
             f"🗓️ Período: "
             f"**{resultado['fecha_inicio']}** → "
             f"**{resultado['fecha_fin']}**\n\n"
+            f"🎖️ Rango inicial: **{resultado['rango']}**\n\n"
             "A partir de ahora debes utilizar "
             "**/ssf sobrevivi** todos los días."
         )
@@ -199,6 +202,7 @@ class SSF(commands.GroupCog, group_name="ssf"):
             f"**{resultado['racha']} días**\n"
             f"🏆 Mejor racha: "
             f"**{resultado['mejor_racha']} días**\n"
+            f"🎖️ Rango: **{resultado['rango']}**\n"
             f"🕐 Registro: "
             f"**{resultado['hora'].strftime('%H:%M:%S')}**"
         )
@@ -258,7 +262,8 @@ class SSF(commands.GroupCog, group_name="ssf"):
             f"🔥 Racha actual: "
             f"**{resultado['racha_actual']} días**\n"
             f"🏆 Mejor racha: "
-            f"**{resultado['mejor_racha']} días**"
+            f"**{resultado['mejor_racha']} días**\n"
+            f"🎖️ Rango: **{resultado['rango']}**"
             + (
                 f"\n📅 Eliminado el: "
                 f"**{resultado['fecha_eliminacion']}**"
@@ -325,12 +330,15 @@ class SSF(commands.GroupCog, group_name="ssf"):
 
             if eliminado:
                 eliminados.append(
-                    f"💀 **{username}**"
+                    f"💀 **{username}** — "
+                    f"🔥 {racha_actual} días — "
+                    f"🎖️ {calcular_rango(racha_actual)}"
                 )
             else:
                 activos.append(
                     f"🟢 **{username}** — "
-                    f"🔥 {racha_actual} días"
+                    f"🔥 {racha_actual} días — "
+                    f"🎖️ {calcular_rango(racha_actual)}"
                 )
 
         embed = discord.Embed(

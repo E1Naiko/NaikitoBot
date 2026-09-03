@@ -16,12 +16,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Crear un archivo `.env` en la raíz del proyecto:
+Crear un archivo `.env` en la raíz del proyecto a partir de `.env.example`.
+No subas `.env` al repositorio: contiene el token del bot.
 
 ```dotenv
 DISCORD_TOKEN=<TOKEN_DEL_BOT>
 ADMIN_USER_IDS=<ID_USUARIO_ADMIN>[,<ID_USUARIO_ADMIN_2>]
 GUILD_ID=<ID_SERVIDOR>
+GENERAL_CHANNEL_ID=<ID_CANAL_GENERAL>
+MADRUGUE_CHANNEL_ID=<ID_CANAL_MADRUGUE>
 BOX_CHANNEL_ID=<ID_CANAL_1>[,<ID_CANAL_2>]
 SSF_CANALES_ID=<ID_CANAL>[,<ID_CANAL_2>]
 TIMEZONE=America/Argentina/Buenos_Aires
@@ -31,6 +34,10 @@ BOX_EXPERIENCIA_POR_MINUTO=10
 BOX_DINERO_POR_MINUTO=100
 ```
 
+En el proveedor de despliegue, configura estas mismas variables como variables
+de entorno. No es necesario subir el archivo `.env`; el bot también funciona
+con variables definidas directamente por la plataforma.
+
 Iniciar el bot:
 
 ```text
@@ -39,9 +46,10 @@ python main.py
 
 ## Comandos generales
 
-Todos los comandos y respuestas del bot están limitados a los canales cuyos IDs
-se configuren en `BOX_CHANNEL_ID`, separados por comas. En cualquier otro
-canal, el bot ignora los comandos slash sin responder.
+Los comandos están separados por canales: `GENERAL_CHANNEL_ID` permite los
+comandos generales, administrativos y de Box; `MADRUGUE_CHANNEL_ID` permite
+solo Madrugue; y `SSF_CANALES_ID` permite solo SeptSinFP. Los IDs pueden
+separarse por comas.
 
 | Comando | Descripción |
 | --- | --- |
@@ -85,8 +93,8 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 
 | Comando | Parámetros | Descripción |
 | --- | --- | --- |
-| `/box entrenar` | `minutos` | Entrena durante el tiempo indicado y otorga experiencia al finalizar. |
-| `/box trabajar` | `minutos` | Trabaja durante el tiempo indicado y otorga dinero al finalizar. |
+| `/box entrenar` | `minutos` o `hasta` | Entrena durante el tiempo indicado o hasta una hora `HH:MM`. |
+| `/box trabajar` | `minutos` o `hasta` | Trabaja durante el tiempo indicado o hasta una hora `HH:MM`. |
 | `/box sparring` | `contrincante` | Envía un desafío de sparring de una hora a otro usuario. |
 | `/box desafio` | `contrincante` | Envía un desafío de pelea de una hora a otro usuario. |
 | `/box tienda` | Ninguno | Muestra las mejoras y el nivel actual del usuario. |
@@ -96,6 +104,7 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
 | `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
+| `/box ayuda` | Ninguno | Envía por mensaje directo la lista de comandos de Box. |
 
 La duración debe estar entre 1 y 1440 minutos. Mientras una acción está activa,
 el usuario no puede iniciar otra acción de Box. Las recompensas se calculan con
