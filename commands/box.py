@@ -21,6 +21,8 @@ from modules.box.services import (
     obtener_estado_box,
     descansar,
     comprar_tratamiento,
+    obtener_equipo,
+    comprar_equipamiento_progresivo,
 )
 from config import (
     BOX_CHANNEL_IDS,
@@ -53,6 +55,39 @@ TRATAMIENTOS = {
         "nombre": "Tratamiento 5 estrellas",
         "precio": 50000,
         "reinicia_probabilidad": True,
+    },
+}
+
+EQUIPAMIENTO = {
+    "casco": {
+        "nombre": "Casco",
+        "emoji": "🎩",
+        "calidades": ["Basico", "Intermedio", "Avanzado", "Epico", "Legendario"],
+        "precio_base": 1000,
+    },
+    "guantes": {
+        "nombre": "Guantes",
+        "emoji": "🤜",
+        "calidades": ["Basico", "Intermedio", "Avanzado", "Epico", "Legendario"],
+        "precio_base": 1000,
+    },
+    "protector_bucal": {
+        "nombre": "Protector Bucal",
+        "emoji": "😁",
+        "calidades": ["Basico", "Intermedio", "Avanzado", "Epico", "Legendario"],
+        "precio_base": 600,
+    },
+    "short": {
+        "nombre": "Short",
+        "emoji": "👖",
+        "calidades": ["Basico", "Intermedio", "Avanzado", "Epico", "Legendario"],
+        "precio_base": 600,
+    },
+    "botas": {
+        "nombre": "Botas",
+        "emoji": "👟",
+        "calidades": ["Basico", "Intermedio", "Avanzado", "Epico", "Legendario"],
+        "precio_base": 800,
     },
 }
 
@@ -381,9 +416,9 @@ class Box(commands.GroupCog, group_name="box"):
             "`/box desafio contrincante` — Desafía a una pelea.\n"
             "`/box saldo` — Muestra tu experiencia y dinero.\n"
             "`/box stats` — Muestra tus estadísticas privadas.\n"
-            "`/box tienda` — Muestra mejoras y tratamientos.\n"
-            "`/box comprar mejora` — Compra una mejora.\n"
-            "`/box tratamiento tipo` — Cura una lesión.\n"
+            "`/box equipo` — Muestra tu equipo y estadísticas de combate.\n"
+            "`/box tienda` — Muestra todas las compras disponibles.\n"
+            "`/box comprar tipo articulo` — Compra mejoras, equipamiento o tratamientos.\n"
             "`/box descanso` — Reinicia la probabilidad de lesión.\n"
             "`/box topdesafios` — Muestra el ranking de desafíos.\n\n"
             "Las acciones duran el tiempo indicado y continúan aunque el bot se reinicie."
@@ -503,6 +538,55 @@ class Box(commands.GroupCog, group_name="box"):
         )
 
     @app_commands.command(
+        name="equipo",
+        description="Muestra tu equipo y estadísticas de combate.",
+    )
+    async def equipo(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
+                ephemeral=True,
+            )
+            return
+
+        equipo_datos = obtener_equipo(
+            interaction.guild.id,
+            interaction.user.id,
+        )
+
+        if equipo_datos is None:
+            await interaction.response.send_message(
+                "⚠️ Error al obtener el equipo.",
+                ephemeral=True,
+            )
+            return
+
+        # Convertir niveles a calidades
+        equipamiento_textos = {}
+        for tipo, config in EQUIPAMIENTO.items():
+            nivel = equipo_datos[tipo]
+            equipamiento_textos[tipo] = config["calidades"][nivel]
+
+        mensaje = (
+            f"🥊 **Equipo de {interaction.user.display_name}**\n\n"
+            f"**Combate**\n"
+            f"❤️ **Vida:** {equipo_datos['vida']}/{equipo_datos['vida_maxima']}\n"
+            f"💥 **Daño:** {equipo_datos['dano']}/{equipo_datos['dano_maximo']}\n"
+            f"🛡️ **Defensa:** {equipo_datos['defensa']}/{equipo_datos['defensa_maxima']}\n"
+            f"😴 **Cansancio:** {equipo_datos['cansancio']}/{equipo_datos['cansancio_maximo']}\n\n"
+            f"**Habilidad**\n"
+            f"⭐ **Puntos Habilidad:** {equipo_datos['puntos_habilidad']}\n\n"
+            f"**Equipamiento**\n"
+            f"🎩 **Casco:** {equipamiento_textos['casco']}\n"
+            f"🤜 **Guantes:** {equipamiento_textos['guantes']}\n"
+            f"😁 **Protector Bucal:** {equipamiento_textos['protector_bucal']}\n"
+            f"👖 **Short:** {equipamiento_textos['short']}\n"
+            f"👟 **Botas:** {equipamiento_textos['botas']}"
+        )
+
+        await interaction.response.send_message(mensaje)
+
+    @app_commands.command(
         name="topdesafios",
         description="Muestra el ranking histórico de desafíos.",
     )
@@ -538,7 +622,7 @@ class Box(commands.GroupCog, group_name="box"):
 
     @app_commands.command(
         name="tienda",
-        description="Muestra las mejoras disponibles en la tienda.",
+        description="Muestra todas las compras disponibles en la tienda.",
     )
     async def tienda(self, interaction: discord.Interaction):
         if interaction.guild is None:
@@ -549,6 +633,8 @@ class Box(commands.GroupCog, group_name="box"):
             return
 
         lineas = ["🛒 **Tienda de Box**"]
+        
+        lineas.append("\n**Mejoras**")
         for clave, mejora in MEJORAS.items():
             nivel = obtener_nivel_mejora(
                 interaction.guild.id,
@@ -556,10 +642,33 @@ class Box(commands.GroupCog, group_name="box"):
                 clave,
             )
             lineas.append(
-                f"**{clave}** — {mejora['descripcion']} | "
+                f"**{mejora['nombre']}** — {mejora['descripcion']} | "
                 f"Nivel **{nivel}/{mejora['maximo']}** | "
                 f"Siguiente nivel: **{precio_mejora(mejora, nivel)}**"
             )
+        
+        lineas.append("\n**Equipamiento**")
+        equipo = obtener_equipo(
+            interaction.guild.id,
+            interaction.user.id,
+        )
+        for clave, equipo_item in EQUIPAMIENTO.items():
+            nivel_actual = equipo[clave] if equipo else 0
+            calidad_actual = equipo_item["calidades"][nivel_actual]
+            precio_actual = equipo_item["precio_base"] * (2 ** nivel_actual)
+            
+            if nivel_actual < len(equipo_item["calidades"]) - 1:
+                siguiente_precio = equipo_item["precio_base"] * (2 ** (nivel_actual + 1))
+                siguiente_calidad = equipo_item["calidades"][nivel_actual + 1]
+                info_siguiente = f" → Siguiente: **{siguiente_calidad}** ({siguiente_precio}$)"
+            else:
+                info_siguiente = " **(Máximo nivel)**"
+            
+            lineas.append(
+                f"{equipo_item['emoji']} **{equipo_item['nombre']}** — "
+                f"Actual: **{calidad_actual}**{info_siguiente}"
+            )
+        
         lineas.append("\n**Tratamientos**")
         for tratamiento in TRATAMIENTOS.values():
             lineas.append(
@@ -570,69 +679,24 @@ class Box(commands.GroupCog, group_name="box"):
 
     @app_commands.command(
         name="comprar",
-        description="Compra un nivel de mejora con tu dinero.",
+        description="Compra mejoras, equipamiento o tratamientos con tu dinero.",
     )
-    @app_commands.describe(mejora="Mejora que quieres comprar.")
+    @app_commands.describe(
+        tipo="Categoría de compra",
+        articulo="Artículo que quieres comprar."
+    )
     @app_commands.choices(
-        mejora=[
-            app_commands.Choice(name="Creatina", value="entrenamiento"),
-            app_commands.Choice(name="Cafe", value="trabajo"),
+        tipo=[
+            app_commands.Choice(name="Mejora", value="mejora"),
+            app_commands.Choice(name="Equipamiento", value="equipamiento"),
+            app_commands.Choice(name="Tratamiento", value="tratamiento"),
         ]
     )
     async def comprar(
         self,
         interaction: discord.Interaction,
-        mejora: app_commands.Choice[str],
-    ):
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
-                ephemeral=True,
-            )
-            return
-
-        configuracion = MEJORAS[mejora.value]
-        estado, saldo, nivel = comprar_mejora(
-            guild_id=interaction.guild.id,
-            user_id=interaction.user.id,
-            mejora=mejora.value,
-            precio_base=configuracion["precio"],
-            nivel_maximo=configuracion["maximo"],
-        )
-        if estado == "insuficiente":
-            await interaction.response.send_message(
-                f"⚠️ Necesitas el siguiente precio (**{precio_mejora(configuracion, nivel)}**) "
-                f"y tienes **{saldo}**.",
-                ephemeral=True,
-            )
-            return
-        if estado == "maximo":
-            await interaction.response.send_message(
-                f"⚠️ Ya alcanzaste el nivel máximo (**{nivel}**).",
-                ephemeral=True,
-            )
-            return
-
-        await interaction.response.send_message(
-            f"✅ Compraste un nivel de **{configuracion['nombre']}**. "
-            f"Nivel actual: **{nivel}**. Saldo restante: **{saldo}**."
-        )
-
-    @app_commands.command(
-        name="tratamiento",
-        description="Compra un tratamiento para quitar una lesión.",
-    )
-    @app_commands.describe(tipo="Tratamiento que quieres comprar.")
-    @app_commands.choices(
-        tipo=[
-            app_commands.Choice(name="Tratamiento Fisioterapeutico", value="fisioterapeutico"),
-            app_commands.Choice(name="Tratamiento 5 estrellas", value="cinco_estrellas"),
-        ]
-    )
-    async def tratamiento(
-        self,
-        interaction: discord.Interaction,
         tipo: app_commands.Choice[str],
+        articulo: str,
     ):
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -641,30 +705,116 @@ class Box(commands.GroupCog, group_name="box"):
             )
             return
 
-        configuracion = TRATAMIENTOS[tipo.value]
-        estado, saldo = comprar_tratamiento(
-            interaction.guild.id,
-            interaction.user.id,
-            f"tratamiento_{tipo.value}",
-            configuracion["precio"],
-            ahora(),
-        )
-        if estado == "insuficiente":
-            await interaction.response.send_message(
-                f"⚠️ Necesitas **{configuracion['precio']}** y tienes **{saldo}**.",
-                ephemeral=True,
+        if tipo.value == "mejora":
+            if articulo.lower() not in MEJORAS:
+                opciones = ", ".join(f"`{m}`" for m in MEJORAS.keys())
+                await interaction.response.send_message(
+                    f"⚠️ Mejora no válida. Opciones: {opciones}",
+                    ephemeral=True,
+                )
+                return
+
+            configuracion = MEJORAS[articulo.lower()]
+            estado, saldo, nivel = comprar_mejora(
+                guild_id=interaction.guild.id,
+                user_id=interaction.user.id,
+                mejora=articulo.lower(),
+                precio_base=configuracion["precio"],
+                nivel_maximo=configuracion["maximo"],
             )
-            return
-        if estado == "no_lesionado":
+            if estado == "insuficiente":
+                await interaction.response.send_message(
+                    f"⚠️ Necesitas el siguiente precio (**{precio_mejora(configuracion, nivel)}**) "
+                    f"y tienes **{saldo}**.",
+                    ephemeral=True,
+                )
+                return
+            if estado == "maximo":
+                await interaction.response.send_message(
+                    f"⚠️ Ya alcanzaste el nivel máximo (**{nivel}**).",
+                    ephemeral=True,
+                )
+                return
+
             await interaction.response.send_message(
-                "⚠️ No estás lesionado.",
-                ephemeral=True,
+                f"✅ Compraste un nivel de **{configuracion['nombre']}**. "
+                f"Nivel actual: **{nivel}**. Saldo restante: **{saldo}**."
             )
-            return
-        await interaction.response.send_message(
-            f"✅ Compraste **{configuracion['nombre']}** y ya no estás lesionado.",
-            ephemeral=True,
-        )
+
+        elif tipo.value == "equipamiento":
+            if articulo.lower() not in EQUIPAMIENTO:
+                opciones = ", ".join(f"`{e}`" for e in EQUIPAMIENTO.keys())
+                await interaction.response.send_message(
+                    f"⚠️ Equipamiento no válido. Opciones: {opciones}",
+                    ephemeral=True,
+                )
+                return
+
+            configuracion = EQUIPAMIENTO[articulo.lower()]
+            estado, saldo, nivel = comprar_equipamiento_progresivo(
+                interaction.guild.id,
+                interaction.user.id,
+                articulo.lower(),
+                configuracion["precio_base"],
+                nivel_maximo=len(configuracion["calidades"]) - 1,
+            )
+            if estado == "insuficiente":
+                precio_necesario = configuracion["precio_base"] * (2 ** nivel)
+                await interaction.response.send_message(
+                    f"⚠️ Necesitas **{precio_necesario}$** para {configuracion['calidades'][nivel + 1]} "
+                    f"y tienes **{saldo}$**.",
+                    ephemeral=True,
+                )
+                return
+            if estado == "maximo":
+                await interaction.response.send_message(
+                    f"⚠️ Ya has alcanzado el nivel máximo (**{configuracion['calidades'][nivel]}**).",
+                    ephemeral=True,
+                )
+                return
+
+            calidad_anterior = configuracion["calidades"][nivel - 1]
+            calidad_nueva = configuracion["calidades"][nivel]
+            await interaction.response.send_message(
+                f"✅ ¡Compraste una mejora de equipamiento!\n"
+                f"{configuracion['emoji']} **{configuracion['nombre']}**: {calidad_anterior} → {calidad_nueva}\n"
+                f"💰 Saldo restante: **{saldo}$**"
+            )
+
+        elif tipo.value == "tratamiento":
+            if articulo.lower() not in TRATAMIENTOS:
+                opciones = ", ".join(f"`{t}`" for t in TRATAMIENTOS.keys())
+                await interaction.response.send_message(
+                    f"⚠️ Tratamiento no válido. Opciones: {opciones}",
+                    ephemeral=True,
+                )
+                return
+
+            configuracion = TRATAMIENTOS[articulo.lower()]
+            estado, saldo = comprar_tratamiento(
+                interaction.guild.id,
+                interaction.user.id,
+                f"tratamiento_{articulo.lower()}",
+                configuracion["precio"],
+                ahora(),
+            )
+            if estado == "insuficiente":
+                await interaction.response.send_message(
+                    f"⚠️ Necesitas **{configuracion['precio']}** y tienes **{saldo}**.",
+                    ephemeral=True,
+                )
+                return
+            if estado == "no_lesionado":
+                await interaction.response.send_message(
+                    "⚠️ No estás lesionado.",
+                    ephemeral=True,
+                )
+                return
+
+            await interaction.response.send_message(
+                f"✅ Compraste **{configuracion['nombre']}**. "
+                f"Saldo restante: **{saldo}**."
+            )
 
     async def _aceptar_desafio(
         self,

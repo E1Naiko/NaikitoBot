@@ -12,6 +12,9 @@ from modules.box.database import (
     obtener_top_desafios,
     obtener_saldo,
     obtener_accion_activa,
+    obtener_equipo,
+    actualizar_equipo,
+    comprar_equipamiento_progresivo,
 )
 
 __all__ = [
@@ -28,4 +31,7 @@ __all__ = [
     "comprar_tratamiento",
     "iniciar_accion",
     "obtener_accion_activa",
+    "obtener_equipo",
+    "actualizar_equipo",
+    "comprar_equipamiento_progresivo",
 ]
