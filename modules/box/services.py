@@ -12,6 +12,11 @@ from modules.box.database import (
     obtener_top_desafios,
     obtener_saldo,
     obtener_accion_activa,
+    obtener_sponsors_activos,
+    obtener_bonus_experiencia_sponsor,
+    obtener_sponsor_para_promocion,
+    procesar_pagos_sponsors,
+    procesar_sponsors_medicos,
 )
 
 __all__ = [
@@ -28,4 +33,9 @@ __all__ = [
     "comprar_tratamiento",
     "iniciar_accion",
     "obtener_accion_activa",
+    "obtener_sponsors_activos",
+    "obtener_bonus_experiencia_sponsor",
+    "obtener_sponsor_para_promocion",
+    "procesar_pagos_sponsors",
+    "procesar_sponsors_medicos",
 ]

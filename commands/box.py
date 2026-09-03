@@ -56,6 +56,26 @@ TRATAMIENTOS = {
     },
 }
 
+# Probabilidad de conseguir un sponsor según las horas de promoción.
+# Los valores intermedios se calculan mediante interpolación lineal.
+PROBABILIDAD_SPONSOR = {
+    1: 5,
+    2: 10,
+    4: 20,
+    8: 40,
+    12: 60,
+    16: 80,
+    24: 100,
+}
+
+# Probabilidades del sponsor obtenido una vez conseguida la recompensa.
+PROBABILIDAD_SPONSORS = {
+    "redes": 50,
+    "radio": 30,
+    "equipamiento": 15,
+    "medico": 5,
+}
+
 
 def precio_mejora(mejora: dict, nivel: int) -> int:
     """Calcula el precio del siguiente nivel con aumento compuesto del 25 %."""
@@ -153,6 +173,8 @@ class Box(commands.GroupCog, group_name="box"):
             recompensa,
             dinero_recompensa,
             se_lesiona,
+            probabilidad_sponsor,
+            sponsor,
         ) in completar_acciones_vencidas(ahora()):
             guild = self.bot.get_guild(guild_id)
             if guild is None:
@@ -179,30 +201,67 @@ class Box(commands.GroupCog, group_name="box"):
             if isinstance(canal, discord.abc.Messageable):
                 if tipo == "TRABAJANDO":
                     recompensa_texto = f"**{dinero_recompensa} $**"
+                elif tipo == "PROMOVIENDO":
+                    recompensa_texto = "🎯 búsqueda de sponsor"
                 else:
                     recompensa_texto = f"**{recompensa} EXP**"
                     if dinero_recompensa:
                         recompensa_texto += (
                             f" y recibió **{dinero_recompensa} $**"
                         )
+
                 nombres_acciones = {
                     "TRABAJANDO": "trabajar",
                     "ENTRENANDO": "entrenar",
                     "SPARRING": "hacer sparring",
                     "FIGHTING": "pelear",
+                    "PROMOVIENDO": "promocionarse",
                 }
+
                 nombre_accion = nombres_acciones.get(
                     tipo,
                     tipo.lower(),
                 )
+
+                if tipo == "PROMOVIENDO":
+                    if sponsor:
+                        nombres_sponsors = {
+                            "redes": "📱 Redes",
+                            "radio": "📻 Radio",
+                            "equipamiento": "🥊 Equipamiento",
+                            "medico": "🚑 Médico",
+                        }
+
+                        nombre_sponsor = nombres_sponsors.get(
+                            sponsor,
+                            sponsor.capitalize(),
+                        )
+
+                        await canal.send(
+                            f"🎉 {usuario.mention} terminó de "
+                            f"**promocionarse** y consiguió un sponsor: "
+                            f"**{nombre_sponsor}**."
+                        )
+                    else:
+                        await canal.send(
+                            f"📢 {usuario.mention} terminó de "
+                            f"**promocionarse**, pero no consiguió "
+                            "ningún sponsor esta vez."
+                        )
+
+                    continue
+
                 await canal.send(
-                    f"✅ {usuario.mention} terminó de **{nombre_accion}** "
-                    f"y recibió {recompensa_texto}."
+                    f"✅ {usuario.mention} terminó de "
+                    f"**{nombre_accion}** y recibió {recompensa_texto}."
                 )
+
                 if se_lesiona:
                     await canal.send(
-                        f"🚑 {usuario.mention} se lesionó y estará lesionado durante 3 horas."
+                        f"🚑 {usuario.mention} se lesionó y estará "
+                        "lesionado durante 3 horas."
                     )
+
 
     @comprobar_acciones.before_loop
     async def esperar_bot(self):
@@ -214,6 +273,7 @@ class Box(commands.GroupCog, group_name="box"):
         minutos: int,
         tipo: str,
         recompensa_por_minuto: int,
+        permitir_lesionado: bool = False,
     ):
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -226,7 +286,12 @@ class Box(commands.GroupCog, group_name="box"):
             interaction.guild.id,
             interaction.user.id,
         )
-        if lesionado_hasta and datetime.fromisoformat(lesionado_hasta) > ahora():
+
+        if (
+            not permitir_lesionado
+            and lesionado_hasta
+            and datetime.fromisoformat(lesionado_hasta) > ahora()
+        ):
             await interaction.response.send_message(
                 f"🚑 Estás lesionado hasta <t:{int(datetime.fromisoformat(lesionado_hasta).timestamp())}:R>.",
                 ephemeral=True,
@@ -272,6 +337,15 @@ class Box(commands.GroupCog, group_name="box"):
             )
             return
 
+        if tipo == "PROMOVIENDO":
+            await interaction.response.send_message(
+                f"📢 Comenzaste a **promocionarte** durante **{minutos} minutos**.\n"
+                f"⏰ Finaliza <t:{int(finaliza_en.timestamp())}:R>.\n"
+                f"🎯 Cuanto más tiempo te promociones, mayores serán tus "
+                f"chances de conseguir un sponsor."
+            )
+            return
+
         await interaction.response.send_message(
             f"✅ Comenzaste a **{tipo.lower()}** durante **{minutos} minutos**.\n"
             f"⏰ Finaliza <t:{int(finaliza_en.timestamp())}:R>.\n"
@@ -285,11 +359,15 @@ class Box(commands.GroupCog, group_name="box"):
     )
     @app_commands.describe(minutos="Cantidad de minutos de entrenamiento.")
     async def entrenar(self, interaction: discord.Interaction, minutos: int):
-        nivel = obtener_nivel_mejora(
-            interaction.guild.id,
-            interaction.user.id,
-            "entrenamiento",
-        ) if interaction.guild else 0
+        nivel = (
+            obtener_nivel_mejora(
+                interaction.guild.id,
+                interaction.user.id,
+                "entrenamiento",
+            )
+            if interaction.guild
+            else 0
+        )
         await self._comenzar_accion(
             interaction,
             minutos,
@@ -303,16 +381,36 @@ class Box(commands.GroupCog, group_name="box"):
     )
     @app_commands.describe(minutos="Cantidad de minutos de trabajo.")
     async def trabajar(self, interaction: discord.Interaction, minutos: int):
-        nivel = obtener_nivel_mejora(
-            interaction.guild.id,
-            interaction.user.id,
-            "trabajo",
-        ) if interaction.guild else 0
+        nivel = (
+            obtener_nivel_mejora(
+                interaction.guild.id,
+                interaction.user.id,
+                "trabajo",
+            )
+            if interaction.guild
+            else 0
+        )
         await self._comenzar_accion(
             interaction,
             minutos,
             "TRABAJANDO",
             BOX_DINERO_POR_MINUTO + nivel * 50,
+        )
+
+    @app_commands.command(
+        name="promoverme",
+        description="Promocionate durante un tiempo para intentar conseguir un sponsor.",
+    )
+    @app_commands.describe(
+        minutos="Cantidad de minutos que quieres promocionarte (1-1440)."
+    )
+    async def promoverme(self, interaction: discord.Interaction, minutos: int):
+        await self._comenzar_accion(
+            interaction,
+            minutos,
+            "PROMOVIENDO",
+            0,
+            permitir_lesionado=True,
         )
 
     @app_commands.command(
@@ -348,29 +446,27 @@ class Box(commands.GroupCog, group_name="box"):
                 ephemeral=True,
             )
             return
-        if obtener_accion_activa(interaction.guild.id, interaction.user.id):
+
+        if obtener_accion_activa(
+            interaction.guild.id,
+            interaction.user.id,
+        ):
             await interaction.response.send_message(
                 "⚠️ No puedes descansar mientras realizas una acción.",
                 ephemeral=True,
             )
             return
 
-        _, lesionado_hasta = obtener_estado_box(
+        # Descansar está permitido incluso estando lesionado.
+        descansar(
             interaction.guild.id,
             interaction.user.id,
         )
-        if lesionado_hasta and datetime.fromisoformat(lesionado_hasta) > ahora():
-            await interaction.response.send_message(
-                "🚑 No puedes descansar mientras estás lesionado.",
-                ephemeral=True,
-            )
-            return
-
-        descansar(interaction.guild.id, interaction.user.id)
         await interaction.response.send_message(
             "🛌 Tu probabilidad de lesión volvió a **0%**.",
             ephemeral=True,
         )
+
     @app_commands.command(
         name="stats",
         description="Muestra tus estadísticas privadas de Box.",
@@ -536,8 +632,14 @@ class Box(commands.GroupCog, group_name="box"):
     @app_commands.describe(tipo="Tratamiento que quieres comprar.")
     @app_commands.choices(
         tipo=[
-            app_commands.Choice(name="Tratamiento Fisioterapeutico", value="fisioterapeutico"),
-            app_commands.Choice(name="Tratamiento 5 estrellas", value="cinco_estrellas"),
+            app_commands.Choice(
+                name="Tratamiento Fisioterapeutico",
+                value="fisioterapeutico",
+            ),
+            app_commands.Choice(
+                name="Tratamiento 5 estrellas",
+                value="cinco_estrellas",
+            ),
         ]
     )
     async def tratamiento(
@@ -587,7 +689,6 @@ class Box(commands.GroupCog, group_name="box"):
         if interaction.guild is None:
             return {"estado": "invalido"}
 
-        base = 60 * BOX_EXPERIENCIA_POR_MINUTO
         resultado = aceptar_desafio(
             desafio_id=desafio_id,
             guild_id=interaction.guild.id,
@@ -620,7 +721,10 @@ class Box(commands.GroupCog, group_name="box"):
             )
             return
 
-        if obtener_accion_activa(interaction.guild.id, interaction.user.id):
+        if obtener_accion_activa(
+            interaction.guild.id,
+            interaction.user.id,
+        ):
             await interaction.response.send_message(
                 "⚠️ Ya tienes una acción activa.",
                 ephemeral=True,
