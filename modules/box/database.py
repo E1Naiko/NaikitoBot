@@ -442,7 +442,7 @@ def completar_acciones_vencidas(ahora: datetime):
             se_lesiona = random.random() < (probabilidad / 100)
             if se_lesiona:
                 lesionado_hasta = (
-                    ahora + timedelta(hours=24)
+                    ahora + timedelta(hours=3)
                 ).isoformat()
             db.execute(
                 """

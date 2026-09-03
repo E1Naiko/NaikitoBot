@@ -201,7 +201,7 @@ class Box(commands.GroupCog, group_name="box"):
                 )
                 if se_lesiona:
                     await canal.send(
-                        f"🚑 {usuario.mention} se lesionó y estará lesionado durante 24 horas."
+                        f"🚑 {usuario.mention} se lesionó y estará lesionado durante 3 horas."
                     )
 
     @comprobar_acciones.before_loop
