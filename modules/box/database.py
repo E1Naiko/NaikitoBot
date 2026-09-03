@@ -1776,3 +1776,489 @@ def comprar_equipamiento_progresivo(
         db.commit()
 
     return "comprado", saldo - precio, nivel_actual + 1
+
+# ============================================================
+# ADMINISTRACIÓN
+# ============================================================
+
+def admin_obtener_info_usuario(
+    guild_id: int,
+    user_id: int,
+):
+    """Devuelve toda la información administrativa del Box."""
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
+
+        usuario = db.execute(
+            """
+            SELECT experiencia,
+                   dinero,
+                   probabilidad_lesion,
+                   lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        mejoras = db.execute(
+            """
+            SELECT mejora, nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id = ?
+            ORDER BY mejora
+            """,
+            (guild_id, user_id),
+        ).fetchall()
+
+        accion = db.execute(
+            """
+            SELECT tipo,
+                   iniciado_en,
+                   finaliza_en,
+                   recompensa,
+                   dinero_recompensa
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        sponsors = db.execute(
+            """
+            SELECT id,
+                   tipo,
+                   obtenido_en,
+                   expira_en,
+                   ultimo_pago,
+                   ultimo_tratamiento
+            FROM box_sponsors
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND expira_en > ?
+            ORDER BY expira_en ASC
+            """,
+            (
+                guild_id,
+                user_id,
+                datetime.now().isoformat(),
+            ),
+        ).fetchall()
+
+        equipo = db.execute(
+            """
+            SELECT vida,
+                   vida_maxima,
+                   dano,
+                   dano_maximo,
+                   defensa,
+                   defensa_maxima,
+                   cansancio,
+                   cansancio_maximo,
+                   puntos_habilidad,
+                   casco,
+                   guantes,
+                   protector_bucal,
+                   short,
+                   botas
+            FROM box_equipo
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        desafios_pendientes = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, user_id, user_id),
+        ).fetchone()[0]
+
+        participaciones = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, user_id, user_id),
+        ).fetchone()[0]
+
+        victorias = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND ganador_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()[0]
+
+        db.commit()
+
+    return {
+        "experiencia": usuario[0],
+        "dinero": usuario[1],
+        "probabilidad_lesion": usuario[2],
+        "lesionado_hasta": usuario[3],
+        "mejoras": dict(mejoras),
+        "accion": accion,
+        "sponsors": sponsors,
+        "equipo": equipo,
+        "desafios_pendientes": desafios_pendientes,
+        "participaciones": participaciones,
+        "victorias": victorias,
+    }
+
+
+def admin_modificar_dinero(
+    guild_id: int,
+    user_id: int,
+    cantidad: int,
+):
+    """Modifica el dinero de un usuario."""
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
+
+        saldo_actual, = db.execute(
+            """
+            SELECT dinero
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        nuevo_saldo = saldo_actual + cantidad
+
+        if nuevo_saldo < 0:
+            db.rollback()
+            return False, saldo_actual
+
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (nuevo_saldo, guild_id, user_id),
+        )
+
+        db.commit()
+
+    return True, nuevo_saldo
+
+
+def admin_modificar_experiencia(
+    guild_id: int,
+    user_id: int,
+    cantidad: int,
+):
+    """Modifica la experiencia de un usuario."""
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
+
+        experiencia_actual, = db.execute(
+            """
+            SELECT experiencia
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        nueva_experiencia = experiencia_actual + cantidad
+
+        if nueva_experiencia < 0:
+            db.rollback()
+            return False, experiencia_actual
+
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET experiencia = ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (
+                nueva_experiencia,
+                guild_id,
+                user_id,
+            ),
+        )
+
+        db.commit()
+
+    return True, nueva_experiencia
+
+
+def admin_curar_usuario(
+    guild_id: int,
+    user_id: int,
+):
+    """Elimina la lesión activa de un usuario."""
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        if fila is None:
+            return False, None
+
+        lesionado_hasta = fila[0]
+
+        if lesionado_hasta is None:
+            return False, None
+
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET lesionado_hasta = NULL
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        )
+
+        db.commit()
+
+    return True, lesionado_hasta
+
+
+def admin_modificar_probabilidad_lesion(
+    guild_id: int,
+    user_id: int,
+    probabilidad: float,
+):
+    """Establece manualmente la probabilidad de lesión."""
+
+    if not 0 <= probabilidad <= 100:
+        return False, None
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (
+                guild_id,
+                user_id,
+                probabilidad_lesion
+            )
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, user_id)
+            DO UPDATE SET probabilidad_lesion = excluded.probabilidad_lesion
+            """,
+            (
+                guild_id,
+                user_id,
+                probabilidad,
+            ),
+        )
+
+        db.commit()
+
+    return True, probabilidad
+
+
+def admin_cancelar_accion(
+    guild_id: int,
+    user_id: int,
+):
+    """Cancela la acción activa de un usuario."""
+
+    with conectar_db() as db:
+        accion = db.execute(
+            """
+            SELECT tipo,
+                   iniciado_en,
+                   finaliza_en,
+                   recompensa,
+                   dinero_recompensa
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        if accion is None:
+            return None
+
+        db.execute(
+            """
+            DELETE FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        )
+
+        db.commit()
+
+    return accion
+
+
+def admin_dar_sponsor(
+    guild_id: int,
+    user_id: int,
+    tipo: str,
+    ahora: datetime,
+):
+    """Otorga manualmente un sponsor respetando sus límites."""
+
+    if tipo not in DURACION_SPONSOR:
+        return False, "tipo_invalido"
+
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        creado = _crear_sponsor(
+            db,
+            guild_id,
+            user_id,
+            tipo,
+            ahora,
+        )
+
+        if not creado:
+            db.rollback()
+            return False, "limite"
+
+        db.commit()
+
+    return True, None
+
+
+def admin_quitar_sponsor(
+    guild_id: int,
+    user_id: int,
+    sponsor_id: int,
+):
+    """Elimina un sponsor específico."""
+
+    with conectar_db() as db:
+        sponsor = db.execute(
+            """
+            SELECT id, tipo
+            FROM box_sponsors
+            WHERE id = ?
+            AND guild_id = ?
+            AND user_id = ?
+            """,
+            (
+                sponsor_id,
+                guild_id,
+                user_id,
+            ),
+        ).fetchone()
+
+        if sponsor is None:
+            return None
+
+        db.execute(
+            """
+            DELETE FROM box_sponsors
+            WHERE id = ?
+            """,
+            (sponsor_id,),
+        )
+
+        db.commit()
+
+    return sponsor
+
+
+def admin_reset_usuario(
+    guild_id: int,
+    user_id: int,
+):
+    """
+    Resetea completamente el progreso Box del usuario.
+
+    No modifica ningún dato de Madrugue ni SSF.
+    """
+
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        tablas = (
+            "box_acciones",
+            "box_desafios",
+            "box_mejoras",
+            "box_sponsors",
+            "box_desafios_historial",
+            "box_equipo",
+            "box_usuarios",
+        )
+
+        eliminados = {}
+
+        for tabla in tablas:
+            if tabla == "box_desafios":
+                cursor = db.execute(
+                    """
+                    DELETE FROM box_desafios
+                    WHERE guild_id = ?
+                    AND (retador_id = ? OR contrincante_id = ?)
+                    """,
+                    (guild_id, user_id, user_id),
+                )
+            elif tabla == "box_desafios_historial":
+                cursor = db.execute(
+                    """
+                    DELETE FROM box_desafios_historial
+                    WHERE guild_id = ?
+                    AND (retador_id = ?
+                    OR contrincante_id = ?
+                    OR ganador_id = ?)
+                    """,
+                    (
+                        guild_id,
+                        user_id,
+                        user_id,
+                        user_id,
+                    ),
+                )
+            else:
+                cursor = db.execute(
+                    f"""
+                    DELETE FROM {tabla}
+                    WHERE guild_id = ?
+                    AND user_id = ?
+                    """,
+                    (guild_id, user_id),
+                )
+
+            eliminados[tabla] = cursor.rowcount
+
+        db.commit()
+
+    return eliminados
