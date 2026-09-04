@@ -7,6 +7,7 @@ from modules.box.database import (
     iniciar_accion,
     obtener_nivel_mejora,
     obtener_estadisticas_box,
+    obtener_estado_box,
     comprar_tratamiento,
     obtener_top_desafios,
     obtener_saldo,
@@ -16,6 +17,8 @@ from modules.box.database import (
     obtener_sponsor_para_promocion,
     procesar_pagos_sponsors,
     procesar_sponsors_medicos,
+    obtener_equipo,
+    comprar_equipamiento_progresivo,
 
     # Administración
     admin_obtener_info_usuario,

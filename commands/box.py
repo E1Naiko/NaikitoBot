@@ -307,6 +307,8 @@ class Box(commands.GroupCog, group_name="box"):
         minutos: int | None,
         tipo: str,
         recompensa_por_minuto: int,
+        hasta: str | None = None,
+        permitir_lesionado: bool = False,
     ):
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -425,13 +427,22 @@ class Box(commands.GroupCog, group_name="box"):
         name="entrenar",
         description="Entrena durante un tiempo para obtener experiencia.",
     )
-    @app_commands.describe(minutos="Cantidad de minutos de entrenamiento.")
-    async def entrenar(self, interaction: discord.Interaction, minutos: int):
+    @app_commands.describe(
+        minutos="Cantidad de minutos de entrenamiento (1-1440).",
+        hasta="Hora a la que quieres terminar, formato HH:MM.",
+    )
+    async def entrenar(
+        self,
+        interaction: discord.Interaction,
+        minutos: int | None = None,
+        hasta: str | None = None,
+    ):
         nivel = obtener_nivel_mejora(
             interaction.guild.id,
             interaction.user.id,
             "entrenamiento",
         ) if interaction.guild else 0
+
         await self._comenzar_accion(
             interaction,
             minutos,
@@ -444,13 +455,22 @@ class Box(commands.GroupCog, group_name="box"):
         name="trabajar",
         description="Trabaja durante un tiempo para obtener dinero.",
     )
-    @app_commands.describe(minutos="Cantidad de minutos de trabajo.")
-    async def trabajar(self, interaction: discord.Interaction, minutos: int):
+    @app_commands.describe(
+        minutos="Cantidad de minutos de trabajo (1-1440).",
+        hasta="Hora a la que quieres terminar, formato HH:MM.",
+    )
+    async def trabajar(
+        self,
+        interaction: discord.Interaction,
+        minutos: int | None = None,
+        hasta: str | None = None,
+    ):
         nivel = obtener_nivel_mejora(
             interaction.guild.id,
             interaction.user.id,
             "trabajo",
         ) if interaction.guild else 0
+    
         await self._comenzar_accion(
             interaction,
             minutos,
@@ -500,14 +520,21 @@ class Box(commands.GroupCog, group_name="box"):
         description="Promocionate durante un tiempo para intentar conseguir un sponsor.",
     )
     @app_commands.describe(
-        minutos="Cantidad de minutos que quieres promocionarte (1-1440)."
+        minutos="Cantidad de minutos que quieres promocionarte (1-1440).",
+        hasta="Hora a la que quieres terminar, formato HH:MM.",
     )
-    async def promoverme(self, interaction: discord.Interaction, minutos: int):
+    async def promoverme(
+        self,
+        interaction: discord.Interaction,
+        minutos: int | None = None,
+        hasta: str | None = None,
+    ):
         await self._comenzar_accion(
             interaction,
             minutos,
             "PROMOVIENDO",
             0,
+            hasta,
             permitir_lesionado=True,
         )
 
