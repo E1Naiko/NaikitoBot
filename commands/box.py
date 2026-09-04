@@ -33,12 +33,14 @@ from config import (
 MEJORAS = {
     "entrenamiento": {
         "nombre": "Creatina",
+        "emoji": "🔥",
         "descripcion": "+5 EXP por minuto de entrenamiento",
         "precio": 1000,
         "maximo": 10,
     },
     "trabajo": {
         "nombre": "Cafe",
+        "emoji": "☕",
         "descripcion": "+50 dinero por minuto de trabajo",
         "precio": 1000,
         "maximo": 10,
@@ -48,11 +50,13 @@ MEJORAS = {
 TRATAMIENTOS = {
     "fisioterapeutico": {
         "nombre": "Tratamiento Fisioterapeutico",
+        "emoji": "🧑‍⚕️",
         "precio": 10000,
         "reinicia_probabilidad": False,
     },
     "cinco_estrellas": {
         "nombre": "Tratamiento 5 estrellas",
+        "emoji": "🏝️",
         "precio": 50000,
         "reinicia_probabilidad": True,
     },
@@ -739,7 +743,8 @@ class Box(commands.GroupCog, group_name="box"):
                 clave,
             )
             lineas.append(
-                f"**{mejora['nombre']}** — {mejora['descripcion']} | "
+                f"{mejora['emoji']} **{mejora['nombre']}** — "
+                f"{mejora['descripcion']} | "
                 f"Nivel **{nivel}/{mejora['maximo']}** | "
                 f"Siguiente nivel: **{precio_mejora(mejora, nivel)}**"
             )
@@ -769,7 +774,7 @@ class Box(commands.GroupCog, group_name="box"):
         lineas.append("\n**Tratamientos**")
         for tratamiento in TRATAMIENTOS.values():
             lineas.append(
-                f"**{tratamiento['nombre']}** — "
+                f"{tratamiento['emoji']} **{tratamiento['nombre']}** — "
                 f"Precio fijo: **{tratamiento['precio']}**"
             )
         await interaction.response.send_message("\n".join(lineas))
