@@ -228,15 +228,12 @@ class NaikitoBot(commands.Bot):
         print("Cogs antes de cargar Box:", list(self.cogs.keys()))
         print("Box existente:", self.get_cog("Box"))
         print("====================================")
-        
+
         await self.load_extension(
             "commands.box"
         )
-        
+
         print("Box cargado correctamente:", self.get_cog("Box"))
-        await self.load_extension(
-            "commands.box"
-        )
 
         # ====================================================
         # SINCRONIZAR COMANDOS
