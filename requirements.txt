@@ -1,2 +1,7 @@
 discord.py==2.7.1
 python-dotenv==1.2.3
+# Windows no incluye la base de datos de zonas horarias de IANA, y
+# config/settings.py ejecuta ZoneInfo("America/Argentina/Buenos_Aires") al
+# importar el modulo. Sin este paquete el bot no arranca en Windows.
+# En Linux/macOS se usa la base del sistema y este paquete queda de respaldo.
+tzdata>=2024.1

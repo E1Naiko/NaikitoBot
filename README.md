@@ -19,6 +19,22 @@ pip install -r requirements.txt
 Crear un archivo `.env` en la raíz del proyecto a partir de `.env.example`.
 No subas `.env` al repositorio: contiene el token del bot.
 
+`requirements.txt` incluye `tzdata`. Es obligatorio en Windows: el sistema no
+trae la base de datos de zonas horarias de IANA y `config/settings.py` construye
+`ZoneInfo("America/Argentina/Buenos_Aires")` al importar el módulo, así que sin
+ese paquete el bot falla al arrancar con
+`ZoneInfoNotFoundError: 'No time zone found with key America/Argentina/Buenos_Aires'`.
+
+## Pruebas
+
+Las pruebas no necesitan token de Discord ni conexión: usan dobles de
+`discord.Interaction` y una base de datos SQLite temporal.
+
+```text
+pip install -r requirements-dev.txt
+pytest
+```
+
 ```dotenv
 DISCORD_TOKEN=<TOKEN_DEL_BOT>
 ADMIN_USER_IDS=<ID_USUARIO_ADMIN>[,<ID_USUARIO_ADMIN_2>]
