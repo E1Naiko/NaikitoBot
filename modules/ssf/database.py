@@ -288,8 +288,7 @@ def eliminar_participante(
             UPDATE ssf_participantes
             SET
                 eliminado = 1,
-                fecha_eliminacion = ?,
-                racha_actual = 0
+                fecha_eliminacion = ?
             WHERE desafio_id = ?
             AND user_id = ?
         """, (

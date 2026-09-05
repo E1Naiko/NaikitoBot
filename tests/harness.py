@@ -43,6 +43,17 @@ class GuildFalso:
         return self._miembros.get(user_id)
 
 
+class _RespuestaProhibida:
+    """Respuesta HTTP mínima para construir ``discord.Forbidden``.
+
+    ``discord.py`` lee ``response.status`` al crear la excepción, así que
+    ``None`` no sirve: revienta con ``AttributeError`` en vez de ``Forbidden``.
+    """
+
+    status = 403
+    reason = "Forbidden"
+
+
 class UsuarioFalso:
     def __init__(self, user_id=42, nombre="Tester"):
         self.id = user_id
@@ -55,7 +66,10 @@ class UsuarioFalso:
         if not self.dm_abierto:
             import discord
 
-            raise discord.Forbidden(None, "No puedo enviarte mensajes directos.")
+            raise discord.Forbidden(
+                _RespuestaProhibida(),
+                "No puedo enviarte mensajes directos.",
+            )
         self.mensajes_directos.append(content)
         return MensajeFalso()
 

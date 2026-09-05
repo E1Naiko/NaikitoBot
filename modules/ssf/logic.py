@@ -1,23 +1,6 @@
 from datetime import date, timedelta
 
-
-RANGOS = (
-    (0, "Soldado 🪖"),
-    (3, "Cabo 🎗️"),
-    (5, "Tercer Sargento 🥉"),
-    (7, "Segundo Sargento 🥈"),
-    (9, "Primer Sargento 🥇"),
-    (11, "Subteniente 🛡️"),
-    (13, "APS ⚔️"),
-    (15, "Segundo Teniente 🎖️"),
-    (17, "Primer Teniente 🎖️⭐"),
-    (19, "Capitán 🎖️⭐ 🎖️⭐"),
-    (21, "Mayor 🎖️⭐ 🎖️⭐ 🎖️⭐"),
-    (23, "Coronel ⭐"),
-    (25, "General 🌟"),
-    (27, "Rey 👑"),
-    (29, "Monje ♾️"),
-)
+from modules.ssf.constants import RANGOS
 
 
 def calcular_rango(dias_racha):
