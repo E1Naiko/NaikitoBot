@@ -32,7 +32,10 @@ ARBOL_ESPERADO = {
     "admin resettotal|Command",
     "admin resetusuario|Command",
     "admin ssf|Group",
+    "admin ssf agregar|Command",
     "admin ssf iniciar|Command",
+    "admin ssf quitar|Command",
+    "admin ssf recalcular|Command",
     "admin ssf revivir|Command",
     "admin stats|Command",
     "admin top|Command",
@@ -160,6 +163,9 @@ COMANDOS_CON_ARGUMENTO_FALSO = [
     ("resettotal", (Choice("SI"),)),
     ("ssf_revivir", (None, "2026-09-01")),
     ("ssf_iniciar", (None,)),
+    ("ssf_agregar", (None, "2026-09-04")),
+    ("ssf_quitar", (None, "2026-09-05")),
+    ("ssf_recalcular", (None,)),
     ("manualadd", (None, "2026-09-01", "05:45")),
 ]
 
@@ -183,6 +189,7 @@ def test_comandos_rechazan_a_no_administradores(cog, comando, argumentos):
         ("box_info", (None,)),
         ("stats", ()),
         ("ssf_revivir", (None, "2026-09-01")),
+        ("ssf_quitar", (None, "2026-09-05")),
         ("manualadd", (None, "2026-09-01", "05:45")),
     ],
 )

@@ -198,6 +198,9 @@ con ratio `∞`.
 | `/admin manualadd` | `usuario`, `fecha`, `hora` | Agrega manualmente una madrugada. |
 | `/admin ssf revivir` | `usuario`, `fecha` | Revive a un participante eliminado en una fecha. |
 | `/admin ssf iniciar` | `canal` | Inicia un desafío SeptSinFP en un canal. |
+| `/admin ssf agregar` | `usuario`, `fecha` | Agrega manualmente un día a un participante activo. |
+| `/admin ssf quitar` | `usuario`, `fecha` | Quita manualmente un día a un participante. |
+| `/admin ssf recalcular` | `usuario` | Recalcula las rachas desde los registros guardados. |
 | `/admin fileexecute` | `archivo` | Ejecuta comandos administrativos desde un archivo TXT. |
 
 Ejemplo de formatos para los parámetros:
@@ -208,6 +211,25 @@ fecha: YYYY-MM-DD
 hora: HH:MM
 canal: <ID_CANAL> o <#ID_CANAL>
 ```
+
+### Reparación manual de SeptSinFP
+
+Los registros diarios (`ssf_registros`) son la fuente de verdad y ningún flujo
+del juego los borra; las rachas mostradas son un caché calculado desde ellos.
+Si la racha mostrada queda incorrecta, se corrige sin tocar el estado de
+eliminado:
+
+- `/admin ssf recalcular <usuario>`: restaura ambas rachas desde los registros.
+  Es la reparación para participantes eliminados con la racha en 0.
+- `/admin ssf agregar <usuario> <fecha>`: suma un día a un participante activo
+  (rechaza eliminados —para ellos existe `revivir`— y fechas futuras).
+- `/admin ssf quitar <usuario> <fecha>`: saca un día, incluso a eliminados, sin
+  cambiar su estado.
+
+Ejemplo: un participante revivido con la fecha de hoy (`2026-09-05`) en vez del
+día perdido (`2026-09-04`) queda con racha 1. Se corrige con
+`ssf quitar <usuario> 2026-09-05` seguido de
+`ssf agregar <usuario> 2026-09-04`, y vuelve a 4 días.
 
 ## Ejecución desde archivo
 
@@ -224,6 +246,9 @@ resetusuario <ID_USUARIO>
 resettotal SI
 ssf revivir <ID_USUARIO> YYYY-MM-DD
 ssf iniciar <ID_CANAL>
+ssf agregar <ID_USUARIO> YYYY-MM-DD
+ssf quitar <ID_USUARIO> YYYY-MM-DD
+ssf recalcular <ID_USUARIO>
 info
 stats
 top

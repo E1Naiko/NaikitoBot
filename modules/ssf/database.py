@@ -400,6 +400,36 @@ def obtener_registros_usuario(
         )).fetchall()
 
 
+def eliminar_registro(
+    desafio_id,
+    user_id,
+    fecha,
+):
+    """
+    Elimina la supervivencia de un día.
+
+    Solo lo usan las herramientas administrativas de reparación manual.
+    Ningún flujo normal del juego borra registros.
+    """
+
+    with conectar_db() as db:
+
+        cursor = db.execute("""
+            DELETE FROM ssf_registros
+            WHERE desafio_id = ?
+            AND user_id = ?
+            AND fecha = ?
+        """, (
+            desafio_id,
+            user_id,
+            fecha,
+        ))
+
+        db.commit()
+
+        return cursor.rowcount
+
+
 # ============================================================
 # ESTADÍSTICAS
 # ============================================================
