@@ -10,7 +10,6 @@ import pytest
 
 from core.utils import ahora
 from modules.box.database import (
-    comprar_mejora,
     obtener_equipo,
     obtener_nivel_mejora,
     obtener_saldo,
