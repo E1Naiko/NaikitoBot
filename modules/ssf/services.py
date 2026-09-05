@@ -13,6 +13,7 @@ from modules.ssf.constants import (
 from modules.ssf.database import (
     crear_desafio,
     eliminar_participante,
+    eliminar_registro,
     guardar_registro,
     obtener_desafio_activo,
     obtener_estadisticas_desafio,
@@ -48,9 +49,12 @@ __all__ = [
     "calcular_rango",
     "fecha_dentro_del_desafio",
     # Desafíos y participantes
+    "agregar_dia",
     "cerrar_desafios_finalizados",
     "eliminar_faltantes",
     "iniciar_desafio",
+    "quitar_dia",
+    "recalcular_rachas",
     "obtener_estado_desafio",
     "obtener_estado_usuario",
     "obtener_lista_participantes",
@@ -583,6 +587,287 @@ def revivir_participante(
         "mejor_racha": mejor_racha,
         "rango": calcular_rango(racha),
         "fecha": fecha,
+    }
+
+# ============================================================
+# REPARACIÓN MANUAL (SOLO ADMINISTRADORES)
+# ============================================================
+
+def _actualizar_rachas_desde_registros(
+    desafio_id,
+    user_id,
+):
+    """
+    Recalcula ambas rachas desde los registros guardados.
+
+    Los registros son la fuente de verdad y las rachas
+    almacenadas un caché: la racha actual es la racha
+    consecutiva que termina en el último día registrado.
+
+    No toca el estado de eliminado del participante.
+    """
+
+    registros = obtener_registros_usuario(
+        desafio_id,
+        user_id,
+    )
+
+    fechas = [
+        date.fromisoformat(
+            registro[0]
+        )
+        for registro in registros
+    ]
+
+    if not fechas:
+        racha = 0
+    else:
+        racha = calcular_racha(
+            fechas,
+            max(fechas),
+        )
+
+    mejor_racha = calcular_mejor_racha(
+        fechas
+    )
+
+    actualizar_participante(
+        desafio_id=desafio_id,
+        user_id=user_id,
+        racha_actual=racha,
+        mejor_racha=mejor_racha,
+    )
+
+    return (
+        racha,
+        mejor_racha,
+    )
+
+
+def agregar_dia(
+    guild_id,
+    user_id,
+    fecha,
+    hoy,
+):
+    """
+    Agrega manualmente un día sobrevivido a un participante activo.
+
+    Sirve para corregir olvidos o errores sin revivir a nadie:
+    el participante debe estar activo (para eliminados existe
+    ``revivir_participante``). No acepta fechas futuras.
+    """
+
+    desafio = obtener_desafio_activo(guild_id)
+
+    if desafio is None:
+        return {
+            "exitoso": False,
+            "motivo": "sin_desafio",
+        }
+
+    (
+        desafio_id,
+        _guild_id,
+        nombre,
+        fecha_inicio,
+        fecha_fin,
+        _canal_id,
+        _activo,
+    ) = desafio
+
+    if not fecha_dentro_del_desafio(
+        fecha,
+        fecha_inicio,
+        fecha_fin,
+    ):
+        return {
+            "exitoso": False,
+            "motivo": "fuera_de_fecha",
+        }
+
+    participante = obtener_participante(
+        desafio_id,
+        user_id,
+    )
+
+    if participante is None:
+        return {
+            "exitoso": False,
+            "motivo": "no_participante",
+        }
+
+    if participante[4]:
+        return {
+            "exitoso": False,
+            "motivo": "eliminado",
+        }
+
+    if fecha > hoy:
+        return {
+            "exitoso": False,
+            "motivo": "futura",
+        }
+
+    if tiene_registro(
+        desafio_id,
+        user_id,
+        fecha.isoformat(),
+    ):
+        return {
+            "exitoso": False,
+            "motivo": "ya_registrado",
+        }
+
+    guardar_registro(
+        desafio_id=desafio_id,
+        user_id=user_id,
+        fecha=fecha.isoformat(),
+        hora="ADMIN",
+    )
+
+    racha, mejor_racha = (
+        _actualizar_rachas_desde_registros(
+            desafio_id,
+            user_id,
+        )
+    )
+
+    return {
+        "exitoso": True,
+        "motivo": "agregado",
+        "nombre": nombre,
+        "racha": racha,
+        "mejor_racha": mejor_racha,
+        "rango": calcular_rango(racha),
+        "fecha": fecha,
+    }
+
+
+def quitar_dia(
+    guild_id,
+    user_id,
+    fecha,
+):
+    """
+    Quita manualmente un día sobrevivido a un participante.
+
+    Acepta participantes eliminados: quitar un día no cambia
+    el estado de eliminado, solo recalcula las rachas desde
+    los registros restantes.
+
+    No valida que la fecha esté dentro del desafío ni que no
+    sea futura: si existe un registro erróneo, hay que poder
+    borrarlo sea cual sea su fecha.
+    """
+
+    desafio = obtener_desafio_activo(guild_id)
+
+    if desafio is None:
+        return {
+            "exitoso": False,
+            "motivo": "sin_desafio",
+        }
+
+    desafio_id = desafio[0]
+    nombre = desafio[2]
+
+    participante = obtener_participante(
+        desafio_id,
+        user_id,
+    )
+
+    if participante is None:
+        return {
+            "exitoso": False,
+            "motivo": "no_participante",
+        }
+
+    if not tiene_registro(
+        desafio_id,
+        user_id,
+        fecha.isoformat(),
+    ):
+        return {
+            "exitoso": False,
+            "motivo": "sin_registro",
+        }
+
+    eliminar_registro(
+        desafio_id=desafio_id,
+        user_id=user_id,
+        fecha=fecha.isoformat(),
+    )
+
+    racha, mejor_racha = (
+        _actualizar_rachas_desde_registros(
+            desafio_id,
+            user_id,
+        )
+    )
+
+    return {
+        "exitoso": True,
+        "motivo": "quitado",
+        "nombre": nombre,
+        "racha": racha,
+        "mejor_racha": mejor_racha,
+        "rango": calcular_rango(racha),
+        "fecha": fecha,
+        "eliminado": bool(participante[4]),
+    }
+
+
+def recalcular_rachas(
+    guild_id,
+    user_id,
+):
+    """
+    Recalcula las rachas de un participante desde sus registros.
+
+    No cambia el estado de eliminado: sirve para reparar la
+    racha mostrada cuando quedó en un valor incorrecto (por
+    ejemplo, participantes eliminados por el código anterior
+    a la corrección, que pisaba la racha con 0).
+    """
+
+    desafio = obtener_desafio_activo(guild_id)
+
+    if desafio is None:
+        return {
+            "exitoso": False,
+            "motivo": "sin_desafio",
+        }
+
+    desafio_id = desafio[0]
+    nombre = desafio[2]
+
+    participante = obtener_participante(
+        desafio_id,
+        user_id,
+    )
+
+    if participante is None:
+        return {
+            "exitoso": False,
+            "motivo": "no_participante",
+        }
+
+    racha, mejor_racha = (
+        _actualizar_rachas_desde_registros(
+            desafio_id,
+            user_id,
+        )
+    )
+
+    return {
+        "exitoso": True,
+        "motivo": "recalculado",
+        "nombre": nombre,
+        "racha": racha,
+        "mejor_racha": mejor_racha,
+        "rango": calcular_rango(racha),
+        "eliminado": bool(participante[4]),
     }
 
 # ============================================================

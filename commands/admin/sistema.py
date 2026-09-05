@@ -333,6 +333,25 @@ class SistemaMixin:
             )
             parametros["fecha"] = argumentos[1]
 
+        elif nombre in {"agregar", "quitar"}:
+            if len(argumentos) != 2:
+                raise ValueError(f"{nombre} requiere miembro y fecha.")
+
+            parametros["usuario"] = await self._resolver_miembro(
+                interaction,
+                argumentos[0],
+            )
+            parametros["fecha"] = argumentos[1]
+
+        elif nombre == "recalcular":
+            if len(argumentos) != 1:
+                raise ValueError("recalcular requiere un miembro.")
+
+            parametros["usuario"] = await self._resolver_miembro(
+                interaction,
+                argumentos[0],
+            )
+
         elif nombre == "iniciar":
             if len(argumentos) != 1 or interaction.guild is None:
                 raise ValueError("iniciar requiere el ID de un canal.")
