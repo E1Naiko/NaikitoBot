@@ -113,7 +113,7 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 | `/box trabajar` | `minutos` o `hasta` | Trabaja durante el tiempo indicado o hasta una hora `HH:MM`. |
 | `/box sparring` | `contrincante` | Envía un desafío de sparring de una hora a otro usuario. |
 | `/box desafio` | `contrincante` | Envía un desafío de pelea de una hora a otro usuario. |
-| `/box tienda` | Ninguno | Muestra las mejoras y el nivel actual del usuario. |
+| `/box tienda` | Ninguno | Muestra el catálogo con el nivel actual y un botón por artículo para comprarlo. |
 | `/box comprar` | `tipo` y `articulo` | Compra una mejora, una pieza de equipamiento o un tratamiento usando dinero. |
 | `/box saldo` | Ninguno | Muestra la experiencia y el dinero del usuario. |
 | `/box stats` | Ninguno | Muestra tus estadísticas de Box; la respuesta es privada. |
@@ -159,6 +159,26 @@ Para comprar una mejora se utiliza la opción correspondiente:
 /box comprar mejora: Creatina
 /box comprar mejora: Cafe
 ```
+
+### Comprar con los botones de la tienda
+
+`/box tienda` muestra el catálogo y, debajo, un botón por artículo con el emoji
+que lo representa. Tocar el botón compra ese artículo.
+
+Cada botón guarda en su `custom_id` a qué usuario pertenece la tienda
+(`box_comprar:<owner>:<categoría>:<artículo>`), así que solo funciona para quien
+abrió esa tienda; si otro usuario lo toca, se le avisa que use `/box tienda`
+para abrir la suya. Esto evita que compre a un precio distinto del que muestra
+el mensaje, ya que los precios dependen del nivel de quien la abrió.
+
+La confirmación de la compra es efímera: solo la ve quien compró y no ensucia
+el canal.
+
+Los botones se registran por patrón en `setup()`, de modo que siguen
+funcionando en mensajes de tienda anteriores a un reinicio del bot.
+
+`/box comprar` y `/box tratamiento` siguen disponibles para quienes prefieran
+escribir el comando.
 
 El precio del siguiente nivel se calcula como `ceil(1000 x 1.25^nivel_actual)`.
 Por ejemplo: nivel 0 cuesta 1000, nivel 1 cuesta 1250 y nivel 2 cuesta 1563.
