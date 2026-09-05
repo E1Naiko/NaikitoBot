@@ -1,7 +1,16 @@
-from datetime import date, datetime
+"""Fachada del módulo SeptSinFP.
+
+Los cogs importan desde acá y no directamente de ``database`` ni ``logic``,
+igual que en los módulos Madrugue y Box.
+"""
+
+from datetime import date
+
+from modules.ssf.constants import (
+    TEXTO_AYUDA,
+)
 
 from modules.ssf.database import (
-    cerrar_desafio,
     crear_desafio,
     eliminar_participante,
     guardar_registro,
@@ -24,11 +33,32 @@ from modules.ssf.logic import (
     calcular_mejor_racha,
     calcular_racha,
     calcular_rango,
-    fecha_anterior,
     fecha_dentro_del_desafio,
 )
 
 from core.database import conectar_db
+
+
+__all__ = [
+    # Constantes
+    "TEXTO_AYUDA",
+    # Lógica pura
+    "calcular_mejor_racha",
+    "calcular_racha",
+    "calcular_rango",
+    "fecha_dentro_del_desafio",
+    # Desafíos y participantes
+    "cerrar_desafios_finalizados",
+    "eliminar_faltantes",
+    "iniciar_desafio",
+    "obtener_estado_desafio",
+    "obtener_estado_usuario",
+    "obtener_lista_participantes",
+    "procesar_eliminaciones_diarias",
+    "registrar_sobrevivi",
+    "registrar_usuario",
+    "revivir_participante",
+]
 
 
 def iniciar_desafio(
@@ -136,13 +166,51 @@ def registrar_usuario(
         fecha_registro=ahora.isoformat(),
     )
 
+    # Registrarse cuenta como haber sobrevivido el día. Sin esto, quien se
+    # registra el 1/9 y cumple del 2 al 6 quedaba con racha 5 en lugar de 6,
+    # porque sólo /ssf sobrevivi creaba entradas en ssf_registros.
+    guardar_registro(
+        desafio_id=desafio_id,
+        user_id=user_id,
+        fecha=fecha.isoformat(),
+        hora=ahora.strftime("%H:%M:%S"),
+    )
+
+    fechas = [
+        date.fromisoformat(
+            registro[0]
+        )
+        for registro in obtener_registros_usuario(
+            desafio_id,
+            user_id,
+        )
+    ]
+
+    racha = calcular_racha(
+        fechas,
+        fecha,
+    )
+
+    mejor_racha = calcular_mejor_racha(
+        fechas
+    )
+
+    actualizar_participante(
+        desafio_id=desafio_id,
+        user_id=user_id,
+        racha_actual=racha,
+        mejor_racha=mejor_racha,
+    )
+
     return {
         "exitoso": True,
         "motivo": "registrado",
         "nombre": nombre,
         "fecha_inicio": fecha_inicio,
         "fecha_fin": fecha_fin,
-        "rango": calcular_rango(0),
+        "racha": racha,
+        "mejor_racha": mejor_racha,
+        "rango": calcular_rango(racha),
     }
 
 
@@ -517,98 +585,6 @@ def revivir_participante(
         "fecha": fecha,
     }
 
-def procesar_eliminaciones_diarias(fecha):
-    """
-    Elimina automáticamente a los participantes que no
-    registraron /ssf sobrevivi durante la fecha indicada.
-
-    Procesa todos los desafíos activos.
-    """
-
-    resultados = []
-
-    desafios = obtener_desafios_activos()
-
-    for desafio in desafios:
-
-        (
-            desafio_id,
-            guild_id,
-            nombre,
-            fecha_inicio,
-            fecha_fin,
-            canal_id,
-            activo,
-        ) = desafio
-
-        # ----------------------------------------------------
-        # Convertir fechas almacenadas en SQLite
-        # ----------------------------------------------------
-
-        inicio = date.fromisoformat(fecha_inicio)
-        fin = date.fromisoformat(fecha_fin)
-
-        # ----------------------------------------------------
-        # Solo procesar fechas dentro del desafío
-        # ----------------------------------------------------
-
-        if fecha < inicio or fecha > fin:
-            continue
-
-        # ----------------------------------------------------
-        # Obtener participantes
-        # ----------------------------------------------------
-
-        participantes = obtener_participantes(
-            desafio_id
-        )
-
-        eliminados = []
-
-        for participante in participantes:
-
-            user_id = participante[0]
-            username = participante[1]
-            eliminado = participante[3]
-
-            # Ya estaba eliminado.
-            if eliminado:
-                continue
-
-            # Tiene registro de supervivencia.
-            if tiene_registro(
-                desafio_id,
-                user_id,
-                fecha.isoformat(),
-            ):
-                continue
-
-            # No registró: eliminar.
-            eliminar_participante(
-                desafio_id=desafio_id,
-                user_id=user_id,
-                fecha_eliminacion=fecha.isoformat(),
-            )
-
-            eliminados.append(
-                {
-                    "user_id": user_id,
-                    "username": username,
-                }
-            )
-
-        resultados.append(
-            {
-                "desafio_id": desafio_id,
-                "guild_id": guild_id,
-                "nombre": nombre,
-                "fecha": fecha,
-                "eliminados": eliminados,
-            }
-        )
-
-    return resultados
-
 # ============================================================
 # ELIMINACIÓN AUTOMÁTICA
 # ============================================================
@@ -620,8 +596,6 @@ def procesar_eliminaciones_diarias(fecha):
 
     Cada desafío se procesa de manera independiente.
     """
-
-    from modules.ssf.database import conectar_db
 
     resultados = []
 

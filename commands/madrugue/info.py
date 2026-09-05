@@ -1,97 +1,17 @@
+"""Consultas de Madrugue: estadísticas, ranking y ayuda."""
+
 import discord
 from discord import app_commands
-from discord.ext import commands
 
-from core.utils import ahora
-
+from commands.madrugue.base import solo_servidor
 from modules.madrugue.services import (
     obtener_stats_madrugue,
     obtener_top_madrugue,
-    registrar_madrugue,
 )
 
 
-class Madrugue(commands.Cog):
-    """Comandos del sistema Madrugue."""
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-
-    # ========================================================
-    # /madrugue
-    # ========================================================
-
-    @app_commands.command(
-        name="madrugue",
-        description="Registra tu madrugada.",
-    )
-    async def madrugue(
-        self,
-        interaction: discord.Interaction,
-    ):
-        """Registra directamente una madrugada."""
-
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor."
-            )
-            return
-
-        resultado = registrar_madrugue(
-            guild_id=interaction.guild.id,
-            user_id=interaction.user.id,
-            username=interaction.user.display_name,
-            ahora=ahora(),
-        )
-
-        if resultado.motivo == "fuera_de_horario":
-            await interaction.response.send_message(
-                f"🌙 {interaction.user.mention} todavía no "
-                "es hora de madrugar para el ranking.\n"
-                "El horario válido es de **05:30 a 10:00**.\n"
-                f"🇦🇷 Hora actual: "
-                f"**{resultado.hora.strftime('%H:%M')}**"
-            )
-            return
-
-        if resultado.motivo == "ya_registrado":
-            await interaction.response.send_message(
-                f"⚠️ {interaction.user.mention} ya registraste "
-                "tu madrugada de hoy a las "
-                f"**{resultado.hora_anterior}**.\n"
-                f"Obtuviste "
-                f"**{resultado.puntos_anterior:.0f} puntos**."
-            )
-            return
-
-        if resultado.puntos_base == 100:
-            emoji = "🥇"
-        elif resultado.puntos_base == 25:
-            emoji = "🥈"
-        else:
-            emoji = "🥉"
-
-        await interaction.response.send_message(
-            f"🌅 **¡Madrugaste, "
-            f"{interaction.user.mention}!**\n\n"
-            f"{emoji} Hora: "
-            f"**{resultado.hora.strftime('%H:%M')}**\n"
-            f"💰 Puntos base: "
-            f"**{resultado.puntos_base}**\n"
-            f"🔥 Racha: "
-            f"**{resultado.racha} días**\n"
-            f"⭐ Multiplicador: "
-            f"**×{resultado.multiplicador:.3f}**\n"
-            f"🏆 Puntos obtenidos: "
-            f"**{resultado.puntos_finales:.1f}**\n"
-            f"📊 Puntos acumulados: "
-            f"**{resultado.total_puntos:.1f}**"
-        )
-
-    # ========================================================
-    # /madrugue_stats
-    # ========================================================
+class InfoMixin:
+    """Comandos de consulta del ranking de madrugadores."""
 
     @app_commands.command(
         name="madrugue_stats",
@@ -103,11 +23,7 @@ class Madrugue(commands.Cog):
     ):
         """Muestra las estadísticas de Madrugue."""
 
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor."
-            )
+        if not await solo_servidor(interaction):
             return
 
         stats = obtener_stats_madrugue(
@@ -124,10 +40,6 @@ class Madrugue(commands.Cog):
             f"**{stats['mejor_racha']} días**"
         )
 
-    # ========================================================
-    # /madrugue_top
-    # ========================================================
-
     @app_commands.command(
         name="madrugue_top",
         description="Muestra el TOP de Madrugue del servidor.",
@@ -138,11 +50,7 @@ class Madrugue(commands.Cog):
     ):
         """Muestra el ranking histórico de Madrugue."""
 
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse "
-                "dentro de un servidor."
-            )
+        if not await solo_servidor(interaction):
             return
 
         resultados = obtener_top_madrugue(
@@ -198,10 +106,6 @@ class Madrugue(commands.Cog):
         await interaction.response.send_message(
             embed=embed
         )
-
-    # ========================================================
-    # /madrugue_ayuda
-    # ========================================================
 
     @app_commands.command(
         name="madrugue_ayuda",
@@ -277,11 +181,3 @@ class Madrugue(commands.Cog):
         await interaction.response.send_message(
             embed=embed
         )
-
-
-async def setup(bot: commands.Bot):
-    """Carga el Cog de Madrugue."""
-
-    await bot.add_cog(
-        Madrugue(bot)
-    )

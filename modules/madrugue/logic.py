@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from config import (
+from modules.madrugue.constants import (
     BONUS_MAXIMO,
     BONUS_MINIMO,
     FIN_MADRUGADA,
