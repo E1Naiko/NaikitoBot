@@ -16,6 +16,11 @@ class RespuestaFalsa:
     async def send_message(self, content=None, **kwargs):
         self._registro.append(_Mensaje(content, kwargs))
 
+    async def send(self, content=None, **kwargs):
+        """Equivalente de ``followup.send`` sobre el mismo registro."""
+
+        self._registro.append(_Mensaje(content, kwargs))
+
     async def edit_message(self, content=None, **kwargs):
         self._registro.append(_Mensaje(content, kwargs))
 
@@ -35,12 +40,20 @@ class MensajeFalso:
 
 
 class GuildFalso:
-    def __init__(self, guild_id=1, miembros=None):
+    def __init__(self, guild_id=1, miembros=None, nombre="Servidor"):
         self.id = guild_id
+        self.name = nombre
         self._miembros = miembros or {}
 
     def get_member(self, user_id):
         return self._miembros.get(user_id)
+
+    @property
+    def members(self):
+        return list(self._miembros.values())
+
+    async def query_members(self, query=None, limit=100):
+        return []
 
 
 class _RespuestaProhibida:
@@ -96,6 +109,7 @@ class InteraccionFalsa:
         self.user = UsuarioFalso(user_id, nombre)
         self.respuestas = []
         self.response = RespuestaFalsa(self.respuestas)
+        self.followup = RespuestaFalsa(self.respuestas)
 
     async def original_response(self):
         return MensajeFalso()

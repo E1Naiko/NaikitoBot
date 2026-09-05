@@ -466,24 +466,6 @@ def eliminar_registros_servidor(
 
         return cursor.rowcount
 
-def eliminar_registros_servidor(
-    guild_id,
-):
-    """Elimina todos los registros de Madrugue de un servidor."""
-
-    with conectar_db() as db:
-
-        cursor = db.execute("""
-            DELETE FROM registros
-            WHERE guild_id = ?
-        """, (
-            guild_id,
-        ))
-
-        db.commit()
-
-        return cursor.rowcount
-
 
 def obtener_resumen_usuario(
     guild_id,
@@ -519,103 +501,6 @@ def obtener_registro_del_dia_admin(
     fecha,
 ):
     """Obtiene el registro del usuario para una fecha."""
-
-    with conectar_db() as db:
-
-        return db.execute("""
-            SELECT
-                hora,
-                puntos_finales
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            user_id,
-            fecha.isoformat(),
-        )).fetchone()
-
-
-def eliminar_registro_del_dia_por_id(
-    guild_id,
-    user_id,
-    fecha,
-):
-    """Elimina el registro de un usuario en una fecha concreta."""
-
-    with conectar_db() as db:
-
-        cursor = db.execute("""
-            DELETE FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            user_id,
-            fecha.isoformat(),
-        ))
-
-        db.commit()
-
-        return cursor.rowcount
-
-
-def eliminar_registros_usuario_por_id(
-    guild_id,
-    user_id,
-):
-    """Elimina todos los registros de un usuario en un servidor."""
-
-    with conectar_db() as db:
-
-        cursor = db.execute("""
-            DELETE FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        ))
-
-        db.commit()
-
-        return cursor.rowcount
-
-
-def obtener_resumen_usuario_por_id(
-    guild_id,
-    user_id,
-):
-    """Obtiene el resumen de un usuario dentro de un servidor."""
-
-    with conectar_db() as db:
-
-        return db.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(
-                    SUM(puntos_finales),
-                    0
-                ),
-                MIN(fecha),
-                MAX(fecha)
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        )).fetchone()
-
-
-def obtener_registro_del_dia_admin_por_id(
-    guild_id,
-    user_id,
-    fecha,
-):
-    """Obtiene el registro del día para administración."""
 
     with conectar_db() as db:
 

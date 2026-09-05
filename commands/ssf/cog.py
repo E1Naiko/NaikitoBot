@@ -12,11 +12,13 @@ from discord.ext import commands
 
 from commands.ssf.info import InfoMixin
 from commands.ssf.registro import RegistroMixin
+from commands.ssf.tareas import TareasMixin
 
 
 class Ssf(
     RegistroMixin,
     InfoMixin,
+    TareasMixin,
     commands.GroupCog,
     group_name="ssf",
 ):
@@ -24,3 +26,8 @@ class Ssf(
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.ssf_ultima_revision = None
+        self.procesar_ssf_automatico.start()
+
+    def cog_unload(self):
+        self.procesar_ssf_automatico.cancel()

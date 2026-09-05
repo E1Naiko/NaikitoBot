@@ -1,9 +1,40 @@
 import os
-from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
+
+from modules.madrugue.constants import (
+    BONUS_MAXIMO,
+    BONUS_MINIMO,
+    FIN_MADRUGADA,
+    PUNTOS_100_DESDE,
+    PUNTOS_25_DESDE,
+    PUNTOS_5_DESDE,
+)
+
+
+__all__ = [
+    "PREFIX",
+    "TIMEZONE",
+    "DATABASE",
+    "PUNTOS_100_DESDE",
+    "PUNTOS_25_DESDE",
+    "PUNTOS_5_DESDE",
+    "FIN_MADRUGADA",
+    "BONUS_MAXIMO",
+    "BONUS_MINIMO",
+    "ADMIN_USER_IDS",
+    "GUILD_ID",
+    "GENERAL_CHANNEL_IDS",
+    "MADRUGUE_CHANNEL_IDS",
+    "BOX_CHANNEL_IDS",
+    "SSF_CANALES_ID",
+    "SSF_FECHA_INICIO",
+    "SSF_FECHA_FIN",
+    "BOX_EXPERIENCIA_POR_MINUTO",
+    "BOX_DINERO_POR_MINUTO",
+]
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -35,32 +66,9 @@ DATABASE = os.getenv("DATABASE", "naikito.db")
 # CONFIGURACIÓN DE MADRUGUE
 # ============================================================
 
-# 05:30 - 06:59 = 100 puntos
-# 07:00 - 08:59 = 25 puntos
-# 09:00 - 09:59 = 5 puntos
-# 10:00 en adelante = fuera de horario
-
-PUNTOS_100_DESDE = time(5, 30)
-PUNTOS_25_DESDE = time(7, 0)
-PUNTOS_5_DESDE = time(9, 0)
-
-FIN_MADRUGADA = time(10, 0)
-
-
-# ============================================================
-# MULTIPLICADOR DE MADRUGUE
-# ============================================================
-
-# El bonus disminuye linealmente a medida que avanza
-# la madrugada.
-#
-# 05:30 = +0.100 -> x1.100
-# 10:00 = +0.001 -> x1.001
-#
-# La racha no modifica el multiplicador.
-
-BONUS_MAXIMO = 0.100
-BONUS_MINIMO = 0.001
+# Los horarios de puntos y el bonus horario viven en
+# modules/madrugue/constants.py y se reexportan desde acá para no romper
+# `from config import ...`.
 
 
 # ============================================================

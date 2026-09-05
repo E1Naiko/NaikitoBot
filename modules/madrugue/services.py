@@ -1,20 +1,58 @@
+"""Fachada del módulo Madrugue.
+
+Los cogs importan desde acá y no directamente de ``database`` ni ``logic``,
+igual que en los módulos Box y SSF.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 
 from modules.madrugue.database import (
+    eliminar_registro_del_dia,
+    eliminar_registros_servidor,
+    eliminar_registros_usuario,
     guardar_registro,
+    obtener_estadisticas_servidor,
     obtener_fechas_registradas,
     obtener_registro_del_dia,
+    obtener_registro_del_dia_admin,
+    obtener_resumen_usuario,
     obtener_top_madrugadores,
     obtener_total_puntos,
 )
 
 from modules.madrugue.logic import (
-    calcular_multiplicador_horario,
-    calcular_racha_para_nuevo_registro as calcular_racha_logic,
     calcular_mejor_racha,
+    calcular_multiplicador_horario,
+    calcular_racha_para_nuevo_registro,
     obtener_puntos_base,
 )
+
+
+__all__ = [
+    # Lógica pura
+    "calcular_mejor_racha",
+    "calcular_multiplicador_horario",
+    "calcular_racha_para_nuevo_registro",
+    "obtener_puntos_base",
+    # Persistencia
+    "eliminar_registro_del_dia",
+    "eliminar_registros_servidor",
+    "eliminar_registros_usuario",
+    "guardar_registro",
+    "obtener_estadisticas_servidor",
+    "obtener_fechas_registradas",
+    "obtener_registro_del_dia",
+    "obtener_registro_del_dia_admin",
+    "obtener_resumen_usuario",
+    "obtener_top_madrugadores",
+    "obtener_total_puntos",
+    # Servicios
+    "ResultadoMadrugue",
+    "obtener_stats_madrugue",
+    "obtener_top_madrugue",
+    "registrar_madrugue",
+]
 
 
 @dataclass
@@ -92,7 +130,7 @@ def registrar_madrugue(
         user_id,
     )
     
-    racha = calcular_racha_logic(
+    racha = calcular_racha_para_nuevo_registro(
         fechas,
         fecha,
     )

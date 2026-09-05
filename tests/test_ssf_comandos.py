@@ -136,6 +136,7 @@ def test_comandos_rechazan_mensajes_directos(cog):
 def test_extensiones_ssf_y_admin_conviven(base_datos_limpia):
     """El grupo /ssf de usuarios coexiste con /admin ssf."""
 
+    import asyncio
     import discord
     from discord.ext import commands
 
@@ -144,27 +145,36 @@ def test_extensiones_ssf_y_admin_conviven(base_datos_limpia):
         intents=discord.Intents.default(),
     )
 
-    async def cargar():
-        await bot.load_extension("commands.admin")
-        await bot.load_extension("commands.ssf")
+    # El cog de SSF arranca su revisión diaria al cargarse; se usa un loop
+    # propio para cancelarla y cerrarlo sin dejar tareas pendientes.
+    loop = asyncio.new_event_loop()
 
-    ejecutar(cargar())
+    try:
+        async def cargar():
+            await bot.load_extension("commands.admin")
+            await bot.load_extension("commands.ssf")
 
-    nombres = {
-        comando.qualified_name for comando in bot.tree.walk_commands()
-    }
+        loop.run_until_complete(cargar())
 
-    for comando in (
-        "registrar",
-        "sobrevivi",
-        "estado",
-        "participantes",
-        "ayuda",
-    ):
-        assert f"ssf {comando}" in nombres
+        nombres = {
+            comando.qualified_name for comando in bot.tree.walk_commands()
+        }
 
-    assert "admin ssf revivir" in nombres
-    assert "admin ssf iniciar" in nombres
+        for comando in (
+            "registrar",
+            "sobrevivi",
+            "estado",
+            "participantes",
+            "ayuda",
+        ):
+            assert f"ssf {comando}" in nombres
+
+        assert "admin ssf revivir" in nombres
+        assert "admin ssf iniciar" in nombres
+    finally:
+        bot.get_cog("Ssf").procesar_ssf_automatico.cancel()
+        loop.run_until_complete(asyncio.sleep(0))
+        loop.close()
 
 
 # ============================================================
