@@ -23,7 +23,7 @@ from modules.box.constants import (
 def precio_mejora(precio_base: int, nivel: int) -> int:
     """Precio del siguiente nivel de una mejora: +25 % compuesto."""
 
-    return math.ceil(precio_base * 1.25 ** nivel)
+    return math.ceil(precio_base * 2 ** nivel)
 
 
 def precio_equipamiento(precio_base: int, nivel: int) -> int:

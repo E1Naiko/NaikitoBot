@@ -20,7 +20,7 @@ MEJORAS = {
     "trabajo": {
         "nombre": "Cafe",
         "emoji": "☕",
-        "descripcion": "+50 dinero por minuto de trabajo",
+        "descripcion": "+5 dinero por minuto de trabajo",
         "precio": 1000,
         "maximo": 10,
     },
