@@ -12,12 +12,14 @@ NIVEL_MAXIMO_EQUIPAMIENTO = len(CALIDADES) - 1
 MEJORAS = {
     "entrenamiento": {
         "nombre": "Creatina",
+        "emoji": "🔥",
         "descripcion": "+5 EXP por minuto de entrenamiento",
         "precio": 1000,
         "maximo": 10,
     },
     "trabajo": {
         "nombre": "Cafe",
+        "emoji": "☕",
         "descripcion": "+50 dinero por minuto de trabajo",
         "precio": 1000,
         "maximo": 10,
@@ -28,11 +30,13 @@ MEJORAS = {
 TRATAMIENTOS = {
     "fisioterapeutico": {
         "nombre": "Tratamiento Fisioterapeutico",
+        "emoji": "🧑‍⚕️",
         "precio": 10000,
         "reinicia_probabilidad": False,
     },
     "cinco_estrellas": {
         "nombre": "Tratamiento 5 estrellas",
+        "emoji": "🏝️",
         "precio": 50000,
         "reinicia_probabilidad": True,
     },

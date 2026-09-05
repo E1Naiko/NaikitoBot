@@ -48,7 +48,8 @@ class TiendaMixin:
                 clave,
             )
             lineas.append(
-                f"**{mejora['nombre']}** — {mejora['descripcion']} | "
+                f"{mejora['emoji']} **{mejora['nombre']}** — "
+                f"{mejora['descripcion']} | "
                 f"Nivel **{nivel}/{mejora['maximo']}** | "
                 f"Siguiente nivel: **{precio_mejora(mejora['precio'], nivel)}**"
             )
@@ -80,7 +81,7 @@ class TiendaMixin:
         lineas.append("\n**Tratamientos**")
         for tratamiento in TRATAMIENTOS.values():
             lineas.append(
-                f"**{tratamiento['nombre']}** — "
+                f"{tratamiento['emoji']} **{tratamiento['nombre']}** — "
                 f"Precio fijo: **{tratamiento['precio']}**"
             )
 

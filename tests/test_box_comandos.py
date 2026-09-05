@@ -95,6 +95,22 @@ def test_tienda_muestra_las_tres_categorias(cog):
     assert "Tratamientos" in texto
 
 
+def test_tienda_muestra_los_emojis_del_catalogo(cog):
+    """Cada entrada del catálogo con emoji debe mostrarlo en la tienda."""
+
+    from modules.box.constants import EQUIPAMIENTO, MEJORAS, TRATAMIENTOS
+
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+    llamar(cog, "tienda", interaccion)
+    texto = interaccion.texto
+
+    for catalogo in (MEJORAS, EQUIPAMIENTO, TRATAMIENTOS):
+        for entrada in catalogo.values():
+            assert entrada["emoji"] in texto, (
+                f"falta el emoji de {entrada['nombre']} en la tienda"
+            )
+
+
 def test_ayuda_envia_mensaje_directo(cog):
     interaccion = InteraccionFalsa(GUILD, USUARIO)
 
