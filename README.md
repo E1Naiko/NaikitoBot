@@ -98,7 +98,7 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 | `/box sparring` | `contrincante` | Envía un desafío de sparring de una hora a otro usuario. |
 | `/box desafio` | `contrincante` | Envía un desafío de pelea de una hora a otro usuario. |
 | `/box tienda` | Ninguno | Muestra las mejoras y el nivel actual del usuario. |
-| `/box comprar` | `mejora` | Compra un nivel de mejora usando dinero. |
+| `/box comprar` | `tipo` y `articulo` | Compra una mejora, una pieza de equipamiento o un tratamiento usando dinero. |
 | `/box saldo` | Ninguno | Muestra la experiencia y el dinero del usuario. |
 | `/box stats` | Ninguno | Muestra tus estadísticas de Box; la respuesta es privada. |
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
