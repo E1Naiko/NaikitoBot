@@ -309,11 +309,11 @@ def descansar(guild_id: int, user_id: int):
 def comprar_tratamiento(
     guild_id: int,
     user_id: int,
-    tratamiento: str,
     precio: int,
     ahora: datetime,
+    reinicia_probabilidad: bool = False,
 ):
-    """Compra un tratamiento y actualiza el estado de lesión."""
+    """Compra un tratamiento, cura la lesión y opcionalmente resetea la probabilidad."""
 
     with conectar_db() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -357,7 +357,7 @@ def comprar_tratamiento(
             (precio, guild_id, user_id),
         )
 
-        if tratamiento == "tratamiento_5_estrellas":
+        if reinicia_probabilidad:
             db.execute(
                 """
                 UPDATE box_usuarios
