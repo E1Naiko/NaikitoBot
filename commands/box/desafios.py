@@ -6,7 +6,8 @@ import discord
 from discord import app_commands
 
 from commands.box.base import solo_servidor
-from config import BOX_EXPERIENCIA_POR_MINUTO
+from config import BOX_CHANNEL_IDS, BOX_EXPERIENCIA_POR_MINUTO
+from core.permissions import es_admin
 from core.utils import ahora
 from modules.box.services import (
     aceptar_desafio,
@@ -50,6 +51,16 @@ class ChallengeView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if (
+            not es_admin(interaction.user.id)
+            and interaction.channel_id not in BOX_CHANNEL_IDS
+        ):
+            await interaction.response.send_message(
+                "⚠️ Este desafío solo puede aceptarse en el canal de Box.",
+                ephemeral=True,
+            )
+            return
+
         if interaction.user.id != self.contrincante_id:
             await interaction.response.send_message(
                 "⚠️ Solo el contrincante puede aceptar este desafío.",

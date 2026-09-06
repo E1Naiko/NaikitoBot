@@ -63,9 +63,11 @@ python main.py
 ## Comandos generales
 
 Los comandos están separados por canales: `GENERAL_CHANNEL_ID` permite los
-comandos generales, administrativos y de Box; `MADRUGUE_CHANNEL_ID` permite
-solo Madrugue; y `SSF_CANALES_ID` permite solo SeptSinFP. Los IDs pueden
-separarse por comas.
+comandos generales; `BOX_CHANNEL_ID` permite los comandos de Box;
+`MADRUGUE_CHANNEL_ID` permite solo Madrugue; y `SSF_CANALES_ID` permite solo
+SeptSinFP. Los IDs pueden separarse por comas. Los usuarios incluidos en
+`ADMIN_USER_IDS` quedan exentos de la restricción de canal: pueden usar
+cualquier comando desde cualquier canal.
 
 | Comando | Descripción |
 | --- | --- |
@@ -121,6 +123,10 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 | `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
 | `/box ayuda` | Ninguno | Envía por mensaje directo la lista de comandos de Box. |
+
+Los comandos de Box solo pueden usarse en los canales incluidos en
+`BOX_CHANNEL_ID`, salvo que el usuario esté en `ADMIN_USER_IDS`. Los botones
+de la tienda y los de aceptar desafíos siguen la misma restricción.
 
 La duración debe estar entre 1 y 1440 minutos. Mientras una acción está activa,
 el usuario no puede iniciar otra acción de Box. Las recompensas se calculan con

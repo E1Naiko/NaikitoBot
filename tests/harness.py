@@ -104,9 +104,17 @@ class _Mensaje:
 class InteraccionFalsa:
     """Doble mínimo de ``discord.Interaction`` suficiente para Box."""
 
-    def __init__(self, guild_id=1, user_id=42, nombre="Tester", en_servidor=True):
+    def __init__(
+        self,
+        guild_id=1,
+        user_id=42,
+        nombre="Tester",
+        en_servidor=True,
+        canal=None,
+    ):
         self.guild = GuildFalso(guild_id) if en_servidor else None
         self.user = UsuarioFalso(user_id, nombre)
+        self.channel_id = canal if canal is not None else (guild_id if en_servidor else None)
         self.respuestas = []
         self.response = RespuestaFalsa(self.respuestas)
         self.followup = RespuestaFalsa(self.respuestas)

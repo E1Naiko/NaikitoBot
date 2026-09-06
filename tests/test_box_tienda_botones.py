@@ -24,6 +24,15 @@ DUEÑO = 42
 OTRO = 99
 
 
+@pytest.fixture(autouse=True)
+def canal_box(monkeypatch):
+    """Los botones viven en el canal de Box: fija el canal en las pruebas."""
+
+    import commands.box.tienda as tienda
+
+    monkeypatch.setattr(tienda, "BOX_CHANNEL_IDS", {GUILD})
+
+
 @pytest.fixture
 def cog(base_datos_limpia):
     from commands.box.cog import Box

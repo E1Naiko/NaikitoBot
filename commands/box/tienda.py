@@ -13,6 +13,8 @@ from discord import app_commands
 
 from commands.box.base import solo_servidor
 from commands.box.compras import CATALOGOS, ejecutar_compra
+from config import BOX_CHANNEL_IDS
+from core.permissions import es_admin
 from modules.box.services import (
     EQUIPAMIENTO,
     MEJORAS,
@@ -82,6 +84,16 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
         if interaction.guild is None:
             await interaction.response.send_message(
                 "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
+                ephemeral=True,
+            )
+            return
+
+        if (
+            not es_admin(interaction.user.id)
+            and interaction.channel_id not in BOX_CHANNEL_IDS
+        ):
+            await interaction.response.send_message(
+                "⚠️ Esta tienda solo puede usarse en el canal de Box.",
                 ephemeral=True,
             )
             return
