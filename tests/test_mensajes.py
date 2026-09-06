@@ -49,6 +49,44 @@ def test_responder_general_crea_embed_con_seccion():
     assert nombres_secciones(embed) == ["Sección A"]
 
 
+def test_responder_sin_vista_no_pasa_view_none():
+    """Sin vista hay que enviar el centinela MISSING, nunca ``None``.
+
+    ``send_message(view=None)`` revienta en discord.py con
+    ``AttributeError: 'NoneType' object has no attribute 'is_finished'``
+    (el doble del harness también lo valida).
+    """
+    interaccion = InteraccionFalsa(1, 42)
+    from core.mensajes import responder
+
+    ejecutar(responder(interaccion, "Título", "Descripción."))
+
+    assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
+
+
+def test_responder_texto_sin_vista_no_pasa_view_none():
+    """Cubre el fallo real: ``/admin box cancelar`` → ``responder_texto``."""
+    interaccion = InteraccionFalsa(1, 42)
+    from core.mensajes import responder_texto
+
+    ejecutar(responder_texto(interaccion, "🛑 **Acción cancelada correctamente.**"))
+
+    assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
+
+
+def test_responder_con_vista_la_reenvia():
+    class Vista(discord.ui.View):
+        pass
+
+    interaccion = InteraccionFalsa(1, 42)
+    vista = Vista()
+    from core.mensajes import responder
+
+    ejecutar(responder(interaccion, "Título", "Descripción.", view=vista))
+
+    assert interaccion.respuestas[-1].kwargs.get("view") is vista
+
+
 def test_box_saldo_usa_embed_con_secciones(base_datos_limpia):
     from commands.box.cog import Box
 

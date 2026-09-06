@@ -8,6 +8,7 @@ corta y campos/secciones ordenados.
 from __future__ import annotations
 
 import discord
+from discord.utils import MISSING
 
 
 # ============================================================
@@ -106,7 +107,14 @@ async def responder(
     embed = crear_embed(titulo, descripcion, color_area, pie)
     if secciones_:
         secciones(embed, secciones_)
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=ephemeral)
+    # ``send_message`` distingue "sin vista" mediante el centinela MISSING:
+    # si se pasa ``view=None`` discord.py intenta llamar ``view.is_finished()``
+    # sobre ``None`` y la respuesta revienta con AttributeError.
+    await interaction.response.send_message(
+        embed=embed,
+        view=MISSING if view is None else view,
+        ephemeral=ephemeral,
+    )
 
 
 async def responder_error(

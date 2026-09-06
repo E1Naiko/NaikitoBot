@@ -214,6 +214,54 @@ def test_info_funciona_por_mensaje_directo(cog):
 
 
 # ============================================================
+# /admin box cancelar
+# ============================================================
+
+def test_box_cancelar_con_accion_activa_responde_sin_view_none(cog):
+    """Regresión: la cancelación reventaba en producción.
+
+    ``responder_texto`` llegaba a ``send_message`` con ``view=None`` y
+    discord.py levantaba ``AttributeError: 'NoneType' object has no
+    attribute 'is_finished'``. El doble del harness revive ese contrato,
+    así que basta con que el comando responda sin excepción.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from modules.box.database import iniciar_accion
+    from tests.harness import UsuarioFalso
+
+    ahora = datetime.now(timezone.utc)
+    assert iniciar_accion(
+        GUILD,
+        USUARIO,
+        "ENTRENANDO",
+        ahora,
+        ahora + timedelta(hours=1),
+        recompensa=50,
+        dinero_recompensa=10,
+    )
+
+    interaccion = interaccion_admin()
+
+    llamar(cog, "box_cancelar", interaccion, UsuarioFalso(USUARIO, "Peleador"))
+
+    assert "Acción cancelada correctamente" in interaccion.texto
+    # Sin vista se debe enviar el centinela MISSING, nunca None.
+    assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
+
+
+def test_box_cancelar_sin_accion_activa_informa(cog):
+    from tests.harness import UsuarioFalso
+
+    interaccion = interaccion_admin()
+
+    llamar(cog, "box_cancelar", interaccion, UsuarioFalso(USUARIO, "Peleador"))
+
+    assert "no tiene ninguna acción activa" in interaccion.texto
+    assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
+
+
+# ============================================================
 # /admin fileexecute
 # ============================================================
 
