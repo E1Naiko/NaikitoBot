@@ -5,7 +5,17 @@ igual que en los módulos Box y SSF.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
+
+from config import (
+    MADRUGUE_FIN,
+    MADRUGUE_INICIO_100,
+    MADRUGUE_INICIO_25,
+    MADRUGUE_INICIO_5,
+    MADRUGUE_PUNTOS_100,
+    MADRUGUE_PUNTOS_25,
+    MADRUGUE_PUNTOS_5,
+)
 
 from modules.madrugue.database import (
     eliminar_registro_del_dia,
@@ -52,7 +62,90 @@ __all__ = [
     "obtener_stats_madrugue",
     "obtener_top_madrugue",
     "registrar_madrugue",
+    # Textos de horario
+    "texto_horario_valido",
+    "texto_ventanas_puntos",
 ]
+
+
+# ============================================================
+# TEXTOS DE HORARIO
+# ============================================================
+
+def _formatear_hora(hora):
+    """Da formato HH:MM a una hora de la configuración."""
+
+    return hora.strftime("%H:%M")
+
+
+def _minuto_anterior(hora):
+    """Devuelve la hora de un minuto antes, para cerrar una ventana."""
+
+    cierre = (
+        datetime.combine(
+            date(2000, 1, 1),
+            hora,
+        )
+        - timedelta(minutes=1)
+    )
+
+    return cierre.time()
+
+
+def texto_horario_valido():
+    """
+    Texto «HH:MM a HH:MM» con el horario válido.
+
+    Se arma con los valores configurados en el .env para que los
+    mensajes de los comandos no queden desactualizados si cambian
+    las ventanas.
+    """
+
+    return (
+        f"{_formatear_hora(MADRUGUE_INICIO_100)} "
+        f"a {_formatear_hora(MADRUGUE_FIN)}"
+    )
+
+
+def texto_ventanas_puntos():
+    """
+    Líneas «**HH:MM – HH:MM** → N puntos» para la ayuda.
+
+    Como ``texto_horario_valido``, se arma con los valores
+    configurados en el .env.
+    """
+
+    ventanas = (
+        (
+            MADRUGUE_INICIO_100,
+            MADRUGUE_INICIO_25,
+            MADRUGUE_PUNTOS_100,
+        ),
+        (
+            MADRUGUE_INICIO_25,
+            MADRUGUE_INICIO_5,
+            MADRUGUE_PUNTOS_25,
+        ),
+        (
+            MADRUGUE_INICIO_5,
+            MADRUGUE_FIN,
+            MADRUGUE_PUNTOS_5,
+        ),
+    )
+
+    lineas = [
+        f"**{_formatear_hora(desde)} – "
+        f"{_formatear_hora(_minuto_anterior(hasta))}** → "
+        f"{puntos} puntos"
+        for desde, hasta, puntos in ventanas
+    ]
+
+    lineas.append(
+        f"**{_formatear_hora(MADRUGUE_FIN)} en adelante** "
+        "→ fuera de horario"
+    )
+
+    return "\n".join(lineas)
 
 
 @dataclass

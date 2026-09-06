@@ -1,12 +1,15 @@
 from datetime import date, datetime, timedelta
 
-from modules.madrugue.constants import (
-    BONUS_MAXIMO,
-    BONUS_MINIMO,
-    FIN_MADRUGADA,
-    PUNTOS_100_DESDE,
-    PUNTOS_25_DESDE,
-    PUNTOS_5_DESDE,
+from config import (
+    MADRUGUE_BONUS_MAXIMO,
+    MADRUGUE_BONUS_MINIMO,
+    MADRUGUE_FIN,
+    MADRUGUE_INICIO_100,
+    MADRUGUE_INICIO_25,
+    MADRUGUE_INICIO_5,
+    MADRUGUE_PUNTOS_100,
+    MADRUGUE_PUNTOS_25,
+    MADRUGUE_PUNTOS_5,
 )
 
 
@@ -18,20 +21,22 @@ def obtener_puntos_base(hora_actual):
     """
     Determina los puntos según la hora.
 
-    05:30 - 06:59 = 100 puntos
-    07:00 - 08:59 = 25 puntos
-    09:00 - 09:59 = 5 puntos
+    INICIO_100 hasta INICIO_25 = puntos de la primera ventana
+    INICIO_25 hasta INICIO_5 = puntos de la segunda ventana
+    INICIO_5 hasta FIN = puntos de la última ventana
     Fuera de horario = 0
+
+    Las ventanas y los puntos se configuran desde el .env.
     """
 
-    if PUNTOS_100_DESDE <= hora_actual < PUNTOS_25_DESDE:
-        return 100
+    if MADRUGUE_INICIO_100 <= hora_actual < MADRUGUE_INICIO_25:
+        return MADRUGUE_PUNTOS_100
 
-    if PUNTOS_25_DESDE <= hora_actual < PUNTOS_5_DESDE:
-        return 25
+    if MADRUGUE_INICIO_25 <= hora_actual < MADRUGUE_INICIO_5:
+        return MADRUGUE_PUNTOS_25
 
-    if PUNTOS_5_DESDE <= hora_actual < FIN_MADRUGADA:
-        return 5
+    if MADRUGUE_INICIO_5 <= hora_actual < MADRUGUE_FIN:
+        return MADRUGUE_PUNTOS_5
 
     return 0
 
@@ -44,22 +49,20 @@ def calcular_bonus_horario(hora_actual):
     """
     Calcula el bonus según la hora de registro.
 
-    El bonus disminuye linealmente:
-
-        05:30 -> +0.100
-        10:00 -> +0.001
+    El bonus disminuye linealmente desde BONUS_MAXIMO al abrir
+    la madrugada hasta BONUS_MINIMO al cerrarla.
 
     Fuera del horario válido -> 0.
     """
 
     inicio = datetime.combine(
         date.today(),
-        PUNTOS_100_DESDE,
+        MADRUGUE_INICIO_100,
     )
 
     fin = datetime.combine(
         date.today(),
-        FIN_MADRUGADA,
+        MADRUGUE_FIN,
     )
 
     hora = datetime.combine(
@@ -83,15 +86,15 @@ def calcular_bonus_horario(hora_actual):
         duracion_total
     )
 
-    bonus = BONUS_MAXIMO - (
+    bonus = MADRUGUE_BONUS_MAXIMO - (
         proporcion *
-        (BONUS_MAXIMO - BONUS_MINIMO)
+        (MADRUGUE_BONUS_MAXIMO - MADRUGUE_BONUS_MINIMO)
     )
 
     return max(
-        BONUS_MINIMO,
+        MADRUGUE_BONUS_MINIMO,
         min(
-            BONUS_MAXIMO,
+            MADRUGUE_BONUS_MAXIMO,
             bonus,
         ),
     )

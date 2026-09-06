@@ -6,7 +6,10 @@ from discord import app_commands
 from commands.madrugue.base import solo_servidor
 from core.mensajes import responder, responder_error
 from core.utils import ahora
-from modules.madrugue.services import registrar_madrugue
+from modules.madrugue.services import (
+    registrar_madrugue,
+    texto_horario_valido,
+)
 
 
 class RegistroMixin:
@@ -42,7 +45,7 @@ class RegistroMixin:
                 secciones_=[
                     (
                         "⏰ Horario válido",
-                        "**05:30 a 10:00**",
+                        f"**{texto_horario_valido()}**",
                     ),
                     (
                         "🇦🇷 Hora actual",
