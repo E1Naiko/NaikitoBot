@@ -3,19 +3,28 @@
 import discord
 from discord import app_commands
 
-from core.mensajes import responder_texto
+from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
 from modules.box.services import (
-    admin_obtener_info_usuario,
+    NOMBRES_ACCIONES,
+    NOMBRES_SPONSORS,
+    admin_cancelar_accion,
+    admin_completar_acciones_vencidas,
+    admin_curar_usuario,
+    admin_dar_sponsor,
+    admin_finalizar_accion,
     admin_modificar_dinero,
     admin_modificar_experiencia,
-    admin_curar_usuario,
     admin_modificar_probabilidad_lesion,
-    admin_cancelar_accion,
-    admin_dar_sponsor,
+    admin_obtener_estadisticas_box,
+    admin_obtener_historial_desafios,
+    admin_obtener_info_usuario,
+    admin_obtener_lesionados,
+    admin_obtener_top_box,
     admin_quitar_sponsor,
     admin_reset_usuario,
+    obtener_accion_activa,
 )
 
 
@@ -706,5 +715,467 @@ class BoxAdminMixin:
             f"🗑️ Registros eliminados: **{total}**\n\n"
             f"🥊 El progreso de Box fue eliminado por completo.\n"
             f"📋 **Madrugue y SSF no fueron modificados.**",
+            ephemeral=True,
+        )
+
+    # ========================================================
+    # AYUDAS INTERNAS
+    # ========================================================
+
+    def _nombre_miembro(
+        self,
+        interaction: discord.Interaction,
+        user_id: int,
+    ) -> str:
+        """Devuelve el nombre visible de un miembro o su mención cruda."""
+
+        if interaction.guild is not None:
+            miembro = interaction.guild.get_member(user_id)
+
+            if miembro is not None:
+                return miembro.display_name
+
+        return f"<@{user_id}>"
+
+    def _texto_sponsor(self, tipo: str) -> str:
+        """Nombre visible de un tipo de sponsor."""
+
+        return NOMBRES_SPONSORS.get(
+            tipo,
+            tipo.capitalize(),
+        )
+
+    # ========================================================
+    # TOP
+    # ========================================================
+
+    @box.command(
+        name="top",
+        description="Muestra el ranking Box del servidor por EXP y dinero.",
+    )
+    async def box_top(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        filas = admin_obtener_top_box(
+            interaction.guild.id,
+            limite=10,
+        )
+
+        if not filas:
+            await responder_texto(interaction, "ℹ️ Todavía no hay "
+                "usuarios con progreso Box en este servidor.",
+                ephemeral=True,
+            )
+            return
+
+        medallas = {
+            1: "🥇",
+            2: "🥈",
+            3: "🥉",
+        }
+
+        lineas = []
+
+        for posicion, (user_id, experiencia, dinero) in enumerate(
+            filas,
+            start=1,
+        ):
+            medalla = medallas.get(
+                posicion,
+                f"**{posicion}.**",
+            )
+
+            nombre = self._nombre_miembro(
+                interaction,
+                user_id,
+            )
+
+            lineas.append(
+                f"{medalla} **{nombre}** — "
+                f"⭐ {experiencia} EXP — 💰 {dinero}$"
+            )
+
+        await responder(
+            interaction,
+            "🥊 TOP Box del servidor",
+            f"Ranking de **{interaction.guild.name}**.",
+            color_area="box",
+            ephemeral=True,
+            secciones_=[
+                ("Ranking", "\n".join(lineas), False),
+            ],
+        )
+
+    # ========================================================
+    # STATS
+    # ========================================================
+
+    @box.command(
+        name="stats",
+        description="Muestra estadísticas globales de Box del servidor.",
+    )
+    async def box_stats(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        datos = admin_obtener_estadisticas_box(
+            interaction.guild.id,
+        )
+
+        await responder(
+            interaction,
+            "📊 Estadísticas de Box",
+            f"Totales de **{interaction.guild.name}**.",
+            color_area="box",
+            ephemeral=True,
+            secciones_=[
+                ("👥 Jugadores", f"**{datos['jugadores']}**"),
+                ("⭐ EXP total", f"**{datos['experiencia']}**"),
+                ("💰 Dinero total", f"**{datos['dinero']}$**"),
+                ("⏱️ Acciones activas", f"**{datos['acciones_activas']}**"),
+                ("🤝 Sponsors activos", f"**{datos['sponsors_activos']}**"),
+                ("🏆 Combates resueltos", f"**{datos['combates']}**"),
+                ("📨 Desafíos pendientes", f"**{datos['pendientes']}**"),
+                ("🚑 Lesionados", f"**{datos['lesionados']}**"),
+            ],
+        )
+
+    # ========================================================
+    # HISTORIAL
+    # ========================================================
+
+    @box.command(
+        name="historial",
+        description="Muestra los últimos combates de un usuario.",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyo historial quieres consultar.",
+    )
+    async def box_historial(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        filas = admin_obtener_historial_desafios(
+            interaction.guild.id,
+            usuario.id,
+            limite=10,
+        )
+
+        if not filas:
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** "
+                "todavía no participó en ningún combate.",
+                ephemeral=True,
+            )
+            return
+
+        lineas = []
+
+        for creado_en, retador_id, contrincante_id, ganador_id in filas:
+            rival_id = (
+                retador_id
+                if retador_id != usuario.id
+                else contrincante_id
+            )
+
+            rival = self._nombre_miembro(
+                interaction,
+                rival_id,
+            )
+
+            gano = ganador_id == usuario.id
+            resultado = "✅ Victoria" if gano else "❌ Derrota"
+
+            fecha_corta = creado_en[:10]
+
+            lineas.append(
+                f"• `{fecha_corta}` vs **{rival}** — {resultado}"
+            )
+
+        await responder(
+            interaction,
+            f"🏆 Historial de {usuario.display_name}",
+            color_area="box",
+            ephemeral=True,
+            secciones_=[
+                ("Combates", "\n".join(lineas), False),
+            ],
+        )
+
+    # ========================================================
+    # LESIONADOS
+    # ========================================================
+
+    @box.command(
+        name="lesionados",
+        description="Lista usuarios con lesión activa o probabilidad acumulada.",
+    )
+    async def box_lesionados(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        ahora_actual = ahora()
+
+        filas = admin_obtener_lesionados(
+            interaction.guild.id,
+            ahora_actual,
+        )
+
+        if not filas:
+            await responder_texto(interaction, "✅ No hay usuarios "
+                "lesionados ni con probabilidad acumulada.",
+                ephemeral=True,
+            )
+            return
+
+        limite = 20
+        visibles = filas[:limite]
+        restantes = len(filas) - len(visibles)
+
+        lineas = []
+
+        for user_id, probabilidad, lesionado_hasta in visibles:
+            nombre = self._nombre_miembro(
+                interaction,
+                user_id,
+            )
+
+            if lesionado_hasta and lesionado_hasta > ahora_actual.isoformat():
+                estado = f"🚑 hasta `{lesionado_hasta}`"
+            else:
+                estado = "🟢 sin lesión activa"
+
+            lineas.append(
+                f"• **{nombre}** — 🎲 {probabilidad:.1f}% — {estado}"
+            )
+
+        if restantes:
+            lineas.append(f"… y **{restantes} más**")
+
+        await responder(
+            interaction,
+            "🚑 Lesionados y probabilidades",
+            color_area="box",
+            ephemeral=True,
+            secciones_=[
+                ("Listado", "\n".join(lineas), False),
+            ],
+        )
+
+    # ========================================================
+    # FINALIZAR
+    # ========================================================
+
+    @box.command(
+        name="finalizar",
+        description="Liquida la acción ya vencida de un usuario.",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuya acción quieres liquidar.",
+    )
+    async def box_finalizar(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        ahora_actual = ahora()
+
+        accion = obtener_accion_activa(
+            interaction.guild.id,
+            usuario.id,
+        )
+
+        if accion is None:
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** "
+                "no tiene ninguna acción activa.",
+                ephemeral=True,
+            )
+            return
+
+        tipo, finaliza_en, _recompensa = accion
+
+        if finaliza_en > ahora_actual.isoformat():
+            nombre_accion = NOMBRES_ACCIONES.get(
+                tipo,
+                tipo.lower(),
+            )
+
+            await responder_texto(interaction, f"ℹ️ La acción de "
+                f"**{usuario.display_name}** todavía no vence.\n\n"
+                f"🥊 Acción: **{nombre_accion}**\n"
+                f"⏰ Termina: `{finaliza_en}`\n\n"
+                "Cuando venza la liquida el bot automáticamente. "
+                "Si querés cancelarla sin recompensa, usá "
+                "**/admin box cancelar**.",
+                ephemeral=True,
+            )
+            return
+
+        completada = admin_finalizar_accion(
+            interaction.guild.id,
+            usuario.id,
+            ahora_actual,
+        )
+
+        if completada is None:
+            await responder_texto(interaction, "⚠️ No se pudo liquidar "
+                "la acción. Probablemente el bot ya la procesó.",
+                ephemeral=True,
+            )
+            return
+
+        (
+            _guild_id,
+            _user_id,
+            tipo,
+            recompensa,
+            dinero_recompensa,
+            se_lesiona,
+            _probabilidad_sponsor,
+            sponsor,
+        ) = completada
+
+        nombre_accion = NOMBRES_ACCIONES.get(
+            tipo,
+            tipo.lower(),
+        )
+
+        texto = (
+            f"✅ **Acción liquidada correctamente.**\n\n"
+            f"👤 Usuario: **{usuario.display_name}**\n"
+            f"🥊 Acción: **{nombre_accion}**"
+        )
+
+        if tipo == "PROMOVIENDO":
+            if sponsor:
+                texto += (
+                    f"\n🤝 Sponsor conseguido: "
+                    f"**{self._texto_sponsor(sponsor)}**"
+                )
+            else:
+                texto += "\n😞 No consiguió sponsor."
+        else:
+            recompensa_texto = f"{recompensa} EXP"
+
+            if dinero_recompensa:
+                recompensa_texto += f" + {dinero_recompensa}$"
+
+            texto += f"\n🎁 Recompensa entregada: **{recompensa_texto}**"
+
+        if se_lesiona:
+            texto += "\n🚑 Se lastimó y quedó lesionado 3 horas."
+
+        await responder_texto(interaction, texto,
+            ephemeral=True,
+        )
+
+    # ========================================================
+    # PROCESAR
+    # ========================================================
+
+    @box.command(
+        name="procesar",
+        description="Liquida todas las acciones vencidas del servidor.",
+    )
+    async def box_procesar(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        completadas = admin_completar_acciones_vencidas(
+            interaction.guild.id,
+            ahora(),
+        )
+
+        cantidad = len(completadas)
+
+        if cantidad == 0:
+            await responder_texto(interaction, "✅ No había acciones "
+                "vencidas pendientes de liquidar en este servidor.",
+                ephemeral=True,
+            )
+            return
+
+        nombres_acciones = []
+        lesiones = 0
+        sponsors_conseguidos = 0
+
+        for (
+            _guild_id,
+            _user_id,
+            tipo,
+            _recompensa,
+            _dinero,
+            se_lesiona,
+            _probabilidad,
+            sponsor,
+        ) in completadas:
+            nombre = NOMBRES_ACCIONES.get(
+                tipo,
+                tipo.lower(),
+            )
+
+            nombres_acciones.append(nombre)
+
+            if se_lesiona:
+                lesiones += 1
+
+            if tipo == "PROMOVIENDO" and sponsor:
+                sponsors_conseguidos += 1
+
+        conteo = {}
+
+        for nombre in nombres_acciones:
+            conteo[nombre] = conteo.get(nombre, 0) + 1
+
+        resumen = ", ".join(
+            f"{nombre} ×{cantidad_acciones}"
+            for nombre, cantidad_acciones in conteo.items()
+        )
+
+        texto = (
+            f"✅ **Acciones procesadas: {cantidad}**\n\n"
+            f"📋 Detalle: {resumen}\n"
+            f"🚑 Lesiones nuevas: **{lesiones}**\n"
+            f"🤝 Sponsors conseguidos: **{sponsors_conseguidos}**"
+        )
+
+        await responder_texto(interaction, texto,
             ephemeral=True,
         )

@@ -517,3 +517,29 @@ def obtener_registro_del_dia_admin(
             user_id,
             fecha.isoformat(),
         )).fetchone()
+
+
+def obtener_ultimos_registros(
+    guild_id,
+    user_id,
+    limite=8,
+):
+    """Obtiene los últimos registros de un usuario, del más reciente al más viejo."""
+
+    with conectar_db() as db:
+
+        return db.execute("""
+            SELECT
+                fecha,
+                hora,
+                puntos_finales
+            FROM registros
+            WHERE guild_id = ?
+            AND user_id = ?
+            ORDER BY fecha DESC
+            LIMIT ?
+        """, (
+            guild_id,
+            user_id,
+            limite,
+        )).fetchall()

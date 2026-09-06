@@ -21,6 +21,7 @@ from modules.box.services import (
     obtener_accion_activa,
     obtener_estado_box,
     obtener_nivel_mejora,
+    reducir_probabilidad_lesion_inactivos,
     resolver_duracion,
 )
 
@@ -117,6 +118,27 @@ class AccionesMixin:
 
     @comprobar_acciones.before_loop
     async def esperar_bot(self):
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(hours=1)
+    async def reducir_probabilidad_lesion(self):
+        """Baja la probabilidad de lesión de los usuarios inactivos.
+
+        Cada hora, los usuarios sin acción en curso (estén o no lesionados)
+        reducen su probabilidad en 0.01 puntos porcentuales, sin pasar de 0.
+        """
+
+        cantidad = reducir_probabilidad_lesion_inactivos()
+
+        if cantidad:
+            print(
+                f"[BOX] probabilidad reducida a {cantidad} "
+                "usuarios sin acción activa",
+                flush=True,
+            )
+
+    @reducir_probabilidad_lesion.before_loop
+    async def esperar_bot_probabilidad(self):
         await self.bot.wait_until_ready()
 
     def _canal_box(self):

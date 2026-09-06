@@ -303,6 +303,44 @@ def descansar(guild_id: int, user_id: int):
 
 
 # ============================================================
+# DECAIMIENTO DE LA PROBABILIDAD
+# ============================================================
+
+def reducir_probabilidad_lesion_inactivos(
+    cantidad: float = 0.01,
+) -> int:
+    """
+    Reduce la probabilidad de lesión de los usuarios sin acción activa.
+
+    Cada llamada representa una hora sin entrenar ni trabajar: baja la
+    probabilidad en ``cantidad`` puntos porcentuales, sin pasar de 0.
+    Aplica también a usuarios lesionados (una lesión no es una acción).
+    """
+
+    with conectar_db() as db:
+        cursor = db.execute(
+            """
+            UPDATE box_usuarios
+            SET probabilidad_lesion = CASE
+                WHEN probabilidad_lesion - ? < 0 THEN 0
+                ELSE probabilidad_lesion - ?
+            END
+            WHERE probabilidad_lesion > 0
+            AND NOT EXISTS (
+                SELECT 1
+                FROM box_acciones
+                WHERE box_acciones.guild_id = box_usuarios.guild_id
+                AND box_acciones.user_id = box_usuarios.user_id
+            )
+            """,
+            (cantidad, cantidad),
+        )
+        db.commit()
+
+    return cursor.rowcount
+
+
+# ============================================================
 # TRATAMIENTOS
 # ============================================================
 
@@ -1009,6 +1047,183 @@ def procesar_sponsors_medicos(ahora: datetime):
 # COMPLETAR ACCIONES
 # ============================================================
 
+def _liquidar_accion(db, fila, ahora: datetime):
+    """Liquida una única acción vencida y devuelve sus datos para notificar.
+
+    PROMOVIENDO es una acción especial:
+    - No da EXP.
+    - No da dinero.
+    - No genera lesión.
+    - Tiene una probabilidad de conseguir sponsor.
+    """
+
+    (
+        accion_id,
+        guild_id,
+        user_id,
+        tipo,
+        recompensa,
+        dinero_recompensa,
+        iniciado_en,
+        finaliza_en,
+    ) = fila
+
+    duracion_horas = (
+        datetime.fromisoformat(finaliza_en)
+        - datetime.fromisoformat(iniciado_en)
+    ).total_seconds() / 3600
+
+    db.execute(
+        "DELETE FROM box_acciones WHERE id = ?",
+        (accion_id,),
+    )
+
+    db.execute(
+        """
+        INSERT INTO box_usuarios (
+            guild_id,
+            user_id
+        )
+        VALUES (?, ?)
+        ON CONFLICT(guild_id, user_id) DO NOTHING
+        """,
+        (guild_id, user_id),
+    )
+
+    # =================================================
+    # PROMOCIÓN
+    # =================================================
+
+    if tipo == "PROMOVIENDO":
+        minutos = duracion_horas * 60
+        probabilidad_sponsor = _probabilidad_promocion(
+            minutos
+        )
+
+        consiguio_sponsor = (
+            random.random()
+            < probabilidad_sponsor / 100
+        )
+
+        sponsor = None
+
+        if consiguio_sponsor:
+            sponsor = _sortear_sponsor()
+
+            creado = _crear_sponsor(
+                db,
+                guild_id,
+                user_id,
+                sponsor,
+                ahora,
+            )
+
+            if not creado:
+                sponsor = None
+
+        return (
+            guild_id,
+            user_id,
+            tipo,
+            0,
+            0,
+            False,
+            probabilidad_sponsor,
+            sponsor,
+        )
+
+    # =================================================
+    # ACCIONES NORMALES
+    # =================================================
+
+    probabilidad_anterior, lesionado_hasta = db.execute(
+        """
+        SELECT
+            probabilidad_lesion,
+            lesionado_hasta
+        FROM box_usuarios
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (guild_id, user_id),
+    ).fetchone()
+
+    probabilidad = min(
+        100.0,
+        probabilidad_anterior + duracion_horas,
+    )
+
+    se_lesiona = random.random() < (
+        probabilidad / 100
+    )
+
+    if se_lesiona:
+        lesionado_hasta = (
+            ahora + timedelta(hours=3)
+        ).isoformat()
+
+    db.execute(
+        """
+        UPDATE box_usuarios
+        SET
+            probabilidad_lesion = ?,
+            lesionado_hasta = ?
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (
+            probabilidad,
+            lesionado_hasta,
+            guild_id,
+            user_id,
+        ),
+    )
+
+    # Bonus de Equipamiento.
+    bonus_exp = _contar_sponsors_activos(
+        db,
+        guild_id,
+        user_id,
+        "equipamiento",
+        ahora,
+    )
+
+    recompensa_final = recompensa
+
+    if bonus_exp:
+        recompensa_final = math.floor(
+            recompensa
+            * (1 + (bonus_exp * 0.10))
+        )
+
+    db.execute(
+        """
+        UPDATE box_usuarios
+        SET
+            experiencia = experiencia + ?,
+            dinero = dinero + ?
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (
+            recompensa_final
+            if tipo != "TRABAJANDO"
+            else 0,
+            dinero_recompensa,
+            guild_id,
+            user_id,
+        ),
+    )
+
+    return (
+        guild_id,
+        user_id,
+        tipo,
+        recompensa_final,
+        dinero_recompensa,
+        se_lesiona,
+        None,
+        None,
+    )
+
+
 def completar_acciones_vencidas(ahora: datetime):
     """
     Liquida acciones vencidas y devuelve sus datos para notificar.
@@ -1040,176 +1255,9 @@ def completar_acciones_vencidas(ahora: datetime):
             (ahora.isoformat(),),
         ).fetchall()
 
-        for (
-            accion_id,
-            guild_id,
-            user_id,
-            tipo,
-            recompensa,
-            dinero_recompensa,
-            iniciado_en,
-            finaliza_en,
-        ) in filas:
-
-            duracion_horas = (
-                datetime.fromisoformat(finaliza_en)
-                - datetime.fromisoformat(iniciado_en)
-            ).total_seconds() / 3600
-
-            db.execute(
-                "DELETE FROM box_acciones WHERE id = ?",
-                (accion_id,),
-            )
-
-            db.execute(
-                """
-                INSERT INTO box_usuarios (
-                    guild_id,
-                    user_id
-                )
-                VALUES (?, ?)
-                ON CONFLICT(guild_id, user_id) DO NOTHING
-                """,
-                (guild_id, user_id),
-            )
-
-            # =================================================
-            # PROMOCIÓN
-            # =================================================
-
-            if tipo == "PROMOVIENDO":
-                minutos = duracion_horas * 60
-                probabilidad_sponsor = _probabilidad_promocion(
-                    minutos
-                )
-
-                consiguio_sponsor = (
-                    random.random()
-                    < probabilidad_sponsor / 100
-                )
-
-                sponsor = None
-
-                if consiguio_sponsor:
-                    sponsor = _sortear_sponsor()
-
-                    creado = _crear_sponsor(
-                        db,
-                        guild_id,
-                        user_id,
-                        sponsor,
-                        ahora,
-                    )
-
-                    if not creado:
-                        sponsor = None
-
-                completadas.append(
-                    (
-                        guild_id,
-                        user_id,
-                        tipo,
-                        0,
-                        0,
-                        False,
-                        probabilidad_sponsor,
-                        sponsor,
-                    )
-                )
-
-                continue
-
-            # =================================================
-            # ACCIONES NORMALES
-            # =================================================
-
-            probabilidad_anterior, lesionado_hasta = db.execute(
-                """
-                SELECT
-                    probabilidad_lesion,
-                    lesionado_hasta
-                FROM box_usuarios
-                WHERE guild_id = ? AND user_id = ?
-                """,
-                (guild_id, user_id),
-            ).fetchone()
-
-            probabilidad = min(
-                100.0,
-                probabilidad_anterior + duracion_horas,
-            )
-
-            se_lesiona = random.random() < (
-                probabilidad / 100
-            )
-
-            if se_lesiona:
-                lesionado_hasta = (
-                    ahora + timedelta(hours=3)
-                ).isoformat()
-
-            db.execute(
-                """
-                UPDATE box_usuarios
-                SET
-                    probabilidad_lesion = ?,
-                    lesionado_hasta = ?
-                WHERE guild_id = ? AND user_id = ?
-                """,
-                (
-                    probabilidad,
-                    lesionado_hasta,
-                    guild_id,
-                    user_id,
-                ),
-            )
-
-            # Bonus de Equipamiento.
-            bonus_exp = _contar_sponsors_activos(
-                db,
-                guild_id,
-                user_id,
-                "equipamiento",
-                ahora,
-            )
-
-            recompensa_final = recompensa
-
-            if bonus_exp:
-                recompensa_final = math.floor(
-                    recompensa
-                    * (1 + (bonus_exp * 0.10))
-                )
-
-            db.execute(
-                """
-                UPDATE box_usuarios
-                SET
-                    experiencia = experiencia + ?,
-                    dinero = dinero + ?
-                WHERE guild_id = ? AND user_id = ?
-                """,
-                (
-                    recompensa_final
-                    if tipo != "TRABAJANDO"
-                    else 0,
-                    dinero_recompensa,
-                    guild_id,
-                    user_id,
-                ),
-            )
-
+        for fila in filas:
             completadas.append(
-                (
-                    guild_id,
-                    user_id,
-                    tipo,
-                    recompensa_final,
-                    dinero_recompensa,
-                    se_lesiona,
-                    None,
-                    None,
-                )
+                _liquidar_accion(db, fila, ahora)
             )
 
         db.commit()
@@ -1223,6 +1271,96 @@ def completar_acciones_vencidas(ahora: datetime):
     procesar_sponsors_medicos(ahora)
 
     return completadas
+
+
+def admin_completar_acciones_vencidas(guild_id: int, ahora: datetime):
+    """
+    Liquida las acciones vencidas de un único servidor.
+
+    Es la versión manual de ``completar_acciones_vencidas`` para
+    mantenimiento administrativo, sin tocar las de otros servidores.
+    """
+
+    completadas = []
+
+    with conectar_db() as db:
+        filas = db.execute(
+            """
+            SELECT
+                id,
+                guild_id,
+                user_id,
+                tipo,
+                recompensa,
+                dinero_recompensa,
+                iniciado_en,
+                finaliza_en
+            FROM box_acciones
+            WHERE guild_id = ?
+            AND finaliza_en <= ?
+            """,
+            (guild_id, ahora.isoformat()),
+        ).fetchall()
+
+        for fila in filas:
+            completadas.append(
+                _liquidar_accion(db, fila, ahora)
+            )
+
+        db.commit()
+
+    # Igual que la versión global, los sponsors se procesan
+    # siempre: sus ciclos internos evitan pagos duplicados.
+    procesar_pagos_sponsors(ahora)
+    procesar_sponsors_medicos(ahora)
+
+    return completadas
+
+
+def admin_finalizar_accion(
+    guild_id: int,
+    user_id: int,
+    ahora: datetime,
+):
+    """Liquida la acción ya vencida de un único usuario.
+
+    Devuelve los mismos datos que ``_liquidar_accion`` o ``None``
+    si el usuario no tiene una acción vencida pendiente.
+    """
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT
+                id,
+                guild_id,
+                user_id,
+                tipo,
+                recompensa,
+                dinero_recompensa,
+                iniciado_en,
+                finaliza_en
+            FROM box_acciones
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND finaliza_en <= ?
+            ORDER BY finaliza_en ASC
+            LIMIT 1
+            """,
+            (guild_id, user_id, ahora.isoformat()),
+        ).fetchone()
+
+        if fila is None:
+            return None
+
+        completada = _liquidar_accion(db, fila, ahora)
+
+        db.commit()
+
+    procesar_pagos_sponsors(ahora)
+    procesar_sponsors_medicos(ahora)
+
+    return completada
 
 
 # ============================================================
@@ -2262,3 +2400,182 @@ def admin_reset_usuario(
         db.commit()
 
     return eliminados
+
+# ============================================================
+# CONSULTAS GLOBALES (SOLO ADMINISTRADORES)
+# ============================================================
+
+def admin_obtener_top_box(
+    guild_id: int,
+    limite: int = 10,
+):
+    """Devuelve el ranking del servidor por experiencia y dinero."""
+
+    with conectar_db() as db:
+
+        return db.execute(
+            """
+            SELECT
+                user_id,
+                experiencia,
+                dinero
+            FROM box_usuarios
+            WHERE guild_id = ?
+            ORDER BY
+                experiencia DESC,
+                dinero DESC
+            LIMIT ?
+            """,
+            (guild_id, limite),
+        ).fetchall()
+
+
+def admin_obtener_estadisticas_box(guild_id: int):
+    """Devuelve estadísticas globales de Box del servidor."""
+
+    with conectar_db() as db:
+
+        jugadores = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_usuarios
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
+
+        experiencia, dinero = db.execute(
+            """
+            SELECT
+                COALESCE(SUM(experiencia), 0),
+                COALESCE(SUM(dinero), 0)
+            FROM box_usuarios
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()
+
+        acciones_activas = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_acciones
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
+
+        sponsors_activos = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_sponsors
+            WHERE guild_id = ?
+            AND expira_en > ?
+            """,
+            (
+                guild_id,
+                datetime.now().isoformat(),
+            ),
+        ).fetchone()[0]
+
+        combates = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
+
+        pendientes = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
+
+        lesionados = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_usuarios
+            WHERE guild_id = ?
+            AND lesionado_hasta IS NOT NULL
+            AND lesionado_hasta > ?
+            """,
+            (
+                guild_id,
+                datetime.now().isoformat(),
+            ),
+        ).fetchone()[0]
+
+    return {
+        "jugadores": jugadores,
+        "experiencia": experiencia,
+        "dinero": dinero,
+        "acciones_activas": acciones_activas,
+        "sponsors_activos": sponsors_activos,
+        "combates": combates,
+        "pendientes": pendientes,
+        "lesionados": lesionados,
+    }
+
+
+def admin_obtener_historial_desafios(
+    guild_id: int,
+    user_id: int,
+    limite: int = 10,
+):
+    """Devuelve los últimos combates de un usuario."""
+
+    with conectar_db() as db:
+
+        return db.execute(
+            """
+            SELECT
+                creado_en,
+                retador_id,
+                contrincante_id,
+                ganador_id
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            ORDER BY creado_en DESC
+            LIMIT ?
+            """,
+            (guild_id, user_id, user_id, limite),
+        ).fetchall()
+
+
+def admin_obtener_lesionados(
+    guild_id: int,
+    ahora: datetime,
+):
+    """Devuelve los usuarios con lesión activa o probabilidad acumulada."""
+
+    with conectar_db() as db:
+
+        return db.execute(
+            """
+            SELECT
+                user_id,
+                probabilidad_lesion,
+                lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ?
+            AND (
+                probabilidad_lesion > 0
+                OR (
+                    lesionado_hasta IS NOT NULL
+                    AND lesionado_hasta > ?
+                )
+            )
+            ORDER BY
+                lesionado_hasta DESC,
+                probabilidad_lesion DESC
+            """,
+            (
+                guild_id,
+                ahora.isoformat(),
+            ),
+        ).fetchall()

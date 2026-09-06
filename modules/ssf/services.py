@@ -20,6 +20,7 @@ from modules.ssf.database import (
     obtener_participante,
     obtener_participantes,
     obtener_registros_usuario,
+    obtener_ultimo_desafio,
     registrar_participante,
     tiene_registro,
     actualizar_participante,
@@ -50,11 +51,14 @@ __all__ = [
     "fecha_dentro_del_desafio",
     # Desafíos y participantes
     "agregar_dia",
+    "cerrar_desafio_activo",
     "cerrar_desafios_finalizados",
     "eliminar_faltantes",
+    "eliminar_participante_admin",
     "iniciar_desafio",
     "quitar_dia",
     "recalcular_rachas",
+    "obtener_desafio_para_ranking",
     "obtener_estado_desafio",
     "obtener_estado_usuario",
     "obtener_lista_participantes",
@@ -1131,3 +1135,180 @@ def cerrar_desafios_finalizados(fecha):
         })
 
     return resultados
+
+# ============================================================
+# ADMINISTRACIÓN MANUAL (SOLO ADMINISTRADORES)
+# ============================================================
+
+def eliminar_participante_admin(
+    guild_id,
+    user_id,
+    fecha,
+    hoy,
+):
+    """Elimina manualmente a un participante que faltó un día.
+
+    Es la reparación simétrica de ``revivir_participante``: replica lo que
+    habría hecho el proceso automático diario si se hubiera ejecutado.
+    """
+
+    desafio = obtener_desafio_activo(guild_id)
+
+    if desafio is None:
+        return {
+            "exitoso": False,
+            "motivo": "sin_desafio",
+        }
+
+    (
+        desafio_id,
+        _guild_id,
+        nombre,
+        fecha_inicio,
+        fecha_fin,
+        canal_id,
+        _activo,
+    ) = desafio
+
+    if not fecha_dentro_del_desafio(
+        fecha,
+        fecha_inicio,
+        fecha_fin,
+    ):
+        return {
+            "exitoso": False,
+            "motivo": "fuera_de_fecha",
+        }
+
+    if fecha > hoy:
+        return {
+            "exitoso": False,
+            "motivo": "futura",
+        }
+
+    participante = obtener_participante(
+        desafio_id,
+        user_id,
+    )
+
+    if participante is None:
+        return {
+            "exitoso": False,
+            "motivo": "no_participante",
+        }
+
+    if participante[4]:
+        return {
+            "exitoso": False,
+            "motivo": "ya_eliminado",
+        }
+
+    if tiene_registro(
+        desafio_id,
+        user_id,
+        fecha.isoformat(),
+    ):
+        return {
+            "exitoso": False,
+            "motivo": "con_registro",
+        }
+
+    eliminar_participante(
+        desafio_id=desafio_id,
+        user_id=user_id,
+        fecha_eliminacion=fecha.isoformat(),
+    )
+
+    return {
+        "exitoso": True,
+        "nombre": nombre,
+        "fecha": fecha.isoformat(),
+        "racha_actual": participante[6],
+        "mejor_racha": participante[7],
+    }
+
+
+def cerrar_desafio_activo(guild_id):
+    """Cierra el desafío activo y devuelve su resultado final."""
+
+    desafio = obtener_desafio_activo(guild_id)
+
+    if desafio is None:
+        return {
+            "exitoso": False,
+            "motivo": "sin_desafio",
+        }
+
+    (
+        desafio_id,
+        _guild_id,
+        nombre,
+        fecha_inicio,
+        fecha_fin,
+        canal_id,
+        _activo,
+    ) = desafio
+
+    ranking = obtener_ranking_final(desafio_id)
+
+    marcar_desafio_cerrado(desafio_id)
+
+    sobrevivientes = [
+        fila
+        for fila in ranking
+        if not fila[2]
+    ]
+
+    eliminados = [
+        fila
+        for fila in ranking
+        if fila[2]
+    ]
+
+    return {
+        "exitoso": True,
+        "desafio_id": desafio_id,
+        "nombre": nombre,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "canal_id": canal_id,
+        "total": len(ranking),
+        "sobrevivientes": sobrevivientes,
+        "eliminados": eliminados,
+        "ranking": ranking,
+    }
+
+
+def obtener_desafio_para_ranking(guild_id):
+    """Devuelve el desafío a rankear: el activo o el más reciente."""
+
+    desafio = obtener_desafio_activo(guild_id)
+
+    activo = True
+
+    if desafio is None:
+        desafio = obtener_ultimo_desafio(guild_id)
+        activo = False
+
+    if desafio is None:
+        return None
+
+    (
+        desafio_id,
+        _guild_id,
+        nombre,
+        fecha_inicio,
+        fecha_fin,
+        canal_id,
+        _activo_db,
+    ) = desafio
+
+    return {
+        "desafio_id": desafio_id,
+        "nombre": nombre,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "canal_id": canal_id,
+        "activo": activo,
+        "ranking": obtener_ranking_final(desafio_id),
+    }

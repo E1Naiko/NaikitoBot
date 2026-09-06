@@ -48,6 +48,9 @@ class GuildFalso:
     def get_member(self, user_id):
         return self._miembros.get(user_id)
 
+    def get_channel(self, canal_id):
+        return None
+
     @property
     def members(self):
         return list(self._miembros.values())
