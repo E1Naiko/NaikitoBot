@@ -7,6 +7,7 @@ from discord import app_commands
 
 from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
+from config import MADRUGUE_PUNTOS_100, MADRUGUE_PUNTOS_25
 from core.utils import ahora
 from modules.madrugue.services import (
     calcular_multiplicador_horario,
@@ -24,6 +25,7 @@ from modules.madrugue.services import (
     obtener_stats_madrugue,
     obtener_top_madrugadores,
     obtener_ultimos_registros,
+    texto_horario_valido,
 )
 
 
@@ -483,7 +485,7 @@ class MadrugueAdminMixin:
             await responder_texto(interaction, "❌ La hora indicada está fuera "
                 "del horario válido.\n\n"
                 "El horario permitido es "
-                "**05:30 a 10:00**.",
+                f"**{texto_horario_valido()}**.",
                 ephemeral=True,
             )
             return
@@ -533,9 +535,9 @@ class MadrugueAdminMixin:
         # EMOJI
         # ----------------------------------------------------
 
-        if puntos_base == 100:
+        if puntos_base == MADRUGUE_PUNTOS_100:
             emoji = "🥇"
-        elif puntos_base == 25:
+        elif puntos_base == MADRUGUE_PUNTOS_25:
             emoji = "🥈"
         else:
             emoji = "🥉"

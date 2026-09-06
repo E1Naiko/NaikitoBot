@@ -6,6 +6,8 @@ registran cada respuesta enviada para poder afirmar sobre ellas.
 
 from dataclasses import dataclass, field
 
+from discord.utils import MISSING
+
 
 class RespuestaFalsa:
     """Doble de ``interaction.response``."""
@@ -13,12 +15,29 @@ class RespuestaFalsa:
     def __init__(self, registro):
         self._registro = registro
 
+    @staticmethod
+    def _validar_view(kwargs):
+        """Reproduce el contrato de ``view`` de discord.py.
+
+        ``send_message``/``followup.send`` distinguen "sin vista" con el
+        centinela ``MISSING``; si reciben ``view=None`` la librería llama a
+        ``view.is_finished()`` sobre ``None`` y revienta con
+        ``AttributeError``. Validar esto aquí hace que las pruebas detecten
+        ese error de integración (``edit_message`` sí admite ``None``).
+        """
+
+        view = kwargs.get("view", MISSING)
+        if view is not MISSING:
+            view.is_finished()
+
     async def send_message(self, content=None, **kwargs):
+        self._validar_view(kwargs)
         self._registro.append(_Mensaje(content, kwargs))
 
     async def send(self, content=None, **kwargs):
         """Equivalente de ``followup.send`` sobre el mismo registro."""
 
+        self._validar_view(kwargs)
         self._registro.append(_Mensaje(content, kwargs))
 
     async def edit_message(self, content=None, **kwargs):

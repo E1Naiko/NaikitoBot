@@ -48,6 +48,15 @@ SSF_FECHA_INICIO=YYYY-MM-DD
 SSF_FECHA_FIN=YYYY-MM-DD
 BOX_EXPERIENCIA_POR_MINUTO=10
 BOX_DINERO_POR_MINUTO=100
+MADRUGUE_INICIO_100=05:30
+MADRUGUE_INICIO_25=07:00
+MADRUGUE_INICIO_5=09:00
+MADRUGUE_FIN=10:00
+MADRUGUE_PUNTOS_100=100
+MADRUGUE_PUNTOS_25=25
+MADRUGUE_PUNTOS_5=5
+MADRUGUE_BONUS_MAXIMO=0.100
+MADRUGUE_BONUS_MINIMO=0.001
 ```
 
 En el proveedor de despliegue, configura estas mismas variables como variables
@@ -89,12 +98,24 @@ cualquier comando desde cualquier canal.
 | `/madrugue_top` | Muestra el ranking histórico de madrugadores del servidor. |
 | `/madrugue_ayuda` | Muestra la ayuda y los horarios de Madrugue. |
 
-Horarios de puntuación:
+Horarios de puntuación (valores por defecto; se configuran en `.env`):
 
 - 05:30 a 06:59: 100 puntos.
 - 07:00 a 08:59: 25 puntos.
 - 09:00 a 09:59: 5 puntos.
 - Desde las 10:00: fuera de horario.
+
+La puntuación de Madrugue se configura con variables de entorno: las ventanas
+con `MADRUGUE_INICIO_100`, `MADRUGUE_INICIO_25`, `MADRUGUE_INICIO_5` y
+`MADRUGUE_FIN` (horas en formato `HH:MM`); los puntos de cada ventana con
+`MADRUGUE_PUNTOS_100`, `MADRUGUE_PUNTOS_25` y `MADRUGUE_PUNTOS_5`; y el bonus
+horario con `MADRUGUE_BONUS_MAXIMO` y `MADRUGUE_BONUS_MINIMO`: el
+multiplicador baja linealmente de `1 + MADRUGUE_BONUS_MAXIMO` al abrir la
+madrugada a `1 + MADRUGUE_BONUS_MINIMO` al cerrarla. Los textos de los
+comandos (`/madrugue`, `/madrugue_ayuda` y `/admin manualadd`) se arman con
+estos valores. Un valor inválido (una hora fuera del formato `HH:MM`, ventanas
+desordenadas, puntos negativos o el bonus invertido) impide que el bot arranque
+con un error que indica la variable culpable.
 
 ## Comandos de SeptSinFP
 
