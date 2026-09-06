@@ -75,7 +75,7 @@ class UsuarioFalso:
         self.dm_abierto = True
         self.mensajes_directos = []
 
-    async def send(self, content):
+    async def send(self, content=None, **kwargs):
         if not self.dm_abierto:
             import discord
 
@@ -83,7 +83,20 @@ class UsuarioFalso:
                 _RespuestaProhibida(),
                 "No puedo enviarte mensajes directos.",
             )
-        self.mensajes_directos.append(content)
+        embed = kwargs.get("embed")
+        if embed is not None:
+            partes = []
+            if embed.title:
+                partes.append(str(embed.title))
+            if embed.description:
+                partes.append(str(embed.description))
+            partes.extend(
+                f"{campo.name}: {campo.value}"
+                for campo in embed.fields
+            )
+            self.mensajes_directos.append("\n".join(partes))
+        else:
+            self.mensajes_directos.append(content or "")
         return MensajeFalso()
 
 
@@ -94,7 +107,27 @@ class _Mensaje:
 
     @property
     def texto(self):
-        return self.contenido or ""
+        """Texto plano equivalente a la respuesta, incluidos los embeds."""
+
+        if self.contenido:
+            return self.contenido
+
+        embed = self.kwargs.get("embed")
+        if embed is None:
+            return ""
+
+        partes = []
+        if embed.title:
+            partes.append(str(embed.title))
+        if embed.description:
+            partes.append(str(embed.description))
+        partes.extend(
+            f"{campo.name}: {campo.value}"
+            for campo in embed.fields
+        )
+        if embed.footer and embed.footer.text:
+            partes.append(str(embed.footer.text))
+        return "\n".join(partes)
 
     @property
     def efimero(self):

@@ -12,6 +12,7 @@ from config import (
     SSF_CANALES_ID,
 )
 
+from core.mensajes import responder
 from core.permissions import es_admin
 from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
@@ -98,11 +99,17 @@ class RestrictedCommandTree(app_commands.CommandTree):
             for canal_id in sorted(canales)
         )
         mensaje = (
-            f"⚠️ Este canal solo permite comandos de {zona}."
+            f"Este canal solo permite comandos de **{zona}**."
             if canales_texto
-            else "⚠️ Este canal no tiene comandos configurados."
+            else "Este canal no tiene comandos configurados."
         )
-        await interaction.response.send_message(mensaje, ephemeral=True)
+        await responder(
+            interaction,
+            "⚠️ Canal no habilitado",
+            mensaje,
+            color_area="aviso",
+            ephemeral=True,
+        )
         print(f"[COMANDO] rechazado={command_path} canal={channel_id}", flush=True)
         return False
 

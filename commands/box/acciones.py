@@ -12,6 +12,7 @@ from config import (
     BOX_DINERO_POR_MINUTO,
     BOX_EXPERIENCIA_POR_MINUTO,
 )
+from core.mensajes import crear_embed, responder, responder_error, seccion
 from core.utils import ahora
 from modules.box.constants import NOMBRES_ACCIONES, NOMBRES_SPONSORS
 from modules.box.services import (
@@ -96,17 +97,23 @@ class AccionesMixin:
                 continue
 
             nombre_accion = NOMBRES_ACCIONES.get(tipo, tipo.lower())
-            await canal.send(
-                f"✅ {usuario.mention} terminó de "
-                f"**{nombre_accion}** y recibió "
-                f"{texto_recompensa(tipo, recompensa, dinero_recompensa)}."
+            embed = crear_embed(
+                "✅ Acción finalizada",
+                f"{usuario.mention} terminó de **{nombre_accion}**.",
+                color_area="box",
             )
-
+            seccion(
+                embed,
+                "Recompensa",
+                texto_recompensa(tipo, recompensa, dinero_recompensa),
+            )
             if se_lesiona:
-                await canal.send(
-                    f"🚑 {usuario.mention} se lesionó y estará "
-                    "lesionado durante 3 horas."
+                seccion(
+                    embed,
+                    "🚑 Lesión",
+                    "Se lastimó y estará lesionado durante 3 horas.",
                 )
+            await canal.send(embed=embed)
 
     @comprobar_acciones.before_loop
     async def esperar_bot(self):
@@ -129,18 +136,23 @@ class AccionesMixin:
                 sponsor,
                 sponsor.capitalize(),
             )
-            await canal.send(
-                f"🎉 {usuario.mention} terminó de "
-                f"**promocionarse** y consiguió un sponsor: "
-                f"**{nombre_sponsor}**."
+            embed = crear_embed(
+                "🎉 ¡Sponsor conseguido!",
+                f"{usuario.mention} terminó de **promocionarse** "
+                "y consiguió un sponsor.",
+                color_area="box",
             )
+            seccion(embed, "Sponsor", f"**{nombre_sponsor}**")
+            await canal.send(embed=embed)
             return
 
-        await canal.send(
-            f"📢 {usuario.mention} terminó de "
-            f"**promocionarse**, pero no consiguió "
-            "ningún sponsor esta vez."
+        embed = crear_embed(
+            "📢 Promoción finalizada",
+            f"{usuario.mention} terminó de **promocionarse**, "
+            "pero no consiguió ningún sponsor esta vez.",
+            color_area="box",
         )
+        await canal.send(embed=embed)
 
     async def _comenzar_accion(
         self,
@@ -167,18 +179,20 @@ class AccionesMixin:
             and datetime.fromisoformat(lesionado_hasta) > ahora()
         ):
             final = datetime.fromisoformat(lesionado_hasta)
-            await interaction.response.send_message(
-                f"🚑 Estás lesionado hasta <t:{int(final.timestamp())}:R>.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "🚑 Lesión activa",
+                f"Estás lesionado hasta <t:{int(final.timestamp())}:R>.",
             )
             return
 
         iniciado_en = ahora()
         duracion, motivo = resolver_duracion(minutos, hasta, iniciado_en)
         if duracion is None:
-            await interaction.response.send_message(
+            await responder_error(
+                interaction,
+                "⚠️ Duración inválida",
                 MENSAJES_DURACION[motivo],
-                ephemeral=True,
             )
             return
 
@@ -189,10 +203,11 @@ class AccionesMixin:
         if accion is not None:
             tipo_actual, finaliza_en, _ = accion
             timestamp = int(datetime.fromisoformat(finaliza_en).timestamp())
-            await interaction.response.send_message(
-                f"⚠️ Ya estás **{tipo_actual.lower()}**. "
+            await responder_error(
+                interaction,
+                "⚠️ Acción activa",
+                f"Ya estás **{tipo_actual.lower()}**. "
                 f"Tu acción termina <t:{timestamp}:R>.",
-                ephemeral=True,
             )
             return
 
@@ -206,30 +221,44 @@ class AccionesMixin:
             duracion.finaliza_en,
             recompensa,
         ):
-            await interaction.response.send_message(
-                "⚠️ Ya tienes otra acción activa.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Acción activa",
+                "Ya tienes otra acción activa.",
             )
             return
 
         finaliza = int(duracion.finaliza_en.timestamp())
 
         if tipo == "PROMOVIENDO":
-            await interaction.response.send_message(
-                f"📢 Comenzaste a **promocionarte** durante "
-                f"**{duracion.minutos} minutos**.\n"
-                f"⏰ Finaliza <t:{finaliza}:R>.\n"
-                f"🎯 Cuanto más tiempo te promociones, mayores serán tus "
-                f"chances de conseguir un sponsor."
+            await responder(
+                interaction,
+                "📢 Comenzaste a promocionarte",
+                color_area="box",
+                secciones_=[
+                    ("⏱️ Duración", f"**{duracion.minutos} minutos**"),
+                    ("⏰ Finaliza", f"<t:{finaliza}:R>"),
+                    (
+                        "🎯 Objetivo",
+                        "Cuanto más tiempo te promociones, "
+                        "mayores serán tus chances de conseguir "
+                        "un sponsor.",
+                    ),
+                ],
             )
             return
 
         unidad = UNIDAD_RECOMPENSA.get(tipo, "EXP")
-        await interaction.response.send_message(
-            f"✅ Comenzaste a **{tipo.lower()}** durante "
-            f"**{duracion.minutos} minutos**.\n"
-            f"⏰ Finaliza <t:{finaliza}:R>.\n"
-            f"🎁 Recompensa: **{recompensa} {unidad}**.",
+        await responder(
+            interaction,
+            f"✅ Comenzaste a {tipo.lower()}",
+            color_area="box",
+            secciones_=[
+                ("🥊 Acción", f"**{tipo.lower()}**"),
+                ("⏱️ Duración", f"**{duracion.minutos} minutos**"),
+                ("⏰ Finaliza", f"<t:{finaliza}:R>"),
+                ("🎁 Recompensa", f"**{recompensa} {unidad}**"),
+            ],
         )
 
     @app_commands.command(

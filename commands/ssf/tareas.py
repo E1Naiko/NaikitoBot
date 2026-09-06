@@ -5,6 +5,7 @@ from datetime import timedelta
 import discord
 from discord.ext import tasks
 
+from core.mensajes import crear_embed, seccion
 from core.utils import ahora
 from modules.ssf.services import (
     cerrar_desafios_finalizados,
@@ -128,12 +129,14 @@ class TareasMixin:
                 # EMBED
                 # =============================================
 
-                embed = discord.Embed(
-                    title="🎯 SeptSinFP — Revisión diaria",
-                    description=(
+                embed = crear_embed(
+                    "🎯 SeptSinFP — Revisión diaria",
+                    (
                         "Revisión correspondiente al "
                         f"**{fecha_a_revisar.strftime('%d/%m/%Y')}**."
                     ),
+                    color_area="ssf",
+                    pie=f"Desafío: {resultado['nombre']}",
                 )
 
                 if eliminados:
@@ -146,41 +149,27 @@ class TareasMixin:
                             f"💀 **{participante['username']}**"
                         )
 
-                    embed.add_field(
-                        name=(
-                            f"💀 Eliminados "
-                            f"({len(eliminados)})"
-                        ),
-                        value="\n".join(nombres),
-                        inline=False,
+                    seccion(
+                        embed,
+                        f"💀 Eliminados ({len(eliminados)})",
+                        "\n".join(nombres),
                     )
-
-                    embed.add_field(
-                        name="📋 Motivo",
-                        value=(
-                            "No registraron "
-                            "**/ssf sobrevivi** durante el día."
-                        ),
-                        inline=False,
+                    seccion(
+                        embed,
+                        "📋 Motivo",
+                        "No registraron "
+                        "**/ssf sobrevivi** durante el día.",
                     )
 
                 else:
 
-                    embed.add_field(
-                        name="🟢 Resultado",
-                        value=(
-                            "No hubo eliminaciones. "
-                            "Todos los participantes "
-                            "registraron su supervivencia."
-                        ),
-                        inline=False,
+                    seccion(
+                        embed,
+                        "🟢 Resultado",
+                        "No hubo eliminaciones. "
+                        "Todos los participantes "
+                        "registraron su supervivencia.",
                     )
-
-                embed.set_footer(
-                    text=(
-                        f"Desafío: {resultado['nombre']}"
-                    )
-                )
 
                 # =============================================
                 # PUBLICAR

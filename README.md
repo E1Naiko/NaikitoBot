@@ -54,6 +54,13 @@ En el proveedor de despliegue, configura estas mismas variables como variables
 de entorno. No es necesario subir el archivo `.env`; el bot también funciona
 con variables definidas directamente por la plataforma.
 
+## Presentación
+
+Las respuestas del bot usan la capa común `core/mensajes.py`, que arma embeds
+con un color por área (Box, Madrugue, SeptSinFP, admin o general) y secciones
+ordenadas (`crear_embed`, `responder`, `responder_error`, etc.). Usar esas
+helpers mantiene el formato consistente entre comandos.
+
 Iniciar el bot:
 
 ```text

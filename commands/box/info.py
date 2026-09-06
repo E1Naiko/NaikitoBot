@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 
 from commands.box.base import solo_servidor
+from core.mensajes import crear_embed, responder, responder_error, responder_ok
 from modules.box.services import (
     EQUIPAMIENTO,
     TEXTO_AYUDA,
@@ -29,19 +30,26 @@ class InfoMixin:
     )
     async def ayuda(self, interaction: discord.Interaction):
         try:
-            await interaction.user.send(TEXTO_AYUDA)
+            await interaction.user.send(
+                embed=crear_embed(
+                    "🥊 Ayuda de Box",
+                    TEXTO_AYUDA,
+                    color_area="box",
+                )
+            )
         except discord.Forbidden:
-            await interaction.response.send_message(
-                "⚠️ No pude enviarte un mensaje directo. "
-                "Activa los mensajes directos de este servidor "
-                "e inténtalo otra vez.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Mensaje directo bloqueado",
+                "No pude enviarte un mensaje directo. Activa los "
+                "mensajes directos de este servidor e inténtalo otra vez.",
             )
             return
 
-        await interaction.response.send_message(
-            "✅ Te envié la ayuda de Box por mensaje directo.",
-            ephemeral=True,
+        await responder_ok(
+            interaction,
+            "✅ Ayuda enviada",
+            "Te envié la ayuda de Box por mensaje directo.",
         )
 
     @app_commands.command(
@@ -56,10 +64,14 @@ class InfoMixin:
             interaction.guild.id,
             interaction.user.id,
         )
-        await interaction.response.send_message(
-            f"📊 **Saldo de {interaction.user.display_name}**\n"
-            f"⭐ Experiencia: **{experiencia}**\n"
-            f"💰 Dinero: **{dinero}**"
+        await responder(
+            interaction,
+            f"📊 Saldo de {interaction.user.display_name}",
+            color_area="box",
+            secciones_=[
+                ("⭐ Experiencia", f"**{experiencia}**"),
+                ("💰 Dinero", f"**{dinero}$**"),
+            ],
         )
 
     @app_commands.command(
@@ -84,19 +96,42 @@ class InfoMixin:
             final = int(datetime.fromisoformat(accion[1]).timestamp())
             accion_texto = f"{accion[0].lower()} hasta <t:{final}:R>"
 
-        await interaction.response.send_message(
-            f"📊 **Stats de {interaction.user.display_name}**\n"
-            f"⭐ Experiencia: **{estadisticas['experiencia']}**\n"
-            f"💰 Dinero: **{estadisticas['dinero']}**\n"
-            f"🥊 Desafíos: **{estadisticas['ganadas']}/"
-            f"{estadisticas['perdidas']}** ratio: "
-            f"**{formato_ratio(estadisticas['ratio'])}**\n"
-            f"📈 Creatina: nivel **{estadisticas['nivel_entrenamiento']}**\n"
-            f"☕ Cafe: nivel **{estadisticas['nivel_trabajo']}**\n"
-            f"🩹 Probabilidad de lesión: "
-            f"**{estadisticas['probabilidad_lesion']:.2f}%**\n"
-            f"⏳ Acción actual: **{accion_texto}**",
+        await responder(
+            interaction,
+            f"📊 Stats de {interaction.user.display_name}",
+            color_area="box",
             ephemeral=True,
+            secciones_=[
+                (
+                    "Economía",
+                    f"⭐ **{estadisticas['experiencia']} EXP**\n"
+                    f"💰 **{estadisticas['dinero']}$**",
+                    True,
+                ),
+                (
+                    "Desafíos",
+                    f"🥊 **{estadisticas['ganadas']}/"
+                    f"{estadisticas['perdidas']}**\n"
+                    f"Ratio: **"
+                    f"{formato_ratio(estadisticas['ratio'])}**",
+                    True,
+                ),
+                (
+                    "Mejoras",
+                    f"📈 Creatina: **"
+                    f"{estadisticas['nivel_entrenamiento']}**\n"
+                    f"☕ Cafe: **"
+                    f"{estadisticas['nivel_trabajo']}**",
+                    True,
+                ),
+                (
+                    "Lesión",
+                    f"🩹 **"
+                    f"{estadisticas['probabilidad_lesion']:.2f}%**",
+                    True,
+                ),
+                ("⏳ Acción actual", f"**{accion_texto}**", False),
+            ],
         )
 
     @app_commands.command(
@@ -113,9 +148,10 @@ class InfoMixin:
         )
 
         if equipo_datos is None:
-            await interaction.response.send_message(
-                "⚠️ Error al obtener el equipo.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Error",
+                "No se pudo obtener el equipo.",
             )
             return
 
@@ -125,21 +161,30 @@ class InfoMixin:
             for clave, pieza in EQUIPAMIENTO.items()
         )
 
-        await interaction.response.send_message(
-            f"🥊 **Equipo de {interaction.user.display_name}**\n\n"
-            f"**Combate**\n"
-            f"❤️ **Vida:** {equipo_datos['vida']}/"
-            f"{equipo_datos['vida_maxima']}\n"
-            f"💥 **Daño:** {equipo_datos['dano']}/"
-            f"{equipo_datos['dano_maximo']}\n"
-            f"🛡️ **Defensa:** {equipo_datos['defensa']}/"
-            f"{equipo_datos['defensa_maxima']}\n"
-            f"😴 **Cansancio:** {equipo_datos['cansancio']}/"
-            f"{equipo_datos['cansancio_maximo']}\n\n"
-            f"**Habilidad**\n"
-            f"⭐ **Puntos Habilidad:** {equipo_datos['puntos_habilidad']}\n\n"
-            f"**Equipamiento**\n"
-            f"{equipamiento}"
+        await responder(
+            interaction,
+            f"🥊 Equipo de {interaction.user.display_name}",
+            color_area="box",
+            secciones_=[
+                (
+                    "Combate",
+                    f"❤️ Vida: **{equipo_datos['vida']}/"
+                    f"{equipo_datos['vida_maxima']}**\n"
+                    f"💥 Daño: **{equipo_datos['dano']}/"
+                    f"{equipo_datos['dano_maximo']}**\n"
+                    f"🛡️ Defensa: **{equipo_datos['defensa']}/"
+                    f"{equipo_datos['defensa_maxima']}**\n"
+                    f"😴 Cansancio: **{equipo_datos['cansancio']}/"
+                    f"{equipo_datos['cansancio_maximo']}**",
+                ),
+                (
+                    "Habilidad",
+                    f"⭐ Puntos Habilidad: **"
+                    f"{equipo_datos['puntos_habilidad']}**",
+                    True,
+                ),
+                ("Equipamiento", equipamiento, False),
+            ],
         )
 
     @app_commands.command(
@@ -151,17 +196,19 @@ class InfoMixin:
             return
 
         if obtener_accion_activa(interaction.guild.id, interaction.user.id):
-            await interaction.response.send_message(
-                "⚠️ No puedes descansar mientras realizas una acción.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Acción activa",
+                "No puedes descansar mientras realizas una acción.",
             )
             return
 
         # Descansar está permitido incluso estando lesionado.
         descansar(interaction.guild.id, interaction.user.id)
-        await interaction.response.send_message(
-            "🛌 Tu probabilidad de lesión volvió a **0%**.",
-            ephemeral=True,
+        await responder_ok(
+            interaction,
+            "🛌 Descanso",
+            "Tu probabilidad de lesión volvió a **0%**.",
         )
 
     @app_commands.command(
@@ -174,12 +221,15 @@ class InfoMixin:
 
         ranking = obtener_top_desafios(interaction.guild.id)
         if not ranking:
-            await interaction.response.send_message(
-                "🏆 Todavía no hay desafíos finalizados."
+            await responder(
+                interaction,
+                "🏆 Desafíos",
+                "Todavía no hay desafíos finalizados.",
+                color_area="box",
             )
             return
 
-        lineas = ["🏆 **TOP DE DESAFÍOS**"]
+        lineas = []
         for posicion, (user_id, ganadas, perdidas, ratio) in enumerate(
             ranking,
             start=1,
@@ -191,4 +241,11 @@ class InfoMixin:
                 f"ratio: **{formato_ratio(ratio)}**"
             )
 
-        await interaction.response.send_message("\n".join(lineas))
+        await responder(
+            interaction,
+            "🏆 Top desafíos",
+            color_area="box",
+            secciones_=[
+                ("Ranking", "\n".join(lineas), False),
+            ],
+        )

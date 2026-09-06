@@ -28,7 +28,9 @@ class RespuestaFalsa:
         self.mensajes = []
 
     async def send_message(self, content=None, **kwargs):
-        self.mensajes.append((content, kwargs))
+        from tests.harness import _Mensaje
+
+        self.mensajes.append(_Mensaje(content, kwargs))
 
 
 class InteraccionFalsa:
@@ -92,7 +94,9 @@ def test_box_rechaza_fuera_del_canal_designado(config_canales, canal):
     permitido, mensajes = comprobar(arbol(), BOX_SALDO, canal, USUARIO)
     assert not permitido
     assert mensajes
-    assert "solo permite comandos de Box" in mensajes[-1][0]
+    texto = mensajes[-1].texto
+    assert "solo permite comandos de" in texto
+    assert "Box" in texto
 
 
 def test_box_admin_exento_de_canal(config_canales):
@@ -151,7 +155,7 @@ def test_boton_tienda_rechaza_fuera_del_canal(config_canales):
     ejecutar(boton.callback(interaccion))
 
     assert interaccion.response.mensajes
-    assert "solo puede usarse en el canal de Box" in interaccion.response.mensajes[-1][0]
+    assert "solo puede usarse en el canal de Box" in interaccion.response.mensajes[-1].texto
 
 
 def test_boton_tienda_admin_exento(base_datos_limpia, config_canales):
@@ -169,7 +173,7 @@ def test_boton_tienda_admin_exento(base_datos_limpia, config_canales):
     # Al estar exento pasa al chequeo de propiedad/compra, no recibe el aviso
     # de canal; y como el botón pertenece al propio admin, intenta comprar.
     assert not any(
-        "solo puede usarse en el canal de Box" in m[0]
+        "solo puede usarse en el canal de Box" in m.texto
         for m in interaccion.response.mensajes
     )
 
@@ -191,4 +195,4 @@ def test_boton_desafio_rechaza_fuera_del_canal(config_canales):
     ejecutar(vista.aceptar.callback(interaccion))
 
     assert interaccion.response.mensajes
-    assert "solo puede aceptarse en el canal de Box" in interaccion.response.mensajes[-1][0]
+    assert "solo puede aceptarse en el canal de Box" in interaccion.response.mensajes[-1].texto

@@ -5,6 +5,7 @@ from datetime import date, datetime
 import discord
 from discord import app_commands
 
+from core.mensajes import responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
 from modules.madrugue.services import (
@@ -114,8 +115,7 @@ class MadrugueAdminMixin:
         )
 
         if not resultados:
-            await interaction.response.send_message(
-                "🏆 Todavía no hay madrugadores registrados.",
+            await responder_texto(interaction, "🏆 Todavía no hay madrugadores registrados.",
                 ephemeral=True,
             )
             return
@@ -196,8 +196,7 @@ class MadrugueAdminMixin:
             fecha_obj = date.fromisoformat(fecha)
 
         except ValueError:
-            await interaction.response.send_message(
-                "⚠️ La fecha no es válida.\n"
+            await responder_texto(interaction, "⚠️ La fecha no es válida.\n"
                 "Utiliza el formato **YYYY-MM-DD**.\n"
                 "Ejemplo: `2026-08-31`.",
                 ephemeral=True,
@@ -211,8 +210,7 @@ class MadrugueAdminMixin:
         )
 
         if registro is None:
-            await interaction.response.send_message(
-                f"ℹ️ **{usuario.display_name}** no tiene "
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** no tiene "
                 f"un registro el **{fecha}**.",
                 ephemeral=True,
             )
@@ -227,14 +225,12 @@ class MadrugueAdminMixin:
         )
 
         if eliminado == 0:
-            await interaction.response.send_message(
-                "⚠️ No se pudo eliminar el registro.",
+            await responder_texto(interaction, "⚠️ No se pudo eliminar el registro.",
                 ephemeral=True,
             )
             return
 
-        await interaction.response.send_message(
-            f"🗑️ Registro eliminado correctamente.\n\n"
+        await responder_texto(interaction, f"🗑️ Registro eliminado correctamente.\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"📅 Fecha: **{fecha}**\n"
             f"⏰ Hora registrada: **{hora}**\n"
@@ -275,8 +271,7 @@ class MadrugueAdminMixin:
         puntos_totales = resumen[1]
 
         if cantidad_registros == 0:
-            await interaction.response.send_message(
-                f"ℹ️ **{usuario.display_name}** no tiene "
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** no tiene "
                 "registros en este servidor.",
                 ephemeral=True,
             )
@@ -288,14 +283,12 @@ class MadrugueAdminMixin:
         )
 
         if eliminado == 0:
-            await interaction.response.send_message(
-                "⚠️ No se pudo eliminar ningún registro.",
+            await responder_texto(interaction, "⚠️ No se pudo eliminar ningún registro.",
                 ephemeral=True,
             )
             return
 
-        await interaction.response.send_message(
-            f"🗑️ Registros eliminados correctamente.\n\n"
+        await responder_texto(interaction, f"🗑️ Registros eliminados correctamente.\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"📋 Registros eliminados: **{eliminado}**\n"
             f"🏆 Puntos eliminados: **{puntos_totales:.1f}**",
@@ -333,8 +326,7 @@ class MadrugueAdminMixin:
             return
 
         if confirmar.value != "SI":
-            await interaction.response.send_message(
-                "🛑 Operación cancelada. "
+            await responder_texto(interaction, "🛑 Operación cancelada. "
                 "No se eliminó ningún registro.",
                 ephemeral=True,
             )
@@ -347,8 +339,7 @@ class MadrugueAdminMixin:
         )
 
         if registros == 0:
-            await interaction.response.send_message(
-                "ℹ️ No hay registros de Madrugue para eliminar en este servidor.",
+            await responder_texto(interaction, "ℹ️ No hay registros de Madrugue para eliminar en este servidor.",
                 ephemeral=True,
             )
             return
@@ -357,8 +348,7 @@ class MadrugueAdminMixin:
             interaction.guild.id
         )
 
-        await interaction.response.send_message(
-            f"🗑️ **Borrado total completado.**\n\n"
+        await responder_texto(interaction, f"🗑️ **Borrado total completado.**\n\n"
             f"🏠 Servidor: **{interaction.guild.name}**\n"
             f"👥 Madrugadores afectados: **{madrugadores}**\n"
             f"📋 Registros eliminados: **{eliminado}**\n"
@@ -413,8 +403,7 @@ class MadrugueAdminMixin:
             ).date()
 
         except ValueError:
-            await interaction.response.send_message(
-                "❌ Fecha inválida.\n"
+            await responder_texto(interaction, "❌ Fecha inválida.\n"
                 "Usá el formato **YYYY-MM-DD**.\n\n"
                 "Ejemplo: `2026-07-01`",
                 ephemeral=True,
@@ -428,8 +417,7 @@ class MadrugueAdminMixin:
         fecha_actual = ahora().date()
 
         if fecha_obj > fecha_actual:
-            await interaction.response.send_message(
-                "❌ No podés registrar una fecha futura.",
+            await responder_texto(interaction, "❌ No podés registrar una fecha futura.",
                 ephemeral=True,
             )
             return
@@ -445,8 +433,7 @@ class MadrugueAdminMixin:
             ).time()
 
         except ValueError:
-            await interaction.response.send_message(
-                "❌ Hora inválida.\n"
+            await responder_texto(interaction, "❌ Hora inválida.\n"
                 "Usá el formato **HH:MM**.\n\n"
                 "Ejemplo: `05:45`",
                 ephemeral=True,
@@ -466,8 +453,7 @@ class MadrugueAdminMixin:
         if registro_existente:
             hora_anterior, puntos = registro_existente
 
-            await interaction.response.send_message(
-                "⚠️ **EL USUARIO YA TIENE REGISTRO EN ESA FECHA**\n\n"
+            await responder_texto(interaction, "⚠️ **EL USUARIO YA TIENE REGISTRO EN ESA FECHA**\n\n"
                 f"👤 Usuario: **{usuario.display_name}**\n"
                 f"📅 Fecha: **{fecha_obj.isoformat()}**\n"
                 f"⏰ Hora registrada: **{hora_anterior}**\n"
@@ -487,8 +473,7 @@ class MadrugueAdminMixin:
         )
 
         if puntos_base == 0:
-            await interaction.response.send_message(
-                "❌ La hora indicada está fuera "
+            await responder_texto(interaction, "❌ La hora indicada está fuera "
                 "del horario válido.\n\n"
                 "El horario permitido es "
                 "**05:30 a 10:00**.",
@@ -552,8 +537,7 @@ class MadrugueAdminMixin:
         # CONFIRMACIÓN
         # ----------------------------------------------------
 
-        await interaction.response.send_message(
-            "🔧 **REGISTRO MANUAL AGREGADO**\n\n"
+        await responder_texto(interaction, "🔧 **REGISTRO MANUAL AGREGADO**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🆔 ID: `{usuario.id}`\n"
             f"📅 Fecha: **{fecha_obj.isoformat()}**\n"

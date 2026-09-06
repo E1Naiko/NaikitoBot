@@ -4,10 +4,11 @@ Cada comando se invoca a través de su callback real con una interacción falsa,
 así que estas pruebas recorren el mismo camino que Discord.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
+from core.utils import ahora
 from modules.ssf.services import (
     eliminar_faltantes,
     iniciar_desafio,
@@ -23,6 +24,12 @@ CANAL = 99
 NOMBRE = "SeptiembreSinFAP"
 
 
+def hoy():
+    """Fecha local del bot, igual que la que usan los comandos."""
+
+    return ahora().date()
+
+
 @pytest.fixture
 def cog(base_datos_limpia):
     from commands.ssf.cog import Ssf
@@ -30,13 +37,13 @@ def cog(base_datos_limpia):
 
     inicializar_db()
 
-    hoy = date.today()
+    hoy_actual = hoy()
 
     resultado = iniciar_desafio(
         GUILD,
         NOMBRE,
-        (hoy - timedelta(days=6)).isoformat(),
-        (hoy + timedelta(days=30)).isoformat(),
+        (hoy_actual - timedelta(days=6)).isoformat(),
+        (hoy_actual + timedelta(days=30)).isoformat(),
         CANAL,
     )
 
@@ -70,7 +77,7 @@ def llamar(cog, nombre_metodo, interaccion, *args):
 
 def mediodia(hace_dias):
     return datetime.combine(
-        date.today() - timedelta(days=hace_dias),
+        hoy() - timedelta(days=hace_dias),
         datetime.min.time(),
     ).replace(hour=12)
 
@@ -101,7 +108,7 @@ def escenario_eliminado_con_racha_6():
     for hace_dias in (5, 4, 3, 2, 1):
         sobrevivir_servicio(hace_dias)
 
-    assert eliminar_faltantes(GUILD, date.today()) == 1
+    assert eliminar_faltantes(GUILD, hoy()) == 1
 
 
 # ============================================================
