@@ -58,7 +58,7 @@ class RegistroMixin:
 
         await responder(
             interaction,
-            f"🎯 ¡{interaction.user.mention} se registró!",
+            f"🎯 ¡{interaction.user.display_name} se registró!",
             color_area="ssf",
             secciones_=[
                 ("🗓️ Desafío", f"**{resultado['nombre']}**"),
@@ -115,7 +115,7 @@ class RegistroMixin:
 
         await responder(
             interaction,
-            f"🔥 ¡{interaction.user.mention} sobrevivió el día "
+            f"🔥 ¡{interaction.user.display_name} sobrevivió el día "
             f"{resultado['fecha'].strftime('%d/%m')}!",
             color_area="ssf",
             secciones_=[

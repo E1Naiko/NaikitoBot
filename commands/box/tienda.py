@@ -12,13 +12,20 @@ import discord
 from discord import app_commands
 
 from commands.box.base import solo_servidor
-from commands.box.compras import CATALOGOS, ejecutar_compra
+from commands.box.compras import (
+    CATALOGOS,
+    ejecutar_compra,
+    titulo_compra,
+    usar_suministro_resultado,
+)
 from config import BOX_CHANNEL_IDS
 from core.mensajes import crear_embed, responder, responder_error
 from core.permissions import es_admin
 from modules.box.services import (
     EQUIPAMIENTO,
     MEJORAS,
+    SUMINISTROS,
+    TIPOS_SUMINISTRO,
     TRATAMIENTOS,
     calidad_equipamiento,
     es_nivel_maximo,
@@ -39,7 +46,7 @@ PLANTILLA_CUSTOM_ID = re.compile(
 )
 
 # Orden en que aparecen los botones, igual que las secciones del mensaje.
-ORDEN_CATALOGOS = ("mejora", "equipamiento", "tratamiento")
+ORDEN_CATALOGOS = ("mejora", "equipamiento", "tratamiento", "suministro")
 
 # Discord permite 5 botones por fila y 5 filas.
 BOTONES_POR_FILA = 5
@@ -109,6 +116,19 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
             )
             return
 
+        # El suministro es una entrada genérica: primero se elige el tipo.
+        if self.categoria == "suministro":
+            await interaction.response.send_message(
+                embed=crear_embed(
+                    "🎒 Suministros de recuperación",
+                    "Elegí qué suministro querés usar:",
+                    color_area="box",
+                ),
+                view=VistaSuministro(self.owner_id),
+                ephemeral=True,
+            )
+            return
+
         resultado = ejecutar_compra(
             interaction.guild.id,
             interaction.user.id,
@@ -123,6 +143,78 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
             ),
             ephemeral=True,
         )
+
+
+class SelectorSuministro(discord.ui.Select):
+    """Menú para elegir el tipo de suministro dentro de la tienda."""
+
+    def __init__(self, owner_id: int):
+        self.owner_id = owner_id
+
+        opciones = [
+            discord.SelectOption(
+                label=tipo["nombre"],
+                value=clave,
+                description=f"Cuesta {tipo['precio']}$",
+                emoji=tipo["emoji"],
+            )
+            for clave, tipo in TIPOS_SUMINISTRO.items()
+        ]
+
+        super().__init__(
+            custom_id=f"box_suministro:{owner_id}",
+            placeholder="Elegí el suministro…",
+            min_values=1,
+            max_values=1,
+            options=opciones,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.owner_id:
+            await responder_error(
+                interaction,
+                "⚠️ Tienda de otro usuario",
+                "Esta tienda no es tuya. Usá `/box tienda` para abrir la tuya.",
+            )
+            return
+
+        if interaction.guild is None:
+            await responder_error(
+                interaction,
+                "⚠️ Sin servidor",
+                "Este comando solo puede utilizarse dentro de un servidor.",
+            )
+            return
+
+        tipo = self.values[0]
+        resultado = usar_suministro_resultado(
+            interaction.guild.id,
+            interaction.user.id,
+            tipo,
+        )
+
+        # El menú es de un solo uso: se deshabilita tras elegir.
+        self.disabled = True
+        await interaction.response.edit_message(view=self.view)
+        await interaction.followup.send(
+            embed=crear_embed(
+                "✅ Suministro"
+                if resultado.exitoso
+                else "⚠️ Suministro no disponible",
+                resultado.texto,
+                color_area="box" if resultado.exitoso else "error",
+            ),
+            ephemeral=True,
+        )
+
+
+class VistaSuministro(discord.ui.View):
+    """Vista efímera con el menú de tipos de suministro."""
+
+    def __init__(self, owner_id: int):
+        super().__init__(timeout=120)
+        self.owner_id = owner_id
+        self.add_item(SelectorSuministro(owner_id))
 
 
 class TiendaView(discord.ui.View):
@@ -204,9 +296,14 @@ class TiendaMixin:
         )
         await interaction.response.send_message(
             embed=crear_embed(
-                "✅ Compra" if resultado.exitoso else "⚠️ Compra rechazada",
+                titulo_compra(resultado),
                 resultado.texto,
-                color_area="box" if resultado.exitoso else "error",
+                color_area=(
+                    "box"
+                    if resultado.exitoso
+                    or resultado.estado == "elegir_tipo"
+                    else "error"
+                ),
             ),
             ephemeral=not resultado.exitoso,
         )
@@ -245,6 +342,44 @@ class TiendaMixin:
         await interaction.response.send_message(
             embed=crear_embed(
                 "✅ Tratamiento" if resultado.exitoso else "⚠️ Compra rechazada",
+                resultado.texto,
+                color_area="box" if resultado.exitoso else "error",
+            ),
+            ephemeral=not resultado.exitoso,
+        )
+
+    @app_commands.command(
+        name="suministro",
+        description="Usa suministros de recuperación (vida, cansancio, defensa o lesión).",
+    )
+    @app_commands.describe(tipo="Suministro que quieres usar.")
+    @app_commands.choices(
+        tipo=[
+            app_commands.Choice(
+                name=f"{tipo['emoji']} {tipo['nombre']} ({tipo['precio']}$)",
+                value=clave,
+            )
+            for clave, tipo in TIPOS_SUMINISTRO.items()
+        ]
+    )
+    async def suministro(
+        self,
+        interaction: discord.Interaction,
+        tipo: app_commands.Choice[str],
+    ):
+        if not await solo_servidor(interaction):
+            return
+
+        resultado = usar_suministro_resultado(
+            interaction.guild.id,
+            interaction.user.id,
+            tipo.value,
+        )
+        await interaction.response.send_message(
+            embed=crear_embed(
+                "✅ Suministro"
+                if resultado.exitoso
+                else "⚠️ Suministro no disponible",
                 resultado.texto,
                 color_area="box" if resultado.exitoso else "error",
             ),
@@ -296,9 +431,22 @@ def construir_catalogo(interaction) -> str:
             f"Precio fijo: **{tratamiento['precio']}**"
         )
 
+    lineas.append("\n**Suministros**")
+
+    for suministro in SUMINISTROS.values():
+        tipos = " · ".join(
+            f"{tipo['emoji']} {tipo['nombre']} **{tipo['precio']}$**"
+            for tipo in TIPOS_SUMINISTRO.values()
+        )
+        lineas.append(
+            f"{suministro['emoji']} **{suministro['nombre']}** — "
+            f"{suministro['descripcion']}\n{tipos}"
+        )
+
     lineas.append(
         "\n💡 Tocá el botón de un artículo para comprarlo. "
-        "Los botones de esta tienda solo funcionan para vos."
+        "Los botones de esta tienda solo funcionan para vos. "
+        "El botón de suministros abre un menú para elegir el tipo."
     )
 
     return "\n".join(lineas)

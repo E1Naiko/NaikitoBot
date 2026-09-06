@@ -26,6 +26,8 @@ class Box(
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.comprobar_acciones.start()
+        self.reducir_probabilidad_lesion.start()
 
     def cog_unload(self):
         self.comprobar_acciones.cancel()
+        self.reducir_probabilidad_lesion.cancel()

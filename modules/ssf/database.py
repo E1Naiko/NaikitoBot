@@ -150,6 +150,29 @@ def obtener_desafio_activo(guild_id):
         )).fetchone()
 
 
+def obtener_ultimo_desafio(guild_id):
+    """Obtiene el desafío más reciente de un servidor, activo o no."""
+
+    with conectar_db() as db:
+
+        return db.execute("""
+            SELECT
+                id,
+                guild_id,
+                nombre,
+                fecha_inicio,
+                fecha_fin,
+                canal_id,
+                activo
+            FROM ssf_desafios
+            WHERE guild_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """, (
+            guild_id,
+        )).fetchone()
+
+
 def obtener_desafio_por_id(desafio_id):
     """Obtiene un desafío por su ID."""
 

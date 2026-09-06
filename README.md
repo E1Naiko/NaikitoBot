@@ -133,7 +133,98 @@ salvo los que no requieren un canal específico según su implementación.
 ## Comandos administrativos
 
 Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
-`ADMIN_USER_IDS`.
+`ADMIN_USER_IDS` y están organizados en subgrupos por área (`/admin madrugue`,
+`/admin ssf`, `/admin box`). Los administradores quedan exentos de la
+restricción de canal: pueden usar cualquier comando desde cualquier canal.
+
+### Sistema
+
+| Comando | Parámetros | Descripción |
+| --- | --- | --- |
+| `/admin info` | Ninguno | Muestra la configuración del bot: canales, tasas de Box, fechas de SeptSinFP y zona horaria. |
+| `/admin fileexecute` | `archivo` | Ejecuta comandos administrativos desde un archivo TXT. |
+
+### Madrugue
+
+| Comando | Parámetros | Descripción |
+| --- | --- | --- |
+| `/admin madrugue stats` | Ninguno | Muestra las estadísticas generales de Madrugue. |
+| `/admin madrugue top` | Ninguno | Muestra el ranking de Madrugue. |
+| `/admin madrugue ver` | `usuario` | Muestra el resumen, rachas y últimos registros de un usuario. |
+| `/admin madrugue resetdia` | `usuario`, `fecha` | Elimina el registro de un usuario para una fecha. |
+| `/admin madrugue resetusuario` | `usuario` | Elimina todos los registros de un usuario. |
+| `/admin madrugue resettotal` | `confirmar`: `SI` o `NO` | Elimina todos los registros del servidor cuando se confirma. |
+| `/admin madrugue manualadd` | `usuario`, `fecha`, `hora` | Agrega manualmente una madrugada. |
+
+### SeptSinFP
+
+| Comando | Parámetros | Descripción |
+| --- | --- | --- |
+| `/admin ssf estado` | `usuario` | Muestra el estado, rachas y rango de cualquier participante. |
+| `/admin ssf desafio` | Ninguno | Muestra el estado global del desafío activo. |
+| `/admin ssf participantes` | Ninguno | Lista los participantes con racha actual y mejor racha. |
+| `/admin ssf ranking` | Ninguno | Muestra el ranking del desafío activo (o del último cerrado). |
+| `/admin ssf iniciar` | `canal`, `fecha_inicio`?, `fecha_fin`?, `nombre`? | Inicia un desafío SeptSinFP. Por defecto usa las fechas de `SSF_FECHA_INICIO` y `SSF_FECHA_FIN`. |
+| `/admin ssf revivir` | `usuario`, `fecha` | Revive a un participante eliminado en una fecha. |
+| `/admin ssf eliminar` | `usuario`, `fecha` | Marca eliminado a un participante que no registró un día. |
+| `/admin ssf agregar` | `usuario`, `fecha` | Agrega manualmente un día a un participante activo. |
+| `/admin ssf quitar` | `usuario`, `fecha` | Quita manualmente un día a un participante. |
+| `/admin ssf recalcular` | `usuario` | Recalcula las rachas desde los registros guardados. |
+| `/admin ssf cerrar` | `confirmar`: `SI` o `NO` | Cierra el desafío activo y lo deja listo para su ranking final. |
+
+### Box
+
+| Comando | Parámetros | Descripción |
+| --- | --- | --- |
+| `/admin box info` | `usuario` | Muestra toda la información Box de un usuario. |
+| `/admin box top` | Ninguno | Muestra el ranking del servidor por EXP y dinero. |
+| `/admin box stats` | Ninguno | Muestra estadísticas globales de Box del servidor. |
+| `/admin box historial` | `usuario` | Muestra los últimos combates de un usuario. |
+| `/admin box sponsors` | `usuario` | Muestra los sponsors activos de un usuario. |
+| `/admin box lesionados` | Ninguno | Lista los usuarios con lesión activa o probabilidad acumulada. |
+| `/admin box dar_dinero` | `usuario`, `cantidad` | Suma o resta dinero Box a un usuario. |
+| `/admin box dar_exp` | `usuario`, `cantidad` | Suma o resta experiencia Box a un usuario. |
+| `/admin box curar` | `usuario` | Cura la lesión activa de un usuario. |
+| `/admin box probabilidad` | `usuario`, `probabilidad` | Establece la probabilidad de lesión de un usuario. |
+| `/admin box cancelar` | `usuario` | Cancela la acción Box activa de un usuario sin recompensa. |
+| `/admin box finalizar` | `usuario` | Liquida ya la acción vencida de un usuario y le entrega la recompensa. |
+| `/admin box procesar` | Ninguno | Liquida todas las acciones vencidas del servidor. |
+| `/admin box dar_sponsor` | `usuario`, `tipo` | Otorga manualmente un sponsor a un usuario. |
+| `/admin box quitar_sponsor` | `usuario`, `sponsor_id` | Elimina un sponsor específico de un usuario. |
+| `/admin box reset` | `usuario` | Resetea completamente el progreso Box de un usuario. |
+
+Ejemplo de formatos para los parámetros:
+
+```text
+usuario: <ID_USUARIO> o <@ID_USUARIO>
+fecha: YYYY-MM-DD
+hora: HH:MM
+canal: <ID_CANAL> o <#ID_CANAL>
+probabilidad: número entre 0 y 100
+tipo: redes | radio | equipamiento | medico
+```
+
+### Reparación manual de SeptSinFP
+
+Los registros diarios (`ssf_registros`) son la fuente de verdad y ningún flujo
+del juego los borra; las rachas mostradas son un caché calculado desde ellos.
+Si la racha mostrada queda incorrecta, se corrige sin tocar el estado de
+eliminado:
+
+- `/admin ssf recalcular <usuario>`: restaura ambas rachas desde los registros.
+  Es la reparación para participantes eliminados con la racha en 0.
+- `/admin ssf agregar <usuario> <fecha>`: suma un día a un participante activo
+  (rechaza eliminados —para ellos existe `revivir`— y fechas futuras).
+- `/admin ssf quitar <usuario> <fecha>`: saca un día, incluso a eliminados, sin
+  cambiar su estado.
+- `/admin ssf eliminar <usuario> <fecha>`: replica la eliminación automática
+  para un día que no se procesó (por ejemplo, si el bot estuvo caído). Rechaza
+  a participantes que sí registraron ese día.
+
+Ejemplo: un participante revivido con la fecha de hoy (`2026-09-05`) en vez del
+día perdido (`2026-09-04`) queda con racha 1. Se corrige con
+`/admin ssf quitar <usuario> 2026-09-05` seguido de
+`/admin ssf agregar <usuario> 2026-09-04`, y vuelve a 4 días.
 
 ## Comandos de Box
 
@@ -150,6 +241,7 @@ Todos los comandos bajo `/admin` requieren que el usuario esté incluido en
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
 | `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
+| `/box suministro` | `tipo` | Usa suministros de recuperación (vida, cansancio, defensa o lesión). |
 | `/box ayuda` | Ninguno | Envía por mensaje directo la lista de comandos de Box. |
 
 Los comandos de Box solo pueden usarse en los canales incluidos en
@@ -182,10 +274,30 @@ redondeando hacia arriba:
 Cada hora de una acción aumenta la probabilidad de lesión en 1%. Al finalizar,
 se realiza un sorteo con esa probabilidad. Si el usuario se lesiona, queda en
 estado `LESIONADO` durante 24 horas y no puede iniciar acciones ni desafíos.
+Mientras esté sin ninguna acción en curso (esté o no lesionado), su
+probabilidad baja **0.01 puntos porcentuales por hora**: el bot reduce ese
+monto una vez por hora para los usuarios inactivos, sin pasar de 0%.
 `/box descanso` reinicia la probabilidad a 0%, pero no cura una lesión activa.
 El `Tratamiento Fisioterapeutico` cuesta 10000, quita la lesión y conserva la
 probabilidad acumulada. El `Tratamiento 5 estrellas` cuesta 50000, quita la
 lesión y reinicia también la probabilidad a 0%.
+
+### Suministros de recuperación
+
+La tienda tiene el artículo `🎒 Suministros de recuperación`. Su botón abre un
+menú efímero para elegir el tipo; también puede usarse con
+`/box suministro <tipo>`. Cada suministro restaura al máximo una estadística y
+solo cobra si la estadística no estaba ya llena:
+
+| Tipo | Suministro | Precio | Efecto |
+| --- | --- | --- | --- |
+| `vida` | 🥤 Bebida isotónica | 1500 | Restaura la vida al máximo (`vida_maxima`). |
+| `cansancio` | ⚡ Bebida energética | 1500 | Restaura la energía al máximo (`cansancio_maximo`). |
+| `defensa` | 🔧 Servicio de reparación | 3000 | Repara la defensa hasta el máximo (`defensa_maxima`). |
+| `lesion` | 🩹 Botiquín completo | 60000 | Cura la lesión activa y deja la probabilidad en 0%. |
+
+El botón de suministros es de un solo uso: tras elegir el tipo, el menú queda
+deshabilitado.
 
 Para comprar una mejora se utiliza la opción correspondiente:
 
@@ -211,8 +323,9 @@ el canal.
 Los botones se registran por patrón en `setup()`, de modo que siguen
 funcionando en mensajes de tienda anteriores a un reinicio del bot.
 
-`/box comprar` y `/box tratamiento` siguen disponibles para quienes prefieran
-escribir el comando.
+`/box comprar`, `/box tratamiento` y `/box suministro` siguen disponibles para
+quienes prefieran escribir el comando. `/box comprar tipo=suministro` orienta
+al `/box suministro`, porque el artículo genérico necesita elegir el tipo.
 
 El precio del siguiente nivel se calcula como `ceil(1000 x 1.25^nivel_actual)`.
 Por ejemplo: nivel 0 cuesta 1000, nivel 1 cuesta 1250 y nivel 2 cuesta 1563.
@@ -221,49 +334,7 @@ Por ejemplo: nivel 0 cuesta 1000, nivel 1 cuesta 1250 y nivel 2 cuesta 1563.
 el ratio de victorias divididas por derrotas. Un usuario sin derrotas aparece
 con ratio `∞`.
 
-| Comando | Parámetros | Descripción |
-| --- | --- | --- |
-| `/admin info` | Ninguno | Muestra información de configuración. |
-| `/admin stats` | Ninguno | Muestra las estadísticas generales de Madrugue. |
-| `/admin top` | Ninguno | Muestra el ranking de Madrugue. |
-| `/admin resetdia` | `usuario`, `fecha` | Elimina el registro de un usuario para una fecha. |
-| `/admin resetusuario` | `usuario` | Elimina todos los registros de un usuario. |
-| `/admin resettotal` | `confirmar`: `SI` o `NO` | Elimina todos los registros del servidor cuando se confirma. |
-| `/admin manualadd` | `usuario`, `fecha`, `hora` | Agrega manualmente una madrugada. |
-| `/admin ssf revivir` | `usuario`, `fecha` | Revive a un participante eliminado en una fecha. |
-| `/admin ssf iniciar` | `canal` | Inicia un desafío SeptSinFP en un canal. |
-| `/admin ssf agregar` | `usuario`, `fecha` | Agrega manualmente un día a un participante activo. |
-| `/admin ssf quitar` | `usuario`, `fecha` | Quita manualmente un día a un participante. |
-| `/admin ssf recalcular` | `usuario` | Recalcula las rachas desde los registros guardados. |
-| `/admin fileexecute` | `archivo` | Ejecuta comandos administrativos desde un archivo TXT. |
 
-Ejemplo de formatos para los parámetros:
-
-```text
-usuario: <ID_USUARIO> o <@ID_USUARIO>
-fecha: YYYY-MM-DD
-hora: HH:MM
-canal: <ID_CANAL> o <#ID_CANAL>
-```
-
-### Reparación manual de SeptSinFP
-
-Los registros diarios (`ssf_registros`) son la fuente de verdad y ningún flujo
-del juego los borra; las rachas mostradas son un caché calculado desde ellos.
-Si la racha mostrada queda incorrecta, se corrige sin tocar el estado de
-eliminado:
-
-- `/admin ssf recalcular <usuario>`: restaura ambas rachas desde los registros.
-  Es la reparación para participantes eliminados con la racha en 0.
-- `/admin ssf agregar <usuario> <fecha>`: suma un día a un participante activo
-  (rechaza eliminados —para ellos existe `revivir`— y fechas futuras).
-- `/admin ssf quitar <usuario> <fecha>`: saca un día, incluso a eliminados, sin
-  cambiar su estado.
-
-Ejemplo: un participante revivido con la fecha de hoy (`2026-09-05`) en vez del
-día perdido (`2026-09-04`) queda con racha 1. Se corrige con
-`ssf quitar <usuario> 2026-09-05` seguido de
-`ssf agregar <usuario> 2026-09-04`, y vuelve a 4 días.
 
 ## Ejecución desde archivo
 
@@ -271,19 +342,38 @@ día perdido (`2026-09-04`) queda con racha 1. Se corrige con
 administrativo independiente. El archivo puede contener hasta 50 comandos y medir
 hasta 1 MiB.
 
-Se aceptan estas formas:
+Cada línea usa la misma estructura que los comandos: `grupo comando argumentos`.
+Los grupos son `madrugue`, `ssf` y `box`:
+
+```text
+madrugue manualadd <ID_USUARIO> YYYY-MM-DD HH:MM
+madrugue resetdia <@ID_USUARIO> YYYY-MM-DD
+madrugue resetusuario <ID_USUARIO>
+madrugue resettotal SI
+madrugue ver <ID_USUARIO>
+ssf estado <ID_USUARIO>
+ssf revivir <ID_USUARIO> YYYY-MM-DD
+ssf iniciar <ID_CANAL>
+ssf agregar <ID_USUARIO> YYYY-MM-DD
+ssf quitar <ID_USUARIO> YYYY-MM-DD
+ssf eliminar <ID_USUARIO> YYYY-MM-DD
+ssf recalcular <ID_USUARIO>
+ssf cerrar SI
+box top
+box stats
+box historial <ID_USUARIO>
+box procesar
+info
+```
+
+Por compatibilidad, los comandos de Madrugue también pueden escribirse sin el
+subgrupo (la forma histórica):
 
 ```text
 manualadd <ID_USUARIO> YYYY-MM-DD HH:MM
 resetdia <@ID_USUARIO> YYYY-MM-DD
 resetusuario <ID_USUARIO>
 resettotal SI
-ssf revivir <ID_USUARIO> YYYY-MM-DD
-ssf iniciar <ID_CANAL>
-ssf agregar <ID_USUARIO> YYYY-MM-DD
-ssf quitar <ID_USUARIO> YYYY-MM-DD
-ssf recalcular <ID_USUARIO>
-info
 stats
 top
 ```
@@ -291,7 +381,7 @@ top
 También se puede escribir `/admin` al comienzo de cada línea:
 
 ```text
-/admin manualadd <ID_USUARIO> YYYY-MM-DD HH:MM
+/admin madrugue manualadd <ID_USUARIO> YYYY-MM-DD HH:MM
 /admin ssf revivir <@ID_USUARIO> YYYY-MM-DD
 ```
 

@@ -29,6 +29,7 @@ from modules.madrugue.database import (
     obtener_resumen_usuario,
     obtener_top_madrugadores,
     obtener_total_puntos,
+    obtener_ultimos_registros,
 )
 
 from modules.madrugue.logic import (
@@ -57,6 +58,7 @@ __all__ = [
     "obtener_resumen_usuario",
     "obtener_top_madrugadores",
     "obtener_total_puntos",
+    "obtener_ultimos_registros",
     # Servicios
     "ResultadoMadrugue",
     "obtener_stats_madrugue",

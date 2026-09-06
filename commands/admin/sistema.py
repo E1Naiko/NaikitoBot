@@ -9,7 +9,50 @@ from discord import app_commands
 
 from core.mensajes import responder_texto
 from commands.admin.base import solo_admin, solo_servidor
-from config import ADMIN_USER_IDS, GUILD_ID
+from core.utils import ahora
+from config import (
+    ADMIN_USER_IDS,
+    BOX_CHANNEL_IDS,
+    BOX_DINERO_POR_MINUTO,
+    BOX_EXPERIENCIA_POR_MINUTO,
+    GENERAL_CHANNEL_IDS,
+    GUILD_ID,
+    MADRUGUE_CHANNEL_IDS,
+    SSF_CANALES_ID,
+    SSF_FECHA_FIN,
+    SSF_FECHA_INICIO,
+    TIMEZONE,
+)
+
+
+def _texto_faltan_argumentos(nombre_comando: str) -> str:
+    """Aviso cuando una línea de un TXT no completa los argumentos obligatorios."""
+
+    mensajes = {
+        "revivir": "revivir requiere miembro y fecha.",
+        "agregar": "agregar requiere miembro y fecha.",
+        "quitar": "quitar requiere miembro y fecha.",
+        "eliminar": "eliminar requiere miembro y fecha.",
+        "recalcular": "recalcular requiere un miembro.",
+        "estado": "estado requiere un miembro.",
+        "ver": "ver requiere un miembro.",
+        "resetdia": "resetdia requiere usuario y fecha.",
+        "manualadd": "manualadd requiere usuario, fecha y hora.",
+        "resetusuario": "resetusuario requiere un usuario.",
+        "resettotal": "resettotal requiere SI o NO.",
+        "cerrar": "cerrar requiere SI o NO.",
+        "iniciar": "iniciar requiere el ID de un canal.",
+        "dar_dinero": "dar_dinero requiere usuario y cantidad.",
+        "dar_exp": "dar_exp requiere usuario y cantidad.",
+        "probabilidad": "probabilidad requiere usuario y porcentaje.",
+        "dar_sponsor": "dar_sponsor requiere usuario y tipo.",
+        "quitar_sponsor": "quitar_sponsor requiere usuario e ID del sponsor.",
+    }
+
+    return mensajes.get(
+        nombre_comando,
+        f"Faltan argumentos para {nombre_comando}.",
+    )
 
 
 class _FileExecutionResponse:
@@ -109,33 +152,106 @@ class SistemaMixin:
 
     def _resolver_comando_admin(
         self,
-        ruta: list[str],
+        grupo: str | None,
+        nombre_comando: str,
     ) -> app_commands.Command:
-        """Obtiene un comando del grupo admin sin permitir rutas arbitrarias."""
+        """Obtiene un comando registrado bajo ``/admin`` sin rutas arbitrarias."""
 
         grupo_admin = self.bot.tree.get_command("admin")
 
         if not isinstance(grupo_admin, app_commands.Group):
             raise ValueError("El grupo admin no está disponible.")
 
-        if not ruta:
-            raise ValueError("Falta el nombre del comando.")
+        grupo_concreto: app_commands.Group | app_commands.Command = grupo_admin
 
-        comando: app_commands.Command | app_commands.Group | None = grupo_admin
+        if grupo is not None:
+            subgrupo = grupo_admin.get_command(grupo)
 
-        for nombre in ruta:
-            if not isinstance(comando, app_commands.Group):
-                raise ValueError("La ruta del comando no es válida.")
+            if not isinstance(subgrupo, app_commands.Group):
+                raise ValueError(
+                    f"Comando admin desconocido: {grupo} {nombre_comando}"
+                )
 
-            comando = comando.get_command(nombre)
+            grupo_concreto = subgrupo
 
-            if comando is None:
-                raise ValueError(f"Comando admin desconocido: {' '.join(ruta)}")
+        comando = grupo_concreto.get_command(nombre_comando)
 
         if not isinstance(comando, app_commands.Command):
-            raise ValueError("La línea debe apuntar a un comando ejecutable.")
+            ruta = f"{grupo} {nombre_comando}".strip()
+            raise ValueError(f"Comando admin desconocido: {ruta}")
 
         return comando
+
+    async def _resolver_canal(
+        self,
+        interaction: discord.Interaction,
+        valor: str,
+    ) -> discord.TextChannel:
+        """Resuelve un canal de texto desde un ID o una mención ``#``."""
+
+        if interaction.guild is None:
+            raise ValueError("El comando requiere un servidor.")
+
+        canal_id = valor.strip("<#>")
+
+        if not canal_id.isdigit():
+            raise ValueError(f"Canal inválido: {valor}")
+
+        canal = interaction.guild.get_channel(int(canal_id))
+
+        if not isinstance(canal, discord.TextChannel):
+            raise ValueError(f"No se encontró el canal de texto: {valor}")
+
+        return canal
+
+    async def _convertir_argumento(
+        self,
+        interaction: discord.Interaction,
+        parametro,
+        valor: str,
+    ) -> object:
+        """Convierte un argumento de texto al tipo del parámetro del comando."""
+
+        if parametro.choices:
+            for opcion in parametro.choices:
+                if (
+                    str(opcion.value).casefold() == valor.casefold()
+                    or str(opcion.name).casefold() == valor.casefold()
+                ):
+                    return app_commands.Choice(
+                        name=opcion.name,
+                        value=opcion.value,
+                    )
+
+            raise ValueError(
+                f"Valor inválido para {parametro.name}: {valor}"
+            )
+
+        tipo = parametro.type
+
+        if tipo is discord.AppCommandOptionType.user:
+            return await self._resolver_miembro(interaction, valor)
+
+        if tipo is discord.AppCommandOptionType.channel:
+            return await self._resolver_canal(interaction, valor)
+
+        if tipo is discord.AppCommandOptionType.integer:
+            try:
+                return int(valor)
+            except ValueError as error:
+                raise ValueError(
+                    f"{parametro.name} debe ser un número entero."
+                ) from error
+
+        if tipo is discord.AppCommandOptionType.number:
+            try:
+                return float(valor)
+            except ValueError as error:
+                raise ValueError(
+                    f"{parametro.name} debe ser un número."
+                ) from error
+
+        return valor
 
     async def _ejecutar_linea_archivo(
         self,
@@ -161,223 +277,82 @@ class SistemaMixin:
         if not argumentos:
             raise ValueError("Falta el nombre del comando admin.")
 
-        ruta = [argumentos.pop(0)]
+        primero = argumentos.pop(0).lower()
 
-        if ruta[0].lower() in {"ssf", "box"}:
+        # Por compatibilidad, los comandos de Madrugue pueden escribirse
+        # sin el subgrupo: ``stats`` equivale a ``madrugue stats``.
+        if primero in {"madrugue", "ssf", "box"}:
+            grupo = primero
+
             if not argumentos:
                 raise ValueError(
-                    f"Falta el subcomando de admin {ruta[0]}."
+                    f"Falta el subcomando de admin {grupo}."
                 )
 
-            ruta.append(argumentos.pop(0))
+            nombre_comando = argumentos.pop(0).lower()
 
-        comando = self._resolver_comando_admin(ruta)
-        nombre = comando.name
-        parametros: dict[str, object] = {}
+        elif primero in {
+            "stats",
+            "top",
+            "ver",
+            "resetdia",
+            "resetusuario",
+            "resettotal",
+            "manualadd",
+        }:
+            grupo = "madrugue"
+            nombre_comando = primero
 
-        if ruta[0].lower() == "box":
-            subcomando = ruta[1].lower()
-
-            if subcomando in {
-                "info",
-                "sponsors",
-                "curar",
-                "cancelar",
-                "reset",
-            }:
-                if len(argumentos) != 1:
-                    raise ValueError(
-                        f"box {subcomando} requiere un usuario."
-                    )
-
-                parametros["usuario"] = await self._resolver_miembro(
-                    interaction,
-                    argumentos[0],
-                )
-
-            elif subcomando in {
-                "dar_dinero",
-                "dar_exp",
-            }:
-                if len(argumentos) != 2:
-                    raise ValueError(
-                        f"box {subcomando} requiere usuario y cantidad."
-                    )
-
-                parametros["usuario"] = await self._resolver_miembro(
-                    interaction,
-                    argumentos[0],
-                )
-
-                try:
-                    parametros["cantidad"] = int(argumentos[1])
-                except ValueError as error:
-                    raise ValueError(
-                        "La cantidad debe ser un número entero."
-                    ) from error
-
-            elif subcomando == "probabilidad":
-                if len(argumentos) != 2:
-                    raise ValueError(
-                        "box probabilidad requiere usuario y porcentaje."
-                    )
-
-                parametros["usuario"] = await self._resolver_miembro(
-                    interaction,
-                    argumentos[0],
-                )
-
-                try:
-                    parametros["probabilidad"] = float(argumentos[1])
-                except ValueError as error:
-                    raise ValueError(
-                        "La probabilidad debe ser un número."
-                    ) from error
-
-            elif subcomando == "dar_sponsor":
-                if len(argumentos) != 2:
-                    raise ValueError(
-                        "box dar_sponsor requiere usuario y tipo."
-                    )
-
-                parametros["usuario"] = await self._resolver_miembro(
-                    interaction,
-                    argumentos[0],
-                )
-
-                tipo = argumentos[1].lower()
-
-                tipos_validos = {
-                    "redes": "📱 Redes",
-                    "radio": "📻 Radio",
-                    "equipamiento": "🥊 Equipamiento",
-                    "medico": "🚑 Médico",
-                }
-
-                if tipo not in tipos_validos:
-                    raise ValueError(
-                        "Tipo de sponsor inválido. "
-                        "Usa: redes, radio, equipamiento o medico."
-                    )
-
-                parametros["tipo"] = app_commands.Choice(
-                    name=tipos_validos[tipo],
-                    value=tipo,
-                )
-
-            elif subcomando == "quitar_sponsor":
-                if len(argumentos) != 2:
-                    raise ValueError(
-                        "box quitar_sponsor requiere usuario e ID del sponsor."
-                    )
-
-                parametros["usuario"] = await self._resolver_miembro(
-                    interaction,
-                    argumentos[0],
-                )
-
-                try:
-                    parametros["sponsor_id"] = int(argumentos[1])
-                except ValueError as error:
-                    raise ValueError(
-                        "El ID del sponsor debe ser un número entero."
-                    ) from error
-
-            else:
-                raise ValueError(
-                    f"Comando admin box desconocido: {subcomando}"
-                )
-
-        elif nombre in {"info", "stats", "top", "resettotal"}:
-            if nombre == "resettotal":
-                if len(argumentos) != 1:
-                    raise ValueError("resettotal requiere SI o NO.")
-
-                parametros["confirmar"] = app_commands.Choice(
-                    name=argumentos[0].upper(),
-                    value=argumentos[0].upper(),
-                )
-            elif argumentos:
-                raise ValueError(f"{nombre} no acepta argumentos.")
-
-        elif nombre in {"manualadd", "resetdia", "resetusuario"}:
-            if not argumentos:
-                raise ValueError(f"Faltan argumentos para {nombre}.")
-
-            parametros["usuario"] = await self._resolver_miembro(
-                interaction,
-                argumentos.pop(0),
-            )
-
-            if nombre in {"manualadd", "resetdia"}:
-                if not argumentos:
-                    raise ValueError(f"Falta la fecha para {nombre}.")
-
-                parametros["fecha"] = argumentos.pop(0)
-
-            if nombre == "manualadd":
-                if not argumentos:
-                    raise ValueError("Falta la hora para manualadd.")
-
-                parametros["hora"] = argumentos.pop(0)
-
-            if argumentos:
-                raise ValueError(f"Sobran argumentos para {nombre}.")
-
-        elif nombre == "revivir":
-            if len(argumentos) != 2:
-                raise ValueError("revivir requiere miembro y fecha.")
-
-            parametros["usuario"] = await self._resolver_miembro(
-                interaction,
-                argumentos[0],
-            )
-            parametros["fecha"] = argumentos[1]
-
-        elif nombre in {"agregar", "quitar"}:
-            if len(argumentos) != 2:
-                raise ValueError(f"{nombre} requiere miembro y fecha.")
-
-            parametros["usuario"] = await self._resolver_miembro(
-                interaction,
-                argumentos[0],
-            )
-            parametros["fecha"] = argumentos[1]
-
-        elif nombre == "recalcular":
-            if len(argumentos) != 1:
-                raise ValueError("recalcular requiere un miembro.")
-
-            parametros["usuario"] = await self._resolver_miembro(
-                interaction,
-                argumentos[0],
-            )
-
-        elif nombre == "iniciar":
-            if len(argumentos) != 1 or interaction.guild is None:
-                raise ValueError("iniciar requiere el ID de un canal.")
-
-            canal_id = argumentos[0].strip("<#>")
-
-            if not canal_id.isdigit():
-                raise ValueError(f"Canal inválido: {argumentos[0]}")
-
-            canal = interaction.guild.get_channel(int(canal_id))
-
-            if not isinstance(canal, discord.TextChannel):
-                raise ValueError(f"No se encontró el canal de texto: {argumentos[0]}")
-
-            parametros["canal"] = canal
+        elif primero in {"info", "fileexecute"}:
+            grupo = None
+            nombre_comando = primero
 
         else:
-            raise ValueError(f"Comando no permitido: {' '.join(ruta)}")
+            raise ValueError(f"Comando admin desconocido: {primero}")
+
+        comando = self._resolver_comando_admin(
+            grupo,
+            nombre_comando,
+        )
+
+        if nombre_comando == "fileexecute":
+            raise ValueError("fileexecute no puede ejecutarse desde un archivo.")
+
+        parametros = comando.parameters
+        requeridos = [
+            parametro
+            for parametro in parametros
+            if parametro.required
+        ]
+
+        if len(argumentos) > len(parametros):
+            raise ValueError(
+                f"Sobran argumentos para {nombre_comando}."
+            )
+
+        if len(argumentos) < len(requeridos):
+            raise ValueError(
+                _texto_faltan_argumentos(nombre_comando)
+            )
+
+        kwargs: dict[str, object] = {}
+
+        for posicion, parametro in enumerate(parametros):
+            if posicion >= len(argumentos):
+                break
+
+            kwargs[parametro.name] = await self._convertir_argumento(
+                interaction,
+                parametro,
+                argumentos[posicion],
+            )
 
         await comando._do_call(
             cast(
                 discord.Interaction,
                 _FileExecutionInteraction(interaction),
             ),
-            parametros,
+            kwargs,
         )
 
     @app_commands.command(
@@ -457,6 +432,15 @@ class SistemaMixin:
         if not await solo_admin(interaction):
             return
 
+        def canales_texto(ids: set[int]) -> str:
+            if not ids:
+                return "No configurado"
+
+            return ", ".join(
+                f"`{canal_id}`"
+                for canal_id in sorted(ids)
+            )
+
         embed = discord.Embed(
             title="⚙️ Información de Naikito Bot",
             description="Configuración administrativa.",
@@ -478,6 +462,48 @@ class SistemaMixin:
             inline=True,
         )
 
+        embed.add_field(
+            name="🗓️ SSF",
+            value=(
+                f"Inicio: `{SSF_FECHA_INICIO}`\n"
+                f"Fin: `{SSF_FECHA_FIN}`"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🥊 Box",
+            value=(
+                f"EXP/min: **{BOX_EXPERIENCIA_POR_MINUTO}**\n"
+                f"Dinero/min: **{BOX_DINERO_POR_MINUTO}$**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="📡 Canales generales",
+            value=canales_texto(GENERAL_CHANNEL_IDS),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🌅 Canales de Madrugue",
+            value=canales_texto(MADRUGUE_CHANNEL_IDS),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🥊 Canales de Box",
+            value=canales_texto(BOX_CHANNEL_IDS),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🫡 Canales de SeptSinFP",
+            value=canales_texto(SSF_CANALES_ID),
+            inline=False,
+        )
+
         if interaction.guild:
             embed.add_field(
                 name="📍 Servidor actual",
@@ -487,6 +513,13 @@ class SistemaMixin:
                 ),
                 inline=False,
             )
+
+        embed.set_footer(
+            text=(
+                f"🕐 {TIMEZONE} — "
+                f"{ahora().strftime('%Y-%m-%d %H:%M')}"
+            )
+        )
 
         await interaction.response.send_message(
             embed=embed,

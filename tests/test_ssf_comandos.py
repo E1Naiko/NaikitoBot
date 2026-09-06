@@ -198,6 +198,17 @@ def test_registrar_anota_al_usuario(cog):
     assert "1 días" in interaccion.texto
 
 
+def test_registrar_muestra_el_nombre_del_servidor(cog):
+    """La confirmación muestra el nombre/apodo del servidor, no el ID."""
+
+    interaccion = InteraccionFalsa(GUILD, USUARIO, nombre="ApodoEnServer")
+
+    llamar(cog, "registrar", interaccion)
+
+    assert "ApodoEnServer" in interaccion.texto
+    assert "<@" not in interaccion.texto
+
+
 def test_registrar_dos_veces_informa(cog):
     llamar(cog, "registrar", InteraccionFalsa(GUILD, USUARIO))
     interaccion = InteraccionFalsa(GUILD, USUARIO)
@@ -244,6 +255,18 @@ def test_sobrevivi_al_dia_siguiente_suma_racha(cog):
 
     assert "sobrevivió" in interaccion.texto
     assert "2 días" in interaccion.texto
+
+
+def test_sobrevivi_muestra_el_nombre_del_servidor(cog):
+    """La confirmación muestra el nombre/apodo del servidor, no el ID."""
+
+    registrar_servicio(hace_dias=1)
+    interaccion = InteraccionFalsa(GUILD, USUARIO, nombre="ApodoEnServer")
+
+    llamar(cog, "sobrevivi", interaccion)
+
+    assert "¡ApodoEnServer sobrevivió" in interaccion.texto
+    assert "<@" not in interaccion.texto
 
 
 # ============================================================

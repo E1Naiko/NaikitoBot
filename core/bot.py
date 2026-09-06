@@ -257,36 +257,6 @@ class NaikitoBot(commands.Bot):
                 guild=guild
             )
 
-            manualadd = self.tree.get_command(
-                "admin"
-            )
-            
-            print()
-            print("========== DEBUG MANUALADD ==========")
-            
-            if isinstance(manualadd, app_commands.Group):
-                print("Admin encontrado en Tree")
-
-                for subcomando in manualadd.commands:
-                    print(
-                        f"Subcomando: {subcomando.name}"
-                    )
-
-                    if (
-                        subcomando.name == "manualadd"
-                        and isinstance(subcomando, app_commands.Command)
-                    ):
-                        print("PARÁMETROS MANUALADD:")
-
-                        for parametro in subcomando.parameters:
-                            print(
-                                f"- {parametro.name} | "
-                                f"requerido={parametro.required} | "
-                                f"tipo={parametro.type}"
-                            )
-            
-            print("=====================================")
-
             print()
             comandos = await self.tree.sync(
                 guild=guild
@@ -311,6 +281,23 @@ class NaikitoBot(commands.Bot):
                                     f"tipo={opcion.type} | "
                                     f"requerido={opcion.required}"
                                 )
+
+                        if isinstance(subcomando, app_commands.Group):
+                            for subsubcomando in subcomando.commands:
+                                print(f"      └── {subsubcomando.name}")
+
+                                if isinstance(
+                                    subsubcomando,
+                                    app_commands.Command,
+                                ):
+                                    print("          OPCIONES:")
+
+                                    for opcion in subsubcomando.parameters:
+                                        print(
+                                            f"          - {opcion.name} | "
+                                            f"tipo={opcion.type} | "
+                                            f"requerido={opcion.required}"
+                                        )
 
             print("=" * 60)
 

@@ -12,26 +12,32 @@ from modules.box.services import (
     EQUIPAMIENTO,
     MEJORAS,
     NIVEL_MAXIMO_EQUIPAMIENTO,
+    SUMINISTROS,
+    TIPOS_SUMINISTRO,
     TRATAMIENTOS,
     calidad_equipamiento,
     comprar_equipamiento_progresivo,
     comprar_mejora,
     comprar_tratamiento,
     es_nivel_maximo,
+    obtener_equipo,
     precio_equipamiento,
     precio_mejora,
+    usar_suministro,
 )
 
 CATALOGOS = {
     "mejora": MEJORAS,
     "equipamiento": EQUIPAMIENTO,
     "tratamiento": TRATAMIENTOS,
+    "suministro": SUMINISTROS,
 }
 
 NOMBRES_CATEGORIA = {
     "mejora": "Mejora",
     "equipamiento": "Equipamiento",
     "tratamiento": "Tratamiento",
+    "suministro": "Suministro",
 }
 
 
@@ -149,10 +155,134 @@ def _comprar_tratamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
     )
 
 
+def _comprar_suministro(
+    guild_id: int,
+    user_id: int,
+    clave: str,
+) -> Resultado:
+    """La entrada genérica necesita elegir el tipo: orienta al usuario."""
+
+    configuracion = SUMINISTROS[clave]
+
+    tipos = "\n".join(
+        f"{tipo['emoji']} `{nombre_clave}` — **{tipo['nombre']}** "
+        f"({tipo['precio']}$)"
+        for nombre_clave, tipo in TIPOS_SUMINISTRO.items()
+    )
+
+    return Resultado(
+        False,
+        "elegir_tipo",
+        f"🎒 **{configuracion['nombre']}**: elegí el suministro con "
+        f"**/box suministro <tipo>**.\n\n{tipos}",
+    )
+
+
+def titulo_compra(resultado: Resultado) -> str:
+    """Título del embed para el comando ``/box comprar``."""
+
+    if resultado.exitoso:
+        return "✅ Compra"
+
+    # Orientación, no un rechazo: la entrada genérica pide elegir el tipo.
+    if resultado.estado == "elegir_tipo":
+        return "🎒 Elige el suministro"
+
+    return "⚠️ Compra rechazada"
+
+
+def texto_tipos_suministro() -> str:
+    """Lista los tipos de suministro disponibles para los comandos."""
+
+    return ", ".join(
+        f"`{clave}`"
+        for clave in TIPOS_SUMINISTRO
+    )
+
+
+def usar_suministro_resultado(
+    guild_id: int,
+    user_id: int,
+    tipo: str,
+) -> Resultado:
+    """Usa un suministro tipificado y devuelve el mensaje formateado."""
+
+    configuracion = TIPOS_SUMINISTRO.get(tipo)
+
+    if configuracion is None:
+        return Resultado(
+            False,
+            "tipo_invalido",
+            f"⚠️ Suministro no válido. Opciones: {texto_tipos_suministro()}",
+        )
+
+    estado, saldo = usar_suministro(
+        guild_id=guild_id,
+        user_id=user_id,
+        objetivo=configuracion["objetivo"],
+        precio=configuracion["precio"],
+        ahora=ahora(),
+    )
+
+    if estado == "insuficiente":
+        return Resultado(
+            False,
+            estado,
+            f"⚠️ Necesitas **{configuracion['precio']}$** y "
+            f"tienes **{saldo}$**.",
+        )
+
+    if estado == "lleno":
+        return Resultado(
+            False,
+            estado,
+            "ℹ️ Ya tienes la estadística al máximo. "
+            "No se descontó dinero.",
+        )
+
+    if estado == "sin_lesion":
+        return Resultado(
+            False,
+            estado,
+            "ℹ️ No tienes ninguna lesión activa ni "
+            "probabilidad acumulada. No se descontó dinero.",
+        )
+
+    if estado != "comprado":
+        return Resultado(
+            False,
+            estado,
+            "⚠️ No se pudo usar el suministro.",
+        )
+
+    # Detalle del estado tras la recuperación.
+    objetivo = configuracion["objetivo"]
+
+    if objetivo == "lesion":
+        detalle = "🩹 Lesión curada y probabilidad en **0%**."
+    else:
+        equipo = obtener_equipo(guild_id, user_id)
+        if objetivo == "vida":
+            detalle = f"❤️ Vida: **{equipo['vida']}/{equipo['vida_maxima']}**."
+        elif objetivo == "cansancio":
+            detalle = f"😴 Cansancio: **{equipo['cansancio']}/{equipo['cansancio_maximo']}**."
+        else:
+            detalle = f"🛡️ Defensa: **{equipo['defensa']}/{equipo['defensa_maxima']}**."
+
+    return Resultado(
+        True,
+        estado,
+        f"✅ Usaste {configuracion['emoji']} **{configuracion['nombre']}**: "
+        f"{configuracion['efecto']} {detalle}\n"
+        f"💰 Saldo restante: **{saldo}$**.",
+    )
+
+
 MANEJADORES = {
     "mejora": _comprar_mejora,
     "equipamiento": _comprar_equipamiento,
     "tratamiento": _comprar_tratamiento,
+    "suministro": _comprar_suministro,
 }
 
 
@@ -179,10 +309,11 @@ def ejecutar_compra(
     clave = clave.lower()
     if clave not in CATALOGOS[categoria]:
         nombre = NOMBRES_CATEGORIA[categoria]
+        genero_masculino = categoria in {"equipamiento", "suministro"}
         return Resultado(
             False,
             "articulo_invalido",
-            f"⚠️ {nombre} no válid{'o' if categoria == 'equipamiento' else 'a'}. "
+            f"⚠️ {nombre} no válid{'o' if genero_masculino else 'a'}. "
             f"Opciones: {opciones_validas(categoria)}",
         )
 

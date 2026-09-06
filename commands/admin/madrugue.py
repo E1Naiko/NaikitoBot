@@ -5,7 +5,7 @@ from datetime import date, datetime
 import discord
 from discord import app_commands
 
-from core.mensajes import responder_texto
+from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from config import MADRUGUE_PUNTOS_100, MADRUGUE_PUNTOS_25
 from core.utils import ahora
@@ -22,23 +22,30 @@ from modules.madrugue.services import (
     obtener_registro_del_dia,
     obtener_registro_del_dia_admin,
     obtener_resumen_usuario,
+    obtener_stats_madrugue,
     obtener_top_madrugadores,
+    obtener_ultimos_registros,
     texto_horario_valido,
 )
 
 
 class MadrugueAdminMixin:
-    """Comandos administrativos de Madrugue bajo ``/admin``."""
+    """Comandos administrativos de Madrugue bajo ``/admin madrugue``."""
+
+    madrugue = app_commands.Group(
+        name="madrugue",
+        description="Administración de Madrugue.",
+    )
 
     # ========================================================
     # STATS
     # ========================================================
 
-    @app_commands.command(
+    @madrugue.command(
         name="stats",
         description="Muestra las estadísticas de Madrugue del servidor.",
     )
-    async def stats(
+    async def madrugue_stats(
         self,
         interaction: discord.Interaction,
     ):
@@ -95,11 +102,11 @@ class MadrugueAdminMixin:
     # TOP
     # ========================================================
 
-    @app_commands.command(
+    @madrugue.command(
         name="top",
         description="Muestra el TOP de Madrugue del servidor.",
     )
-    async def top(
+    async def madrugue_top(
         self,
         interaction: discord.Interaction,
     ):
@@ -172,7 +179,7 @@ class MadrugueAdminMixin:
     # RESET DÍA
     # ========================================================
 
-    @app_commands.command(
+    @madrugue.command(
         name="resetdia",
         description="Elimina el registro de Madrugue de un usuario para una fecha.",
     )
@@ -180,7 +187,7 @@ class MadrugueAdminMixin:
         usuario="Usuario cuyo registro quieres eliminar.",
         fecha="Fecha del registro en formato YYYY-MM-DD.",
     )
-    async def resetdia(
+    async def madrugue_resetdia(
         self,
         interaction: discord.Interaction,
         usuario: discord.Member,
@@ -244,14 +251,14 @@ class MadrugueAdminMixin:
     # RESET USUARIO
     # ========================================================
 
-    @app_commands.command(
+    @madrugue.command(
         name="resetusuario",
         description="Elimina todos los registros de Madrugue de un usuario.",
     )
     @app_commands.describe(
         usuario="Usuario cuyos registros quieres eliminar.",
     )
-    async def resetusuario(
+    async def madrugue_resetusuario(
         self,
         interaction: discord.Interaction,
         usuario: discord.Member,
@@ -301,7 +308,7 @@ class MadrugueAdminMixin:
     # RESET TOTAL
     # ========================================================
 
-    @app_commands.command(
+    @madrugue.command(
         name="resettotal",
         description="Elimina todos los registros de Madrugue del servidor.",
     )
@@ -314,7 +321,7 @@ class MadrugueAdminMixin:
             app_commands.Choice(name="NO", value="NO"),
         ]
     )
-    async def resettotal(
+    async def madrugue_resettotal(
         self,
         interaction: discord.Interaction,
         confirmar: app_commands.Choice[str],
@@ -362,7 +369,7 @@ class MadrugueAdminMixin:
     # MANUAL ADD
     # ========================================================
 
-    @app_commands.command(
+    @madrugue.command(
         name="manualadd",
         description="Agrega manualmente la madrugada de un usuario.",
     )
@@ -371,7 +378,7 @@ class MadrugueAdminMixin:
         fecha="Fecha del registro en formato YYYY-MM-DD.",
         hora="Hora de la madrugada en formato HH:MM.",
     )
-    async def manualadd(
+    async def madrugue_manualadd(
         self,
         interaction: discord.Interaction,
         usuario: discord.Member,
@@ -552,4 +559,75 @@ class MadrugueAdminMixin:
             f"🏆 Puntos obtenidos: "
             f"**{puntos_finales:.3f}**",
             ephemeral=True,
+        )
+
+    # ========================================================
+    # VER
+    # ========================================================
+
+    @madrugue.command(
+        name="ver",
+        description="Muestra el detalle de Madrugue de un usuario.",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyos registros quieres consultar.",
+    )
+    async def madrugue_ver(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        """Muestra el resumen y los últimos registros de un usuario."""
+
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        resumen = obtener_resumen_usuario(
+            interaction.guild.id,
+            usuario.id,
+        )
+
+        if resumen is None or resumen[0] == 0:
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** no tiene "
+                "registros de Madrugue en este servidor.",
+                ephemeral=True,
+            )
+            return
+
+        cantidad, puntos, primera, ultima = resumen
+
+        stats = obtener_stats_madrugue(
+            interaction.guild.id,
+            usuario.id,
+        )
+
+        registros = obtener_ultimos_registros(
+            interaction.guild.id,
+            usuario.id,
+            limite=8,
+        )
+
+        lineas = []
+
+        for fecha, hora, puntos_registro in registros:
+            lineas.append(
+                f"• **{fecha}** — `{hora}` — "
+                f"**{puntos_registro:.1f} pts**"
+            )
+
+        await responder(
+            interaction,
+            f"🌅 Madrugue — {usuario.display_name}",
+            color_area="madrugue",
+            ephemeral=True,
+            secciones_=[
+                ("📋 Registros", f"**{cantidad}** en total"),
+                ("🏆 Puntos acumulados", f"**{puntos:.1f}**"),
+                ("🔥 Mejor racha", f"**{stats['mejor_racha']} días**"),
+                ("🗓️ Período", f"`{primera}` → `{ultima}`"),
+                ("🕘 Últimos registros", "\n".join(lineas), False),
+            ],
         )
