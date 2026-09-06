@@ -3,6 +3,7 @@
 import discord
 from discord import app_commands
 
+from core.mensajes import responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
 from modules.box.services import (
@@ -224,8 +225,7 @@ class BoxAdminMixin:
             return
 
         if cantidad == 0:
-            await interaction.response.send_message(
-                "⚠️ La cantidad no puede ser 0.",
+            await responder_texto(interaction, "⚠️ La cantidad no puede ser 0.",
                 ephemeral=True,
             )
             return
@@ -237,8 +237,7 @@ class BoxAdminMixin:
         )
 
         if not exitoso:
-            await interaction.response.send_message(
-                f"❌ No se pudo modificar el dinero.\n\n"
+            await responder_texto(interaction, f"❌ No se pudo modificar el dinero.\n\n"
                 f"💰 Saldo actual: **{saldo}$**\n"
                 f"📉 La operación dejaría el saldo por debajo de **0$**.",
                 ephemeral=True,
@@ -252,8 +251,7 @@ class BoxAdminMixin:
             accion = "retirado"
             cantidad_texto = str(cantidad)
 
-        await interaction.response.send_message(
-            f"💰 **Dinero {accion} correctamente.**\n\n"
+        await responder_texto(interaction, f"💰 **Dinero {accion} correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"💵 Modificación: **{cantidad_texto}$**\n"
             f"💰 Nuevo saldo: **{saldo}$**",
@@ -292,8 +290,7 @@ class BoxAdminMixin:
         }
 
         if not sponsors:
-            await interaction.response.send_message(
-                f"ℹ️ **{usuario.display_name}** no tiene "
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** no tiene "
                 "sponsors activos.",
                 ephemeral=True,
             )
@@ -373,8 +370,7 @@ class BoxAdminMixin:
             return
 
         if cantidad == 0:
-            await interaction.response.send_message(
-                "⚠️ La cantidad no puede ser 0.",
+            await responder_texto(interaction, "⚠️ La cantidad no puede ser 0.",
                 ephemeral=True,
             )
             return
@@ -386,8 +382,7 @@ class BoxAdminMixin:
         )
 
         if not exitoso:
-            await interaction.response.send_message(
-                f"❌ No se pudo modificar la experiencia.\n\n"
+            await responder_texto(interaction, f"❌ No se pudo modificar la experiencia.\n\n"
                 f"⭐ EXP actual: **{experiencia}**\n"
                 f"📉 La operación dejaría la experiencia por debajo de **0**.",
                 ephemeral=True,
@@ -401,8 +396,7 @@ class BoxAdminMixin:
             accion = "retirada"
             cantidad_texto = str(cantidad)
 
-        await interaction.response.send_message(
-            f"⭐ **Experiencia {accion} correctamente.**\n\n"
+        await responder_texto(interaction, f"⭐ **Experiencia {accion} correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"⭐ Modificación: **{cantidad_texto} EXP**\n"
             f"🏆 Nueva experiencia: **{experiencia} EXP**",
@@ -433,15 +427,13 @@ class BoxAdminMixin:
         )
 
         if not curado:
-            await interaction.response.send_message(
-                f"ℹ️ **{usuario.display_name}** "
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** "
                 "no tiene una lesión activa.",
                 ephemeral=True,
             )
             return
 
-        await interaction.response.send_message(
-            f"🚑 **Usuario curado correctamente.**\n\n"
+        await responder_texto(interaction, f"🚑 **Usuario curado correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🩹 La lesión que terminaba en "
             f"`{lesionado_hasta}` fue eliminada.\n\n"
@@ -477,14 +469,12 @@ class BoxAdminMixin:
         )
 
         if not exitoso:
-            await interaction.response.send_message(
-                "❌ La probabilidad debe estar entre **0% y 100%**.",
+            await responder_texto(interaction, "❌ La probabilidad debe estar entre **0% y 100%**.",
                 ephemeral=True,
             )
             return
 
-        await interaction.response.send_message(
-            f"⚠️ **Probabilidad de lesión modificada.**\n\n"
+        await responder_texto(interaction, f"⚠️ **Probabilidad de lesión modificada.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🎲 Nueva probabilidad: **{nuevo_valor:.1f}%**",
             ephemeral=True,
@@ -514,8 +504,7 @@ class BoxAdminMixin:
         )
 
         if accion is None:
-            await interaction.response.send_message(
-                f"ℹ️ **{usuario.display_name}** "
+            await responder_texto(interaction, f"ℹ️ **{usuario.display_name}** "
                 "no tiene ninguna acción activa.",
                 ephemeral=True,
             )
@@ -534,8 +523,7 @@ class BoxAdminMixin:
         if dinero_recompensa:
             recompensa_texto += f" + {dinero_recompensa}$"
 
-        await interaction.response.send_message(
-            f"🛑 **Acción cancelada correctamente.**\n\n"
+        await responder_texto(interaction, f"🛑 **Acción cancelada correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🥊 Acción: **{tipo}**\n"
             f"🕐 Iniciada: `{iniciado_en}`\n"
@@ -610,29 +598,25 @@ class BoxAdminMixin:
             if motivo == "limite":
                 if tipo.value in {"redes", "radio"}:
                     limite = 10
-                    await interaction.response.send_message(
-                        f"❌ No se pudo otorgar el sponsor "
+                    await responder_texto(interaction, f"❌ No se pudo otorgar el sponsor "
                         f"**{nombre_sponsor}**.\n\n"
                         f"Se alcanzó el límite de **{limite} sponsors "
                         "activos de este tipo**.",
                         ephemeral=True,
                     )
                 else:
-                    await interaction.response.send_message(
-                        f"❌ No se pudo otorgar el sponsor "
+                    await responder_texto(interaction, f"❌ No se pudo otorgar el sponsor "
                         f"**{nombre_sponsor}**.",
                         ephemeral=True,
                     )
             else:
-                await interaction.response.send_message(
-                    "❌ El tipo de sponsor indicado no es válido.",
+                await responder_texto(interaction, "❌ El tipo de sponsor indicado no es válido.",
                     ephemeral=True,
                 )
 
             return
 
-        await interaction.response.send_message(
-            f"🤝 **Sponsor otorgado correctamente.**\n\n"
+        await responder_texto(interaction, f"🤝 **Sponsor otorgado correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🏷️ Sponsor: **{nombre_sponsor}**",
             ephemeral=True,
@@ -665,8 +649,7 @@ class BoxAdminMixin:
         )
 
         if sponsor is None:
-            await interaction.response.send_message(
-                f"❌ No se encontró el sponsor con ID "
+            await responder_texto(interaction, f"❌ No se encontró el sponsor con ID "
                 f"`{sponsor_id}` para **{usuario.display_name}**.",
                 ephemeral=True,
             )
@@ -686,8 +669,7 @@ class BoxAdminMixin:
             tipo.capitalize(),
         )
 
-        await interaction.response.send_message(
-            f"🗑️ **Sponsor eliminado correctamente.**\n\n"
+        await responder_texto(interaction, f"🗑️ **Sponsor eliminado correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🆔 ID: `{sponsor_id}`\n"
             f"🏷️ Sponsor: **{nombre_sponsor}**",
@@ -719,8 +701,7 @@ class BoxAdminMixin:
 
         total = sum(eliminados.values())
 
-        await interaction.response.send_message(
-            f"♻️ **Progreso Box reseteado correctamente.**\n\n"
+        await responder_texto(interaction, f"♻️ **Progreso Box reseteado correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"🗑️ Registros eliminados: **{total}**\n\n"
             f"🥊 El progreso de Box fue eliminado por completo.\n"

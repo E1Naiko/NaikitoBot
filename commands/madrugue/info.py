@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 
 from commands.madrugue.base import solo_servidor
+from core.mensajes import crear_embed, responder, seccion
 from modules.madrugue.services import (
     obtener_stats_madrugue,
     obtener_top_madrugue,
@@ -31,13 +32,14 @@ class InfoMixin:
             user_id=interaction.user.id,
         )
 
-        await interaction.response.send_message(
-            f"📊 **Estadísticas de "
-            f"{interaction.user.display_name}**\n\n"
-            f"🏆 Puntos acumulados: "
-            f"**{stats['total_puntos']:.1f}**\n"
-            f"🔥 Mejor racha: "
-            f"**{stats['mejor_racha']} días**"
+        await responder(
+            interaction,
+            f"📊 Estadísticas de {interaction.user.display_name}",
+            color_area="madrugue",
+            secciones_=[
+                ("🏆 Puntos acumulados", f"**{stats['total_puntos']:.1f}**"),
+                ("🔥 Mejor racha", f"**{stats['mejor_racha']} días**"),
+            ],
         )
 
     @app_commands.command(
@@ -59,14 +61,18 @@ class InfoMixin:
         )
 
         if not resultados:
-            await interaction.response.send_message(
-                "🏆 Todavía no hay madrugadores registrados."
+            await responder(
+                interaction,
+                "🏆 TOP Madrugadores",
+                "Todavía no hay madrugadores registrados.",
+                color_area="madrugue",
             )
             return
 
-        embed = discord.Embed(
-            title="🏆 TOP Madrugadores",
-            description="Ranking histórico del servidor.",
+        embed = crear_embed(
+            "🏆 TOP Madrugadores",
+            "Ranking histórico del servidor.",
+            color_area="madrugue",
         )
 
         medallas = {
@@ -93,11 +99,7 @@ class InfoMixin:
                 f"**{puntos:.0f} puntos**"
             )
 
-        embed.add_field(
-            name="Ranking",
-            value="\n".join(lineas),
-            inline=False,
-        )
+        seccion(embed, "Ranking", "\n".join(lineas))
 
         embed.set_footer(
             text=f"Servidor: {interaction.guild.name}"

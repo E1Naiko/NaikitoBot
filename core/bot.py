@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import (
+    BOX_CHANNEL_IDS,
     GENERAL_CHANNEL_IDS,
     GUILD_ID,
     MADRUGUE_CHANNEL_IDS,
@@ -11,6 +12,8 @@ from config import (
     SSF_CANALES_ID,
 )
 
+from core.mensajes import responder
+from core.permissions import es_admin
 from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
 )
@@ -50,13 +53,24 @@ class RestrictedCommandTree(app_commands.CommandTree):
         channel_id = interaction.channel_id
         command_path = self._command_path(data)
 
-        if command_name == "admin":
+        if es_admin(interaction.user.id):
+            # Los administradores no tienen la restricción de canal.
             permitido = True
             zona = "administración"
             canales = set()
+        elif command_name == "admin":
+            # El chequeo de administrador se hace de nuevo en cada comando
+            # /admin (solo_admin); acá solo se evita bloquearlos por canal.
+            permitido = True
+            zona = "administración"
+            canales = set()
+        elif command_name == "box":
+            permitido = channel_id in BOX_CHANNEL_IDS
+            zona = "Box"
+            canales = BOX_CHANNEL_IDS
         elif channel_id in GENERAL_CHANNEL_IDS:
-            permitido = command_name in {"ping", "box"}
-            zona = "general, Box y administración"
+            permitido = command_name == "ping"
+            zona = "generales"
             canales = GENERAL_CHANNEL_IDS
         elif channel_id in MADRUGUE_CHANNEL_IDS:
             permitido = bool(command_name and command_name.startswith("madrugue"))
@@ -70,7 +84,8 @@ class RestrictedCommandTree(app_commands.CommandTree):
             permitido = False
             zona = "ningún comando"
             canales = (
-                GENERAL_CHANNEL_IDS
+                BOX_CHANNEL_IDS
+                | GENERAL_CHANNEL_IDS
                 | MADRUGUE_CHANNEL_IDS
                 | SSF_CANALES_ID
             )
@@ -84,11 +99,17 @@ class RestrictedCommandTree(app_commands.CommandTree):
             for canal_id in sorted(canales)
         )
         mensaje = (
-            f"⚠️ Este canal solo permite comandos de {zona}."
+            f"Este canal solo permite comandos de **{zona}**."
             if canales_texto
-            else "⚠️ Este canal no tiene comandos configurados."
+            else "Este canal no tiene comandos configurados."
         )
-        await interaction.response.send_message(mensaje, ephemeral=True)
+        await responder(
+            interaction,
+            "⚠️ Canal no habilitado",
+            mensaje,
+            color_area="aviso",
+            ephemeral=True,
+        )
         print(f"[COMANDO] rechazado={command_path} canal={channel_id}", flush=True)
         return False
 

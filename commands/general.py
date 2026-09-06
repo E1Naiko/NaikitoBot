@@ -2,6 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from core.mensajes import responder
+
 
 class General(commands.Cog):
     """Comandos generales de Naikito Bot."""
@@ -18,8 +20,13 @@ class General(commands.Cog):
 
         latency = round(self.bot.latency * 1000)
 
-        await interaction.response.send_message(
-            f"🏓 Pong! `{latency} ms`"
+        await responder(
+            interaction,
+            "🏓 Pong!",
+            color_area="general",
+            secciones_=[
+                ("Latencia", f"`{latency} ms`"),
+            ],
         )
 
 

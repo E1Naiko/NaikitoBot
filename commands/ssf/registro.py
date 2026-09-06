@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 
 from commands.ssf.base import solo_servidor
+from core.mensajes import responder, responder_error
 from core.utils import ahora
 from modules.ssf.services import (
     registrar_sobrevivi,
@@ -31,43 +32,49 @@ class RegistroMixin:
 
         if not resultado["exitoso"]:
             if resultado["motivo"] == "fuera_de_fecha":
-                mensaje = (
-                    f"⚠️ **{resultado['nombre']}** "
+                detalle = (
+                    f"**{resultado['nombre']}** "
                     "no está en período de inscripción."
                 )
+                titulo = "⚠️ Fuera de inscripción"
             else:
                 motivos = {
-                    "sin_desafio": (
-                        "⚠️ No hay un desafío SeptSinFP activo."
-                    ),
-                    "eliminado": (
-                        "💀 Ya estás eliminado de este desafío."
-                    ),
-                    "ya_registrado": (
-                        "ℹ️ Ya estás registrado en el desafío."
-                    ),
+                    "sin_desafio": "No hay un desafío SeptSinFP activo.",
+                    "eliminado": "💀 Ya estás eliminado de este desafío.",
+                    "ya_registrado": "ℹ️ Ya estás registrado en el desafío.",
                 }
-
-                mensaje = motivos.get(
+                detalle = motivos.get(
                     resultado["motivo"],
-                    "⚠️ No pudiste registrarte en el desafío.",
+                    "No pudiste registrarte en el desafío.",
                 )
+                titulo = "⚠️ Registro no disponible"
 
-            await interaction.response.send_message(
-                mensaje,
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                titulo,
+                detalle,
             )
             return
 
-        await interaction.response.send_message(
-            f"🎯 **¡{interaction.user.mention} se registró en "
-            f"{resultado['nombre']}!**\n\n"
-            f"🗓️ Desafío: **{resultado['fecha_inicio']}** → "
-            f"**{resultado['fecha_fin']}**\n"
-            f"🔥 Racha actual: **{resultado['racha']} días**\n"
-            f"🫡 Rango: **{resultado['rango']}**\n\n"
-            "Registrarse cuenta como haber sobrevivido hoy. "
-            "No olvides usar `/ssf sobrevivi` cada día."
+        await responder(
+            interaction,
+            f"🎯 ¡{interaction.user.mention} se registró!",
+            color_area="ssf",
+            secciones_=[
+                ("🗓️ Desafío", f"**{resultado['nombre']}**"),
+                (
+                    "📅 Período",
+                    f"**{resultado['fecha_inicio']}** → "
+                    f"**{resultado['fecha_fin']}**",
+                ),
+                ("🔥 Racha actual", f"**{resultado['racha']} días**"),
+                ("🫡 Rango", f"**{resultado['rango']}**"),
+                (
+                    "💡 Recordatorio",
+                    "Registrarse cuenta como haber sobrevivido hoy. "
+                    "No olvides usar `/ssf sobrevivi` cada día.",
+                ),
+            ],
         )
 
     @app_commands.command(
@@ -86,37 +93,34 @@ class RegistroMixin:
 
         if not resultado["exitoso"]:
             motivos = {
-                "sin_desafio": (
-                    "⚠️ No hay un desafío SeptSinFP activo."
-                ),
-                "fuera_de_fecha": (
-                    "⚠️ Hoy no es un día del desafío."
-                ),
+                "sin_desafio": "No hay un desafío SeptSinFP activo.",
+                "fuera_de_fecha": "Hoy no es un día del desafío.",
                 "no_participante": (
-                    "ℹ️ No estás registrado en el desafío.\n"
+                    "No estás registrado en el desafío. "
                     "Usa `/ssf registrar` primero."
                 ),
-                "eliminado": (
-                    "💀 Estás eliminado de este desafío."
-                ),
-                "ya_registrado": (
-                    "ℹ️ Ya registraste tu supervivencia de hoy."
-                ),
+                "eliminado": "💀 Estás eliminado de este desafío.",
+                "ya_registrado": "ℹ️ Ya registraste tu supervivencia de hoy.",
             }
 
-            await interaction.response.send_message(
+            await responder_error(
+                interaction,
+                "⚠️ Supervivencia no registrada",
                 motivos.get(
                     resultado["motivo"],
-                    "⚠️ No se pudo registrar tu supervivencia.",
+                    "No se pudo registrar tu supervivencia.",
                 ),
-                ephemeral=True,
             )
             return
 
-        await interaction.response.send_message(
-            f"🔥 **¡{interaction.user.mention} sobrevivió el día "
-            f"{resultado['fecha'].strftime('%d/%m')}!**\n\n"
-            f"🔥 Racha actual: **{resultado['racha']} días**\n"
-            f"🏆 Mejor racha: **{resultado['mejor_racha']} días**\n"
-            f"🫡 Rango: **{resultado['rango']}**"
+        await responder(
+            interaction,
+            f"🔥 ¡{interaction.user.mention} sobrevivió el día "
+            f"{resultado['fecha'].strftime('%d/%m')}!",
+            color_area="ssf",
+            secciones_=[
+                ("🔥 Racha actual", f"**{resultado['racha']} días**"),
+                ("🏆 Mejor racha", f"**{resultado['mejor_racha']} días**"),
+                ("🫡 Rango", f"**{resultado['rango']}**"),
+            ],
         )

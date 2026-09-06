@@ -1,7 +1,9 @@
 """Ayudas compartidas por los comandos de Box."""
 
+from core.mensajes import responder_error
+
 TEXTO_SOLO_SERVIDOR = (
-    "⚠️ Este comando solo puede utilizarse dentro de un servidor."
+    "Este comando solo puede utilizarse dentro de un servidor."
 )
 
 
@@ -17,8 +19,9 @@ async def solo_servidor(interaction) -> bool:
     if interaction.guild is not None:
         return True
 
-    await interaction.response.send_message(
+    await responder_error(
+        interaction,
+        "⚠️ Sin servidor",
         TEXTO_SOLO_SERVIDOR,
-        ephemeral=True,
     )
     return False

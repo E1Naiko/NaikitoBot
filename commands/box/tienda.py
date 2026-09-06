@@ -13,6 +13,9 @@ from discord import app_commands
 
 from commands.box.base import solo_servidor
 from commands.box.compras import CATALOGOS, ejecutar_compra
+from config import BOX_CHANNEL_IDS
+from core.mensajes import crear_embed, responder, responder_error
+from core.permissions import es_admin
 from modules.box.services import (
     EQUIPAMIENTO,
     MEJORAS,
@@ -80,16 +83,29 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.guild is None:
-            await interaction.response.send_message(
-                "⚠️ Este comando solo puede utilizarse dentro de un servidor.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Sin servidor",
+                "Este comando solo puede utilizarse dentro de un servidor.",
+            )
+            return
+
+        if (
+            not es_admin(interaction.user.id)
+            and interaction.channel_id not in BOX_CHANNEL_IDS
+        ):
+            await responder_error(
+                interaction,
+                "⚠️ Canal incorrecto",
+                "Esta tienda solo puede usarse en el canal de Box.",
             )
             return
 
         if interaction.user.id != self.owner_id:
-            await interaction.response.send_message(
-                "⚠️ Esta tienda no es tuya. Usá `/box tienda` para abrir la tuya.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Tienda de otro usuario",
+                "Esta tienda no es tuya. Usá `/box tienda` para abrir la tuya.",
             )
             return
 
@@ -100,7 +116,11 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
             self.clave,
         )
         await interaction.response.send_message(
-            resultado.texto,
+            embed=crear_embed(
+                "✅ Compra" if resultado.exitoso else "⚠️ Compra rechazada",
+                resultado.texto,
+                color_area="box" if resultado.exitoso else "error",
+            ),
             ephemeral=True,
         )
 
@@ -144,8 +164,11 @@ class TiendaMixin:
         if not await solo_servidor(interaction):
             return
 
-        await interaction.response.send_message(
+        await responder(
+            interaction,
+            "🛒 Tienda de Box",
             construir_catalogo(interaction),
+            color_area="box",
             view=TiendaView(interaction.user.id),
         )
 
@@ -180,7 +203,11 @@ class TiendaMixin:
             articulo,
         )
         await interaction.response.send_message(
-            resultado.texto,
+            embed=crear_embed(
+                "✅ Compra" if resultado.exitoso else "⚠️ Compra rechazada",
+                resultado.texto,
+                color_area="box" if resultado.exitoso else "error",
+            ),
             ephemeral=not resultado.exitoso,
         )
 
@@ -216,7 +243,11 @@ class TiendaMixin:
             tipo.value,
         )
         await interaction.response.send_message(
-            resultado.texto,
+            embed=crear_embed(
+                "✅ Tratamiento" if resultado.exitoso else "⚠️ Compra rechazada",
+                resultado.texto,
+                color_area="box" if resultado.exitoso else "error",
+            ),
             ephemeral=not resultado.exitoso,
         )
 

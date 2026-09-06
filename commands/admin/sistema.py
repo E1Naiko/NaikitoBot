@@ -7,6 +7,7 @@ from typing import cast
 import discord
 from discord import app_commands
 
+from core.mensajes import responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from config import ADMIN_USER_IDS, GUILD_ID
 
@@ -400,15 +401,13 @@ class SistemaMixin:
             return
 
         if not archivo.filename.lower().endswith(".txt"):
-            await interaction.response.send_message(
-                "⚠️ El archivo debe tener extensión `.txt`.",
+            await responder_texto(interaction, "⚠️ El archivo debe tener extensión `.txt`.",
                 ephemeral=True,
             )
             return
 
         if archivo.size > 1024 * 1024:
-            await interaction.response.send_message(
-                "⚠️ El archivo no puede superar 1 MiB.",
+            await responder_texto(interaction, "⚠️ El archivo no puede superar 1 MiB.",
                 ephemeral=True,
             )
             return

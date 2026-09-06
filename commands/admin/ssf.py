@@ -5,6 +5,7 @@ from datetime import date
 import discord
 from discord import app_commands
 
+from core.mensajes import responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
 from modules.ssf.services import (
@@ -58,8 +59,7 @@ class SsfAdminMixin:
             fecha_obj = date.fromisoformat(fecha)
 
         except ValueError:
-            await interaction.response.send_message(
-                "⚠️ La fecha no es válida.\n"
+            await responder_texto(interaction, "⚠️ La fecha no es válida.\n"
                 "Utiliza el formato **YYYY-MM-DD**.\n"
                 "Ejemplo: `2026-09-01`.",
                 ephemeral=True,
@@ -98,8 +98,7 @@ class SsfAdminMixin:
                 ),
             }
 
-            await interaction.response.send_message(
-                motivos.get(
+            await responder_texto(interaction, motivos.get(
                     resultado["motivo"],
                     "⚠️ No se pudo revivir al participante.",
                 ),
@@ -108,8 +107,7 @@ class SsfAdminMixin:
 
             return
 
-        await interaction.response.send_message(
-            f"💚 **Participante revivido correctamente.**\n\n"
+        await responder_texto(interaction, f"💚 **Participante revivido correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"📅 Día recuperado: **{fecha}**\n"
             f"🔥 Racha actual: "
@@ -167,15 +165,13 @@ class SsfAdminMixin:
                     "⚠️ No se pudo iniciar el desafío."
                 )
 
-            await interaction.response.send_message(
-                mensaje,
+            await responder_texto(interaction, mensaje,
                 ephemeral=True,
             )
 
             return
 
-        await interaction.response.send_message(
-            f"🎯 **SeptSinFP iniciado correctamente.**\n\n"
+        await responder_texto(interaction, f"🎯 **SeptSinFP iniciado correctamente.**\n\n"
             f"📋 Desafío: **SeptSinFP 2026**\n"
             f"🗓️ Inicio: **{fecha_inicio}**\n"
             f"🏁 Fin: **{fecha_fin}**\n"
@@ -216,8 +212,7 @@ class SsfAdminMixin:
             fecha_obj = date.fromisoformat(fecha)
 
         except ValueError:
-            await interaction.response.send_message(
-                "⚠️ La fecha no es válida.\n"
+            await responder_texto(interaction, "⚠️ La fecha no es válida.\n"
                 "Utiliza el formato **YYYY-MM-DD**.\n"
                 "Ejemplo: `2026-09-01`.",
                 ephemeral=True,
@@ -262,8 +257,7 @@ class SsfAdminMixin:
                 ),
             }
 
-            await interaction.response.send_message(
-                motivos.get(
+            await responder_texto(interaction, motivos.get(
                     resultado["motivo"],
                     "⚠️ No se pudo agregar el día.",
                 ),
@@ -272,8 +266,7 @@ class SsfAdminMixin:
 
             return
 
-        await interaction.response.send_message(
-            f"✅ **Día agregado correctamente.**\n\n"
+        await responder_texto(interaction, f"✅ **Día agregado correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"📅 Día agregado: **{fecha}**\n"
             f"🔥 Racha actual: "
@@ -314,8 +307,7 @@ class SsfAdminMixin:
             fecha_obj = date.fromisoformat(fecha)
 
         except ValueError:
-            await interaction.response.send_message(
-                "⚠️ La fecha no es válida.\n"
+            await responder_texto(interaction, "⚠️ La fecha no es válida.\n"
                 "Utiliza el formato **YYYY-MM-DD**.\n"
                 "Ejemplo: `2026-09-01`.",
                 ephemeral=True,
@@ -345,8 +337,7 @@ class SsfAdminMixin:
                 ),
             }
 
-            await interaction.response.send_message(
-                motivos.get(
+            await responder_texto(interaction, motivos.get(
                     resultado["motivo"],
                     "⚠️ No se pudo quitar el día.",
                 ),
@@ -372,8 +363,7 @@ class SsfAdminMixin:
                 "sigue eliminado."
             )
 
-        await interaction.response.send_message(
-            texto,
+        await responder_texto(interaction, texto,
             ephemeral=True,
         )
 
@@ -419,8 +409,7 @@ class SsfAdminMixin:
                 ),
             }
 
-            await interaction.response.send_message(
-                motivos.get(
+            await responder_texto(interaction, motivos.get(
                     resultado["motivo"],
                     "⚠️ No se pudieron recalcular las rachas.",
                 ),
@@ -434,8 +423,7 @@ class SsfAdminMixin:
         else:
             estado = "🟢 Activo"
 
-        await interaction.response.send_message(
-            f"🔄 **Rachas recalculadas correctamente.**\n\n"
+        await responder_texto(interaction, f"🔄 **Rachas recalculadas correctamente.**\n\n"
             f"👤 Usuario: **{usuario.display_name}**\n"
             f"📊 Estado: **{estado}**\n"
             f"🔥 Racha actual: "

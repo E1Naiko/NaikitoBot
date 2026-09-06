@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 
 from commands.ssf.base import solo_servidor
+from core.mensajes import crear_embed, responder, responder_error, responder_ok
 from modules.ssf.services import (
     TEXTO_AYUDA,
     calcular_rango,
@@ -22,19 +23,26 @@ class InfoMixin:
     )
     async def ayuda(self, interaction: discord.Interaction):
         try:
-            await interaction.user.send(TEXTO_AYUDA)
+            await interaction.user.send(
+                embed=crear_embed(
+                    "SeptSinFP — Ayuda",
+                    TEXTO_AYUDA,
+                    color_area="ssf",
+                )
+            )
         except discord.Forbidden:
-            await interaction.response.send_message(
-                "⚠️ No pude enviarte un mensaje directo. "
-                "Activa los mensajes directos de este servidor "
-                "e inténtalo otra vez.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Mensaje directo bloqueado",
+                "No pude enviarte un mensaje directo. Activa los "
+                "mensajes directos de este servidor e inténtalo otra vez.",
             )
             return
 
-        await interaction.response.send_message(
-            "✅ Te envié la ayuda de SeptSinFP por mensaje directo.",
-            ephemeral=True,
+        await responder_ok(
+            interaction,
+            "✅ Ayuda enviada",
+            "Te envié la ayuda de SeptSinFP por mensaje directo.",
         )
 
     @app_commands.command(
@@ -52,41 +60,42 @@ class InfoMixin:
 
         if not resultado["exitoso"]:
             motivos = {
-                "sin_desafio": (
-                    "⚠️ No hay un desafío SeptSinFP activo."
-                ),
+                "sin_desafio": "No hay un desafío SeptSinFP activo.",
                 "no_participante": (
-                    "ℹ️ No estás registrado en el desafío.\n"
+                    "No estás registrado en el desafío. "
                     "Usa `/ssf registrar` primero."
                 ),
             }
-
-            await interaction.response.send_message(
+            await responder_error(
+                interaction,
+                "⚠️ Estado no disponible",
                 motivos.get(
                     resultado["motivo"],
-                    "⚠️ No se pudo obtener tu estado.",
+                    "No se pudo obtener tu estado.",
                 ),
-                ephemeral=True,
             )
             return
 
-        texto = (
-            f"📊 **Estado de {interaction.user.display_name} "
-            f"en {resultado['nombre']}**\n\n"
-            f"🫡 Rango: **{resultado['rango']}**\n"
-            f"🔥 Racha actual: **{resultado['racha_actual']} días**\n"
-            f"🏆 Mejor racha: **{resultado['mejor_racha']} días**"
-        )
-
+        secciones_ = [
+            ("🫡 Rango", f"**{resultado['rango']}**"),
+            ("🔥 Racha actual", f"**{resultado['racha_actual']} días**"),
+            ("🏆 Mejor racha", f"**{resultado['mejor_racha']} días**"),
+        ]
         if resultado["eliminado"]:
-            texto += (
-                f"\n\n💀 Eliminado el "
-                f"**{resultado['fecha_eliminacion']}**."
+            secciones_.append(
+                (
+                    "💀 Eliminado",
+                    f"El **{resultado['fecha_eliminacion']}**.",
+                )
             )
 
-        await interaction.response.send_message(
-            texto,
+        await responder(
+            interaction,
+            f"📊 Estado de {interaction.user.display_name} "
+            f"en {resultado['nombre']}",
+            color_area="ssf",
             ephemeral=True,
+            secciones_=secciones_,
         )
 
     @app_commands.command(
@@ -102,9 +111,10 @@ class InfoMixin:
         )
 
         if desafio is None:
-            await interaction.response.send_message(
-                "⚠️ No hay un desafío SeptSinFP activo.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Sin desafío",
+                "No hay un desafío SeptSinFP activo.",
             )
             return
 
@@ -113,17 +123,15 @@ class InfoMixin:
         )
 
         if not lista:
-            await interaction.response.send_message(
-                "📋 Todavía no hay participantes registrados."
+            await responder(
+                interaction,
+                "📋 Participantes",
+                "Todavía no hay participantes registrados.",
+                color_area="ssf",
             )
             return
 
-        lineas = [
-            f"📋 **Participantes de {desafio['nombre']}** — "
-            f"{desafio['activos']} activos, "
-            f"{desafio['eliminados']} eliminados"
-        ]
-
+        lineas = []
         for participante in lista:
             (
                 _user_id,
@@ -137,17 +145,19 @@ class InfoMixin:
 
             rango = calcular_rango(racha_actual)
 
-            if eliminado:
-                lineas.append(
-                    f"💀 **{username}** — "
-                    f"🔥 {racha_actual} días — "
-                    f"{rango}"
-                )
-            else:
-                lineas.append(
-                    f"🟢 **{username}** — "
-                    f"🔥 {racha_actual} días — "
-                    f"{rango}"
-                )
+            estado = "💀" if eliminado else "🟢"
+            lineas.append(
+                f"{estado} **{username}** — "
+                f"🔥 {racha_actual} días — {rango}"
+            )
 
-        await interaction.response.send_message("\n".join(lineas))
+        await responder(
+            interaction,
+            f"📋 Participantes de {desafio['nombre']}",
+            f"{desafio['activos']} activos, "
+            f"{desafio['eliminados']} eliminados.",
+            color_area="ssf",
+            secciones_=[
+                ("Listado", "\n".join(lineas), False),
+            ],
+        )

@@ -6,7 +6,9 @@ import discord
 from discord import app_commands
 
 from commands.box.base import solo_servidor
-from config import BOX_EXPERIENCIA_POR_MINUTO
+from config import BOX_CHANNEL_IDS, BOX_EXPERIENCIA_POR_MINUTO
+from core.mensajes import crear_embed, responder, responder_error, seccion
+from core.permissions import es_admin
 from core.utils import ahora
 from modules.box.services import (
     aceptar_desafio,
@@ -50,10 +52,22 @@ class ChallengeView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if (
+            not es_admin(interaction.user.id)
+            and interaction.channel_id not in BOX_CHANNEL_IDS
+        ):
+            await responder_error(
+                interaction,
+                "⚠️ Canal incorrecto",
+                "Este desafío solo puede aceptarse en el canal de Box.",
+            )
+            return
+
         if interaction.user.id != self.contrincante_id:
-            await interaction.response.send_message(
-                "⚠️ Solo el contrincante puede aceptar este desafío.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ No autorizado",
+                "Solo el contrincante puede aceptar este desafío.",
             )
             return
 
@@ -67,29 +81,42 @@ class ChallengeView(discord.ui.View):
         if resultado["estado"] == "aceptado":
             button.disabled = True
             nombre = self.tipo.lower()
+            embed = crear_embed(
+                "🥊 ¡Desafío aceptado!",
+                f"Ambos competirán durante 1 hora.",
+                color_area="box",
+            )
+            seccion(embed, "Modalidad", f"**{nombre}**")
             await interaction.response.edit_message(
-                content=(
-                    f"🥊 ¡Desafío de {nombre} aceptado! "
-                    "Ambos competirán durante 1 hora."
-                ),
+                embed=embed,
                 view=self,
             )
             self.stop()
             return
 
-        await interaction.response.edit_message(
-            content=MENSAJES_DESAFIO_NO_DISPONIBLE.get(
+        embed = crear_embed(
+            "⚠️ Desafío no disponible",
+            MENSAJES_DESAFIO_NO_DISPONIBLE.get(
                 resultado["estado"],
-                "⚠️ El desafío ya no está disponible.",
+                "El desafío ya no está disponible.",
             ),
+            color_area="error",
+        )
+        await interaction.response.edit_message(
+            embed=embed,
             view=None,
         )
         self.stop()
 
     async def on_timeout(self):
         if self.message is not None:
+            embed = crear_embed(
+                "⌛ Desafío expirado",
+                "El desafío de sparring expiró.",
+                color_area="aviso",
+            )
             await self.message.edit(
-                content="⌛ El desafío de sparring expiró.",
+                embed=embed,
                 view=None,
             )
 
@@ -128,16 +155,18 @@ class DesafiosMixin:
             return
 
         if contrincante.id == interaction.user.id:
-            await interaction.response.send_message(
-                "⚠️ No puedes desafiarte a ti mismo.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Desafío inválido",
+                "No puedes desafiarte a ti mismo.",
             )
             return
 
         if obtener_accion_activa(interaction.guild.id, interaction.user.id):
-            await interaction.response.send_message(
-                "⚠️ Ya tienes una acción activa.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Acción activa",
+                "Ya tienes una acción activa.",
             )
             return
 
@@ -146,9 +175,10 @@ class DesafiosMixin:
             interaction.user.id,
         )
         if lesionado_hasta and datetime.fromisoformat(lesionado_hasta) > ahora():
-            await interaction.response.send_message(
-                "🚑 No puedes desafiar a otro usuario mientras estás lesionado.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "🚑 Lesión activa",
+                "No puedes desafiar a otro usuario mientras estás lesionado.",
             )
             return
 
@@ -161,19 +191,23 @@ class DesafiosMixin:
             expira_en=inicio + DURACION_DESAFIO,
         )
         if desafio_id is None:
-            await interaction.response.send_message(
-                "⚠️ Ya existe un desafío pendiente con ese usuario.",
-                ephemeral=True,
+            await responder_error(
+                interaction,
+                "⚠️ Desafío pendiente",
+                "Ya existe un desafío pendiente con ese usuario.",
             )
             return
 
         view = ChallengeView(self, desafio_id, contrincante.id, tipo)
-        await interaction.response.send_message(
-            f"🥊 {contrincante.mention}, {interaction.user.mention} "
-            f"te desafía a un {tipo.lower()}. Tienes 1 hora para aceptar.\n"
-            f"Al aceptar, ambos estarán en modo **{tipo}** durante 1 hora.",
-            view=view,
+        embed = crear_embed(
+            "🥊 ¡Nuevo desafío!",
+            f"{contrincante.mention}, {interaction.user.mention} "
+            "te desafía.",
+            color_area="box",
         )
+        seccion(embed, "Modalidad", f"**{tipo.lower()}**")
+        seccion(embed, "Tiempo", "Tienes **1 hora** para aceptar.")
+        await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()
 
     @app_commands.command(
