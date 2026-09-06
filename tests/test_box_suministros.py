@@ -368,3 +368,11 @@ def test_selector_rechaza_a_un_usuario_que_no_es_el_dueño():
     )
 
     assert "no es tuya" in interaccion.texto
+
+
+def test_comprar_suministro_orienta_a_usar_el_comando(cog):
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+    llamar(cog, "comprar", interaccion, Choice("suministro"), "recuperacion")
+
+    assert "🎒 Elige el suministro" in interaccion.texto
+    assert "/box suministro" in interaccion.texto

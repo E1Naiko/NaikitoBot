@@ -15,6 +15,7 @@ from commands.box.base import solo_servidor
 from commands.box.compras import (
     CATALOGOS,
     ejecutar_compra,
+    titulo_compra,
     usar_suministro_resultado,
 )
 from config import BOX_CHANNEL_IDS
@@ -295,9 +296,14 @@ class TiendaMixin:
         )
         await interaction.response.send_message(
             embed=crear_embed(
-                "✅ Compra" if resultado.exitoso else "⚠️ Compra rechazada",
+                titulo_compra(resultado),
                 resultado.texto,
-                color_area="box" if resultado.exitoso else "error",
+                color_area=(
+                    "box"
+                    if resultado.exitoso
+                    or resultado.estado == "elegir_tipo"
+                    else "error"
+                ),
             ),
             ephemeral=not resultado.exitoso,
         )

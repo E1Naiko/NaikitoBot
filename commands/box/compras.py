@@ -178,6 +178,19 @@ def _comprar_suministro(
     )
 
 
+def titulo_compra(resultado: Resultado) -> str:
+    """Título del embed para el comando ``/box comprar``."""
+
+    if resultado.exitoso:
+        return "✅ Compra"
+
+    # Orientación, no un rechazo: la entrada genérica pide elegir el tipo.
+    if resultado.estado == "elegir_tipo":
+        return "🎒 Elige el suministro"
+
+    return "⚠️ Compra rechazada"
+
+
 def texto_tipos_suministro() -> str:
     """Lista los tipos de suministro disponibles para los comandos."""
 
