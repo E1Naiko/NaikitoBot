@@ -411,6 +411,154 @@ def comprar_tratamiento(
 
 
 # ============================================================
+# SUMINISTROS DE RECUPERACIÓN
+# ============================================================
+
+def usar_suministro(
+    guild_id: int,
+    user_id: int,
+    objetivo: str,
+    precio: int,
+    ahora: datetime,
+):
+    """Usa un suministro y restaura al máximo la estadística indicada.
+
+    ``objetivo`` puede ser ``vida``, ``cansancio``, ``defensa`` o ``lesion``.
+    Si la estadística ya está al máximo (o no hay lesión ni probabilidad que
+    curar), no descuenta dinero y devuelve el estado correspondiente.
+    """
+
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
+
+        saldo, probabilidad_lesion, lesionado_hasta = db.execute(
+            """
+            SELECT dinero, probabilidad_lesion, lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        db.execute(
+            """
+            INSERT INTO box_equipo (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
+
+        vida, vida_maxima, cansancio, cansancio_maximo, defensa, defensa_maxima = (
+            db.execute(
+                """
+                SELECT vida, vida_maxima, cansancio, cansancio_maximo,
+                       defensa, defensa_maxima
+                FROM box_equipo
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            ).fetchone()
+        )
+
+        # ----------------------------------------------------
+        # COMPROBAR SI LA ESTADÍSTICA NECESITA RECUPERACIÓN
+        # ----------------------------------------------------
+
+        aplica = True
+
+        if objetivo == "vida":
+            aplica = vida < vida_maxima
+        elif objetivo == "cansancio":
+            aplica = cansancio < cansancio_maximo
+        elif objetivo == "defensa":
+            aplica = defensa < defensa_maxima
+        elif objetivo == "lesion":
+            lesionado_activo = (
+                lesionado_hasta is not None
+                and datetime.fromisoformat(lesionado_hasta) > ahora
+            )
+            aplica = lesionado_activo or probabilidad_lesion > 0
+        else:
+            db.rollback()
+            return "objetivo_invalido", saldo
+
+        if not aplica:
+            db.rollback()
+            if objetivo == "lesion":
+                return "sin_lesion", saldo
+            return "lleno", saldo
+
+        # ----------------------------------------------------
+        # COBRO Y APLICACIÓN
+        # ----------------------------------------------------
+
+        if saldo < precio:
+            db.rollback()
+            return "insuficiente", saldo
+
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = dinero - ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (precio, guild_id, user_id),
+        )
+
+        if objetivo == "vida":
+            db.execute(
+                """
+                UPDATE box_equipo
+                SET vida = vida_maxima
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
+        elif objetivo == "cansancio":
+            db.execute(
+                """
+                UPDATE box_equipo
+                SET cansancio = cansancio_maximo
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
+        elif objetivo == "defensa":
+            db.execute(
+                """
+                UPDATE box_equipo
+                SET defensa = defensa_maxima
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
+        else:
+            db.execute(
+                """
+                UPDATE box_usuarios
+                SET lesionado_hasta = NULL,
+                    probabilidad_lesion = 0
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
+
+        db.commit()
+
+    return "comprado", saldo - precio
+
+
+# ============================================================
 # SALDO / ESTADÍSTICAS
 # ============================================================
 

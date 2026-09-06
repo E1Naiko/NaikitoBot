@@ -11,7 +11,9 @@ from modules.box.constants import (
     NIVEL_MAXIMO_EQUIPAMIENTO,
     NOMBRES_ACCIONES,
     NOMBRES_SPONSORS,
+    SUMINISTROS,
     TEXTO_AYUDA,
+    TIPOS_SUMINISTRO,
     TRATAMIENTOS,
 )
 
@@ -52,6 +54,7 @@ from modules.box.database import (
     obtener_top_desafios,
     procesar_pagos_sponsors,
     procesar_sponsors_medicos,
+    usar_suministro,
 )
 
 from modules.box.logic import (
@@ -72,7 +75,9 @@ __all__ = [
     "NIVEL_MAXIMO_EQUIPAMIENTO",
     "NOMBRES_ACCIONES",
     "NOMBRES_SPONSORS",
+    "SUMINISTROS",
     "TEXTO_AYUDA",
+    "TIPOS_SUMINISTRO",
     "TRATAMIENTOS",
     # Lógica pura
     "Duracion",
@@ -104,6 +109,7 @@ __all__ = [
     "obtener_sponsor_para_promocion",
     "procesar_pagos_sponsors",
     "procesar_sponsors_medicos",
+    "usar_suministro",
     # Administración
     "admin_obtener_info_usuario",
     "admin_obtener_estadisticas_box",

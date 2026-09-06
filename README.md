@@ -220,6 +220,7 @@ día perdido (`2026-09-04`) queda con racha 1. Se corrige con
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
 | `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
+| `/box suministro` | `tipo` | Usa suministros de recuperación (vida, cansancio, defensa o lesión). |
 | `/box ayuda` | Ninguno | Envía por mensaje directo la lista de comandos de Box. |
 
 Los comandos de Box solo pueden usarse en los canales incluidos en
@@ -260,6 +261,23 @@ El `Tratamiento Fisioterapeutico` cuesta 10000, quita la lesión y conserva la
 probabilidad acumulada. El `Tratamiento 5 estrellas` cuesta 50000, quita la
 lesión y reinicia también la probabilidad a 0%.
 
+### Suministros de recuperación
+
+La tienda tiene el artículo `🎒 Suministros de recuperación`. Su botón abre un
+menú efímero para elegir el tipo; también puede usarse con
+`/box suministro <tipo>`. Cada suministro restaura al máximo una estadística y
+solo cobra si la estadística no estaba ya llena:
+
+| Tipo | Suministro | Precio | Efecto |
+| --- | --- | --- | --- |
+| `vida` | 🥤 Bebida isotónica | 1500 | Restaura la vida al máximo (`vida_maxima`). |
+| `cansancio` | ⚡ Bebida energética | 1500 | Restaura la energía al máximo (`cansancio_maximo`). |
+| `defensa` | 🔧 Servicio de reparación | 3000 | Repara la defensa hasta el máximo (`defensa_maxima`). |
+| `lesion` | 🩹 Botiquín completo | 60000 | Cura la lesión activa y deja la probabilidad en 0%. |
+
+El botón de suministros es de un solo uso: tras elegir el tipo, el menú queda
+deshabilitado.
+
 Para comprar una mejora se utiliza la opción correspondiente:
 
 ```text
@@ -284,8 +302,9 @@ el canal.
 Los botones se registran por patrón en `setup()`, de modo que siguen
 funcionando en mensajes de tienda anteriores a un reinicio del bot.
 
-`/box comprar` y `/box tratamiento` siguen disponibles para quienes prefieran
-escribir el comando.
+`/box comprar`, `/box tratamiento` y `/box suministro` siguen disponibles para
+quienes prefieran escribir el comando. `/box comprar tipo=suministro` orienta
+al `/box suministro`, porque el artículo genérico necesita elegir el tipo.
 
 El precio del siguiente nivel se calcula como `ceil(1000 x 1.25^nivel_actual)`.
 Por ejemplo: nivel 0 cuesta 1000, nivel 1 cuesta 1250 y nivel 2 cuesta 1563.

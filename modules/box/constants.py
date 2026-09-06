@@ -43,6 +43,53 @@ TRATAMIENTOS = {
 }
 
 
+# Artículo genérico de la tienda. El tipo de suministro se elige al usarlo
+# (comando /box suministro o el menú que abre su botón).
+SUMINISTROS = {
+    "recuperacion": {
+        "nombre": "Suministros de recuperación",
+        "emoji": "🎒",
+        "descripcion": (
+            "Restauran al máximo la estadística que elijas: "
+            "vida, cansancio, defensa (reparación) o lesión."
+        ),
+    },
+}
+
+
+# Tipos de suministro disponibles, con temática de insumos de ejercicio.
+TIPOS_SUMINISTRO = {
+    "vida": {
+        "nombre": "Bebida isotónica",
+        "emoji": "🥤",
+        "precio": 1500,
+        "objetivo": "vida",
+        "efecto": "restaura tu vida al máximo.",
+    },
+    "cansancio": {
+        "nombre": "Bebida energética",
+        "emoji": "⚡",
+        "precio": 1500,
+        "objetivo": "cansancio",
+        "efecto": "restaura tu energía (cansancio) al máximo.",
+    },
+    "defensa": {
+        "nombre": "Servicio de reparación",
+        "emoji": "🔧",
+        "precio": 3000,
+        "objetivo": "defensa",
+        "efecto": "repara tu defensa hasta el máximo.",
+    },
+    "lesion": {
+        "nombre": "Botiquín completo",
+        "emoji": "🩹",
+        "precio": 60000,
+        "objetivo": "lesion",
+        "efecto": "cura tu lesión activa y deja la probabilidad en 0%.",
+    },
+}
+
+
 EQUIPAMIENTO = {
     "casco": {
         "nombre": "Casco",
@@ -113,6 +160,8 @@ TEXTO_AYUDA = (
     "`/box tienda` — Muestra todas las compras disponibles.\n"
     "`/box comprar tipo articulo` — Compra mejoras, equipamiento o tratamientos.\n"
     "`/box tratamiento tipo` — Compra un tratamiento para curar una lesión.\n"
+    "`/box suministro tipo` — Usa suministros que restauran vida, cansancio,\n"
+    "defensa (servicio de reparación) o la lesión.\n"
     "`/box descanso` — Reinicia la probabilidad de lesión.\n"
     "`/box topdesafios` — Muestra el ranking de desafíos.\n\n"
     "Las acciones duran el tiempo indicado y continúan aunque el bot se reinicie."

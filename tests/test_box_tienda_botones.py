@@ -74,7 +74,7 @@ def clic(boton, user_id=DUEÑO, en_servidor=True):
 def test_la_vista_tiene_un_boton_por_articulo():
     vista = TiendaView(DUEÑO)
 
-    assert len(vista.children) == len(list(iterar_articulos())) == 9
+    assert len(vista.children) == len(list(iterar_articulos()))
 
 
 def test_los_botones_llevan_el_emoji_de_su_articulo():
@@ -289,7 +289,7 @@ def test_tienda_adjunta_la_vista_del_usuario(cog):
     vista = interaccion.respuestas[-1].kwargs.get("view")
     assert isinstance(vista, TiendaView)
     assert vista.owner_id == DUEÑO
-    assert len(vista.children) == 9
+    assert len(vista.children) == len(list(iterar_articulos()))
 
 
 def test_tienda_invita_a_usar_los_botones(cog):
