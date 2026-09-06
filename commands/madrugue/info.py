@@ -8,6 +8,7 @@ from core.mensajes import crear_embed, responder, seccion
 from modules.madrugue.services import (
     obtener_stats_madrugue,
     obtener_top_madrugue,
+    texto_ventanas_puntos,
 )
 
 
@@ -154,12 +155,7 @@ class InfoMixin:
 
         embed.add_field(
             name="⏰ Horarios",
-            value=(
-                "**05:30 – 06:59** → 100 puntos\n"
-                "**07:00 – 08:59** → 25 puntos\n"
-                "**09:00 – 09:59** → 5 puntos\n"
-                "**10:00 en adelante** → fuera de horario"
-            ),
+            value=texto_ventanas_puntos(),
             inline=False,
         )
 
