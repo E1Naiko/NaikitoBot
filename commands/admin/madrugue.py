@@ -369,6 +369,31 @@ class MadrugueAdminMixin:
     # MANUAL ADD
     # ========================================================
 
+    @app_commands.command(
+        name="manualadd",
+        description="Agrega manualmente la madrugada de un usuario (alias de madrugue manualadd).",
+    )
+    @app_commands.describe(
+        usuario="Usuario al que se le agregará el registro.",
+        fecha="Fecha del registro en formato YYYY-MM-DD.",
+        hora="Hora de la madrugada en formato HH:MM.",
+    )
+    async def manualadd(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        fecha: str,
+        hora: str,
+    ):
+        """Alias directo de /admin madrugue manualadd."""
+        await self.madrugue_manualadd.callback(
+            self,
+            interaction,
+            usuario,
+            fecha,
+            hora,
+        )
+
     @madrugue.command(
         name="manualadd",
         description="Agrega manualmente la madrugada de un usuario.",
@@ -453,11 +478,18 @@ class MadrugueAdminMixin:
         # COMPROBAR REGISTRO EXISTENTE
         # ----------------------------------------------------
 
-        registro_existente = obtener_registro_del_dia(
-            interaction.guild.id,
-            usuario.id,
-            fecha_obj,
-        )
+        try:
+            registro_existente = obtener_registro_del_dia(
+                interaction.guild.id,
+                usuario.id,
+                fecha_obj,
+            )
+        except Exception as e:
+            await responder_texto(interaction, f"❌ Error al consultar registros existentes.\n\n"
+                f"Detalle: `{str(e)}`",
+                ephemeral=True,
+            )
+            return
 
         if registro_existente:
             hora_anterior, puntos = registro_existente
@@ -494,15 +526,22 @@ class MadrugueAdminMixin:
         # CALCULAR RACHA
         # ----------------------------------------------------
 
-        fechas_registradas = obtener_fechas_registradas(
-            interaction.guild.id,
-            usuario.id,
-        )
+        try:
+            fechas_registradas = obtener_fechas_registradas(
+                interaction.guild.id,
+                usuario.id,
+            )
 
-        racha = calcular_racha_para_nuevo_registro(
-            fechas_registradas,
-            fecha_obj,
-        )
+            racha = calcular_racha_para_nuevo_registro(
+                fechas_registradas,
+                fecha_obj,
+            )
+        except Exception as e:
+            await responder_texto(interaction, f"❌ Error al calcular la racha.\n\n"
+                f"Detalle: `{str(e)}`",
+                ephemeral=True,
+            )
+            return
 
         # ----------------------------------------------------
         # CALCULAR MULTIPLICADOR
@@ -520,16 +559,23 @@ class MadrugueAdminMixin:
         # GUARDAR REGISTRO
         # ----------------------------------------------------
 
-        guardar_registro(
-            guild_id=interaction.guild.id,
-            user_id=usuario.id,
-            username=usuario.display_name,
-            fecha=fecha_obj,
-            hora=hora_obj.strftime("%H:%M"),
-            puntos_base=puntos_base,
-            multiplicador=multiplicador,
-            puntos_finales=puntos_finales,
-        )
+        try:
+            guardar_registro(
+                guild_id=interaction.guild.id,
+                user_id=usuario.id,
+                username=usuario.display_name,
+                fecha=fecha_obj,
+                hora=hora_obj.strftime("%H:%M"),
+                puntos_base=puntos_base,
+                multiplicador=multiplicador,
+                puntos_finales=puntos_finales,
+            )
+        except Exception as e:
+            await responder_texto(interaction, f"❌ Error al guardar el registro.\n\n"
+                f"Detalle: `{str(e)}`",
+                ephemeral=True,
+            )
+            return
 
         # ----------------------------------------------------
         # EMOJI
