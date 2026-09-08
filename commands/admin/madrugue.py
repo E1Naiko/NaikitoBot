@@ -370,6 +370,96 @@ class MadrugueAdminMixin:
     # ========================================================
 
     @app_commands.command(
+        name="stats",
+        description="Muestra las estadísticas de Madrugue del servidor (alias de madrugue stats).",
+    )
+    async def stats(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Alias directo de /admin madrugue stats."""
+        await self.madrugue_stats.callback(self, interaction)
+
+    @app_commands.command(
+        name="top",
+        description="Muestra el TOP de Madrugue del servidor (alias de madrugue top).",
+    )
+    async def top(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Alias directo de /admin madrugue top."""
+        await self.madrugue_top.callback(self, interaction)
+
+    @app_commands.command(
+        name="ver",
+        description="Muestra el detalle de Madrugue de un usuario (alias de madrugue ver).",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyos registros quieres consultar.",
+    )
+    async def ver(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        """Alias directo de /admin madrugue ver."""
+        await self.madrugue_ver.callback(self, interaction, usuario)
+
+    @app_commands.command(
+        name="resetdia",
+        description="Elimina el registro de Madrugue de un usuario para una fecha (alias de madrugue resetdia).",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyo registro quieres eliminar.",
+        fecha="Fecha del registro en formato YYYY-MM-DD.",
+    )
+    async def resetdia(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        fecha: str,
+    ):
+        """Alias directo de /admin madrugue resetdia."""
+        await self.madrugue_resetdia.callback(self, interaction, usuario, fecha)
+
+    @app_commands.command(
+        name="resetusuario",
+        description="Elimina todos los registros de Madrugue de un usuario (alias de madrugue resetusuario).",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyos registros quieres eliminar.",
+    )
+    async def resetusuario(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        """Alias directo de /admin madrugue resetusuario."""
+        await self.madrugue_resetusuario.callback(self, interaction, usuario)
+
+    @app_commands.command(
+        name="resettotal",
+        description="Elimina todos los registros de Madrugue del servidor (alias de madrugue resettotal).",
+    )
+    @app_commands.describe(
+        confirmar="Confirma el borrado total.",
+    )
+    @app_commands.choices(
+        confirmar=[
+            app_commands.Choice(name="SI", value="SI"),
+            app_commands.Choice(name="NO", value="NO"),
+        ]
+    )
+    async def resettotal(
+        self,
+        interaction: discord.Interaction,
+        confirmar: app_commands.Choice[str],
+    ):
+        """Alias directo de /admin madrugue resettotal."""
+        await self.madrugue_resettotal.callback(self, interaction, confirmar)
+
+    @app_commands.command(
         name="manualadd",
         description="Agrega manualmente la madrugada de un usuario (alias de madrugue manualadd).",
     )
