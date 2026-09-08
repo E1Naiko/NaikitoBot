@@ -369,6 +369,121 @@ class MadrugueAdminMixin:
     # MANUAL ADD
     # ========================================================
 
+    @app_commands.command(
+        name="stats",
+        description="Muestra las estadísticas de Madrugue del servidor (alias de madrugue stats).",
+    )
+    async def stats(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Alias directo de /admin madrugue stats."""
+        await self.madrugue_stats.callback(self, interaction)
+
+    @app_commands.command(
+        name="top",
+        description="Muestra el TOP de Madrugue del servidor (alias de madrugue top).",
+    )
+    async def top(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Alias directo de /admin madrugue top."""
+        await self.madrugue_top.callback(self, interaction)
+
+    @app_commands.command(
+        name="ver",
+        description="Muestra el detalle de Madrugue de un usuario (alias de madrugue ver).",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyos registros quieres consultar.",
+    )
+    async def ver(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        """Alias directo de /admin madrugue ver."""
+        await self.madrugue_ver.callback(self, interaction, usuario)
+
+    @app_commands.command(
+        name="resetdia",
+        description="Elimina el registro de Madrugue de un usuario para una fecha (alias de madrugue resetdia).",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyo registro quieres eliminar.",
+        fecha="Fecha del registro en formato YYYY-MM-DD.",
+    )
+    async def resetdia(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        fecha: str,
+    ):
+        """Alias directo de /admin madrugue resetdia."""
+        await self.madrugue_resetdia.callback(self, interaction, usuario, fecha)
+
+    @app_commands.command(
+        name="resetusuario",
+        description="Elimina todos los registros de Madrugue de un usuario (alias de madrugue resetusuario).",
+    )
+    @app_commands.describe(
+        usuario="Usuario cuyos registros quieres eliminar.",
+    )
+    async def resetusuario(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+    ):
+        """Alias directo de /admin madrugue resetusuario."""
+        await self.madrugue_resetusuario.callback(self, interaction, usuario)
+
+    @app_commands.command(
+        name="resettotal",
+        description="Elimina todos los registros de Madrugue del servidor (alias de madrugue resettotal).",
+    )
+    @app_commands.describe(
+        confirmar="Confirma el borrado total.",
+    )
+    @app_commands.choices(
+        confirmar=[
+            app_commands.Choice(name="SI", value="SI"),
+            app_commands.Choice(name="NO", value="NO"),
+        ]
+    )
+    async def resettotal(
+        self,
+        interaction: discord.Interaction,
+        confirmar: app_commands.Choice[str],
+    ):
+        """Alias directo de /admin madrugue resettotal."""
+        await self.madrugue_resettotal.callback(self, interaction, confirmar)
+
+    @app_commands.command(
+        name="manualadd",
+        description="Agrega manualmente la madrugada de un usuario (alias de madrugue manualadd).",
+    )
+    @app_commands.describe(
+        usuario="Usuario al que se le agregará el registro.",
+        fecha="Fecha del registro en formato YYYY-MM-DD.",
+        hora="Hora de la madrugada en formato HH:MM.",
+    )
+    async def manualadd(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        fecha: str,
+        hora: str,
+    ):
+        """Alias directo de /admin madrugue manualadd."""
+        await self.madrugue_manualadd.callback(
+            self,
+            interaction,
+            usuario,
+            fecha,
+            hora,
+        )
+
     @madrugue.command(
         name="manualadd",
         description="Agrega manualmente la madrugada de un usuario.",
@@ -453,11 +568,18 @@ class MadrugueAdminMixin:
         # COMPROBAR REGISTRO EXISTENTE
         # ----------------------------------------------------
 
-        registro_existente = obtener_registro_del_dia(
-            interaction.guild.id,
-            usuario.id,
-            fecha_obj,
-        )
+        try:
+            registro_existente = obtener_registro_del_dia(
+                interaction.guild.id,
+                usuario.id,
+                fecha_obj,
+            )
+        except Exception as e:
+            await responder_texto(interaction, f"❌ Error al consultar registros existentes.\n\n"
+                f"Detalle: `{str(e)}`",
+                ephemeral=True,
+            )
+            return
 
         if registro_existente:
             hora_anterior, puntos = registro_existente
@@ -494,15 +616,22 @@ class MadrugueAdminMixin:
         # CALCULAR RACHA
         # ----------------------------------------------------
 
-        fechas_registradas = obtener_fechas_registradas(
-            interaction.guild.id,
-            usuario.id,
-        )
+        try:
+            fechas_registradas = obtener_fechas_registradas(
+                interaction.guild.id,
+                usuario.id,
+            )
 
-        racha = calcular_racha_para_nuevo_registro(
-            fechas_registradas,
-            fecha_obj,
-        )
+            racha = calcular_racha_para_nuevo_registro(
+                fechas_registradas,
+                fecha_obj,
+            )
+        except Exception as e:
+            await responder_texto(interaction, f"❌ Error al calcular la racha.\n\n"
+                f"Detalle: `{str(e)}`",
+                ephemeral=True,
+            )
+            return
 
         # ----------------------------------------------------
         # CALCULAR MULTIPLICADOR
@@ -520,16 +649,23 @@ class MadrugueAdminMixin:
         # GUARDAR REGISTRO
         # ----------------------------------------------------
 
-        guardar_registro(
-            guild_id=interaction.guild.id,
-            user_id=usuario.id,
-            username=usuario.display_name,
-            fecha=fecha_obj,
-            hora=hora_obj.strftime("%H:%M"),
-            puntos_base=puntos_base,
-            multiplicador=multiplicador,
-            puntos_finales=puntos_finales,
-        )
+        try:
+            guardar_registro(
+                guild_id=interaction.guild.id,
+                user_id=usuario.id,
+                username=usuario.display_name,
+                fecha=fecha_obj,
+                hora=hora_obj.strftime("%H:%M"),
+                puntos_base=puntos_base,
+                multiplicador=multiplicador,
+                puntos_finales=puntos_finales,
+            )
+        except Exception as e:
+            await responder_texto(interaction, f"❌ Error al guardar el registro.\n\n"
+                f"Detalle: `{str(e)}`",
+                ephemeral=True,
+            )
+            return
 
         # ----------------------------------------------------
         # EMOJI
