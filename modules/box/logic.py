@@ -9,6 +9,11 @@ import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from config import (
+    BOX_PRECIO_EQUIPAMIENTO_CRECIMIENTO,
+    BOX_PRECIO_MEJORA_CRECIMIENTO,
+)
+
 from modules.box.constants import (
     EQUIPAMIENTO,
     MINUTOS_MAXIMO,
@@ -21,15 +26,23 @@ from modules.box.constants import (
 # ============================================================
 
 def precio_mejora(precio_base: int, nivel: int) -> int:
-    """Precio del siguiente nivel de una mejora: +25 % compuesto."""
+    """Precio del siguiente nivel de una mejora.
 
-    return math.ceil(precio_base * 1.25 ** nivel)
+    Crece un ``BOX_PRECIO_MEJORA_CRECIMIENTO`` compuesto por nivel
+    (con el valor por defecto, +25 %).
+    """
+
+    return math.ceil(precio_base * BOX_PRECIO_MEJORA_CRECIMIENTO ** nivel)
 
 
 def precio_equipamiento(precio_base: int, nivel: int) -> int:
-    """Precio de la siguiente pieza: se duplica en cada nivel."""
+    """Precio de la siguiente pieza de equipamiento.
 
-    return precio_base * (2 ** nivel)
+    Se multiplica por ``BOX_PRECIO_EQUIPAMIENTO_CRECIMIENTO`` en cada
+    nivel (con el valor por defecto, se duplica).
+    """
+
+    return math.ceil(precio_base * BOX_PRECIO_EQUIPAMIENTO_CRECIMIENTO ** nivel)
 
 
 # ============================================================
@@ -51,6 +64,15 @@ def es_nivel_maximo(tipo: str, nivel: int) -> bool:
 # ============================================================
 # FORMATO
 # ============================================================
+
+def texto_horas(horas: float) -> str:
+    """Formatea una cantidad de horas como «1 hora» o «1.5 horas»."""
+
+    valor = f"{horas:g}"
+    unidad = "hora" if valor == "1" else "horas"
+
+    return f"{valor} {unidad}"
+
 
 def formato_ratio(ratio: float) -> str:
     """Formatea el ratio de desafíos; infinito se muestra como ∞."""

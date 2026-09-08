@@ -65,6 +65,7 @@ from modules.box.logic import (
     precio_equipamiento,
     precio_mejora,
     resolver_duracion,
+    texto_horas,
 )
 
 __all__ = [
@@ -87,6 +88,7 @@ __all__ = [
     "precio_equipamiento",
     "precio_mejora",
     "resolver_duracion",
+    "texto_horas",
     # Persistencia
     "completar_acciones_vencidas",
     "crear_desafio",

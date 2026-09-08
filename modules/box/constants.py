@@ -1,8 +1,39 @@
 """Catálogos y textos estáticos de Box.
 
 Nada de este módulo depende de la base de datos ni de discord.py: son datos
-planos que comparten los comandos y la lógica.
+planos que comparten los comandos y la lógica. Los precios se leen de la
+configuración (``config``) y sobre ellos se aplica el multiplicador global
+de la tienda ``BOX_PRECIO_MULTIPLICADOR``.
 """
+
+from config import (
+    BOX_MEJORA_ENTRENAMIENTO_EXP_POR_NIVEL,
+    BOX_MEJORA_NIVEL_MAXIMO,
+    BOX_MEJORA_TRABAJO_DINERO_POR_NIVEL,
+    BOX_MINUTOS_MAXIMO,
+    BOX_MINUTOS_MINIMO,
+    BOX_PRECIO_EQUIPAMIENTO_BOTAS,
+    BOX_PRECIO_EQUIPAMIENTO_CASCO,
+    BOX_PRECIO_EQUIPAMIENTO_GUANTES,
+    BOX_PRECIO_EQUIPAMIENTO_PROTECTOR_BUCAL,
+    BOX_PRECIO_EQUIPAMIENTO_SHORT,
+    BOX_PRECIO_MEJORA_ENTRENAMIENTO,
+    BOX_PRECIO_MEJORA_TRABAJO,
+    BOX_PRECIO_MULTIPLICADOR,
+    BOX_PRECIO_SUMINISTRO_CANSANCIO,
+    BOX_PRECIO_SUMINISTRO_DEFENSA,
+    BOX_PRECIO_SUMINISTRO_LESION,
+    BOX_PRECIO_SUMINISTRO_VIDA,
+    BOX_PRECIO_TRATAMIENTO_CINCO_ESTRELLAS,
+    BOX_PRECIO_TRATAMIENTO_FISIOTERAPEUTICO,
+)
+
+
+def _precio(precio_base: int) -> int:
+    """Aplica el multiplicador global de la tienda a un precio base."""
+
+    return max(0, round(precio_base * BOX_PRECIO_MULTIPLICADOR))
+
 
 CALIDADES = ["Basico", "Intermedio", "Avanzado", "Epico", "Legendario"]
 
@@ -13,16 +44,22 @@ MEJORAS = {
     "entrenamiento": {
         "nombre": "Creatina",
         "emoji": "🔥",
-        "descripcion": "+5 EXP por minuto de entrenamiento",
-        "precio": 1000,
-        "maximo": 10,
+        "descripcion": (
+            f"+{BOX_MEJORA_ENTRENAMIENTO_EXP_POR_NIVEL} EXP por minuto "
+            "de entrenamiento"
+        ),
+        "precio": _precio(BOX_PRECIO_MEJORA_ENTRENAMIENTO),
+        "maximo": BOX_MEJORA_NIVEL_MAXIMO,
     },
     "trabajo": {
         "nombre": "Cafe",
         "emoji": "☕",
-        "descripcion": "+5 dinero por minuto de trabajo",
-        "precio": 1000,
-        "maximo": 10,
+        "descripcion": (
+            f"+{BOX_MEJORA_TRABAJO_DINERO_POR_NIVEL} dinero por minuto "
+            "de trabajo"
+        ),
+        "precio": _precio(BOX_PRECIO_MEJORA_TRABAJO),
+        "maximo": BOX_MEJORA_NIVEL_MAXIMO,
     },
 }
 
@@ -31,13 +68,13 @@ TRATAMIENTOS = {
     "fisioterapeutico": {
         "nombre": "Tratamiento Fisioterapeutico",
         "emoji": "🧑‍⚕️",
-        "precio": 10000,
+        "precio": _precio(BOX_PRECIO_TRATAMIENTO_FISIOTERAPEUTICO),
         "reinicia_probabilidad": False,
     },
     "cinco_estrellas": {
         "nombre": "Tratamiento 5 estrellas",
         "emoji": "🏝️",
-        "precio": 50000,
+        "precio": _precio(BOX_PRECIO_TRATAMIENTO_CINCO_ESTRELLAS),
         "reinicia_probabilidad": True,
     },
 }
@@ -62,28 +99,28 @@ TIPOS_SUMINISTRO = {
     "vida": {
         "nombre": "Bebida isotónica",
         "emoji": "🥤",
-        "precio": 1500,
+        "precio": _precio(BOX_PRECIO_SUMINISTRO_VIDA),
         "objetivo": "vida",
         "efecto": "restaura tu vida al máximo.",
     },
     "cansancio": {
         "nombre": "Bebida energética",
         "emoji": "⚡",
-        "precio": 1500,
+        "precio": _precio(BOX_PRECIO_SUMINISTRO_CANSANCIO),
         "objetivo": "cansancio",
         "efecto": "restaura tu energía (cansancio) al máximo.",
     },
     "defensa": {
         "nombre": "Servicio de reparación",
         "emoji": "🔧",
-        "precio": 3000,
+        "precio": _precio(BOX_PRECIO_SUMINISTRO_DEFENSA),
         "objetivo": "defensa",
         "efecto": "repara tu defensa hasta el máximo.",
     },
     "lesion": {
         "nombre": "Botiquín completo",
         "emoji": "🩹",
-        "precio": 60000,
+        "precio": _precio(BOX_PRECIO_SUMINISTRO_LESION),
         "objetivo": "lesion",
         "efecto": "cura tu lesión activa y deja la probabilidad en 0%.",
     },
@@ -95,31 +132,31 @@ EQUIPAMIENTO = {
         "nombre": "Casco",
         "emoji": "🎩",
         "calidades": CALIDADES,
-        "precio_base": 1000,
+        "precio_base": _precio(BOX_PRECIO_EQUIPAMIENTO_CASCO),
     },
     "guantes": {
         "nombre": "Guantes",
         "emoji": "🤜",
         "calidades": CALIDADES,
-        "precio_base": 1000,
+        "precio_base": _precio(BOX_PRECIO_EQUIPAMIENTO_GUANTES),
     },
     "protector_bucal": {
         "nombre": "Protector Bucal",
         "emoji": "😁",
         "calidades": CALIDADES,
-        "precio_base": 600,
+        "precio_base": _precio(BOX_PRECIO_EQUIPAMIENTO_PROTECTOR_BUCAL),
     },
     "short": {
         "nombre": "Short",
         "emoji": "👖",
         "calidades": CALIDADES,
-        "precio_base": 600,
+        "precio_base": _precio(BOX_PRECIO_EQUIPAMIENTO_SHORT),
     },
     "botas": {
         "nombre": "Botas",
         "emoji": "👟",
         "calidades": CALIDADES,
-        "precio_base": 800,
+        "precio_base": _precio(BOX_PRECIO_EQUIPAMIENTO_BOTAS),
     },
 }
 
@@ -143,9 +180,11 @@ NOMBRES_SPONSORS = {
 }
 
 
-# Límites de duración de las acciones, en minutos.
-MINUTOS_MINIMO = 1
-MINUTOS_MAXIMO = 1440
+# Límites de duración de las acciones, en minutos. Se leen de la
+# configuración (BOX_MINUTOS_MINIMO / BOX_MINUTOS_MAXIMO) y se
+# mantienen estos nombres por compatibilidad.
+MINUTOS_MINIMO = BOX_MINUTOS_MINIMO
+MINUTOS_MAXIMO = BOX_MINUTOS_MAXIMO
 
 
 TEXTO_AYUDA = (

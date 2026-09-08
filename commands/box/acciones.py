@@ -11,10 +11,16 @@ from config import (
     BOX_CHANNEL_IDS,
     BOX_DINERO_POR_MINUTO,
     BOX_EXPERIENCIA_POR_MINUTO,
+    BOX_LESION_HORAS,
+    BOX_MEJORA_ENTRENAMIENTO_EXP_POR_NIVEL,
+    BOX_MEJORA_TRABAJO_DINERO_POR_NIVEL,
+    BOX_MINUTOS_MAXIMO,
+    BOX_MINUTOS_MINIMO,
 )
 from core.mensajes import crear_embed, responder, responder_error, seccion
 from core.utils import ahora
 from modules.box.constants import NOMBRES_ACCIONES, NOMBRES_SPONSORS
+from modules.box.logic import texto_horas
 from modules.box.services import (
     completar_acciones_vencidas,
     iniciar_accion,
@@ -31,7 +37,10 @@ MENSAJES_DURACION = {
         "⚠️ La hora debe tener el formato HH:MM, por ejemplo 18:30."
     ),
     "falta_duracion": "⚠️ Debes indicar minutos o una hora de finalización.",
-    "fuera_rango": "⚠️ La duración debe estar entre 1 y 1440 minutos.",
+    "fuera_rango": (
+        f"⚠️ La duración debe estar entre {BOX_MINUTOS_MINIMO} y "
+        f"{BOX_MINUTOS_MAXIMO} minutos."
+    ),
 }
 
 UNIDAD_RECOMPENSA = {
@@ -112,7 +121,8 @@ class AccionesMixin:
                 seccion(
                     embed,
                     "🚑 Lesión",
-                    "Se lastimó y estará lesionado durante 3 horas.",
+                    "Se lastimó y estará lesionado durante "
+                    f"{texto_horas(BOX_LESION_HORAS)}.",
                 )
             await canal.send(embed=embed)
 
@@ -288,7 +298,7 @@ class AccionesMixin:
         description="Entrena durante un tiempo para obtener experiencia.",
     )
     @app_commands.describe(
-        minutos="Cantidad de minutos de entrenamiento (1-1440).",
+        minutos=f"Cantidad de minutos de entrenamiento ({BOX_MINUTOS_MINIMO}-{BOX_MINUTOS_MAXIMO}).",
         hasta="Hora a la que quieres terminar, formato HH:MM.",
     )
     async def entrenar(
@@ -311,7 +321,8 @@ class AccionesMixin:
             interaction,
             minutos,
             "ENTRENANDO",
-            BOX_EXPERIENCIA_POR_MINUTO + nivel * 5,
+            BOX_EXPERIENCIA_POR_MINUTO
+            + nivel * BOX_MEJORA_ENTRENAMIENTO_EXP_POR_NIVEL,
             hasta,
         )
 
@@ -320,7 +331,7 @@ class AccionesMixin:
         description="Trabaja durante un tiempo para obtener dinero.",
     )
     @app_commands.describe(
-        minutos="Cantidad de minutos de trabajo (1-1440).",
+        minutos=f"Cantidad de minutos de trabajo ({BOX_MINUTOS_MINIMO}-{BOX_MINUTOS_MAXIMO}).",
         hasta="Hora a la que quieres terminar, formato HH:MM.",
     )
     async def trabajar(
@@ -343,7 +354,8 @@ class AccionesMixin:
             interaction,
             minutos,
             "TRABAJANDO",
-            BOX_DINERO_POR_MINUTO + nivel * 50,
+            BOX_DINERO_POR_MINUTO
+            + nivel * BOX_MEJORA_TRABAJO_DINERO_POR_NIVEL,
             hasta,
         )
 
@@ -355,7 +367,7 @@ class AccionesMixin:
         ),
     )
     @app_commands.describe(
-        minutos="Cantidad de minutos que quieres promocionarte (1-1440).",
+        minutos=f"Cantidad de minutos que quieres promocionarte ({BOX_MINUTOS_MINIMO}-{BOX_MINUTOS_MAXIMO}).",
         hasta="Hora a la que quieres terminar, formato HH:MM.",
     )
     async def promoverme(
