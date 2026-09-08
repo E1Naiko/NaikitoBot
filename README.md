@@ -48,6 +48,9 @@ SSF_FECHA_INICIO=YYYY-MM-DD
 SSF_FECHA_FIN=YYYY-MM-DD
 BOX_EXPERIENCIA_POR_MINUTO=10
 BOX_DINERO_POR_MINUTO=100
+BOX_PRECIO_MULTIPLICADOR=1.0
+BOX_LESION_HORAS=3
+BOX_DESAFIO_DURACION_HORAS=1
 MADRUGUE_INICIO_100=05:30
 MADRUGUE_INICIO_25=07:00
 MADRUGUE_INICIO_5=09:00
@@ -58,6 +61,9 @@ MADRUGUE_PUNTOS_5=5
 MADRUGUE_BONUS_MAXIMO=0.100
 MADRUGUE_BONUS_MINIMO=0.001
 ```
+
+El archivo `.env.example` documenta todas las variables disponibles, incluidas
+las de balance de Box (precios de la tienda, lesiones, desafíos y sponsors).
 
 En el proveedor de despliegue, configura estas mismas variables como variables
 de entorno. No es necesario subir el archivo `.env`; el bot también funciona
@@ -248,39 +254,57 @@ Los comandos de Box solo pueden usarse en los canales incluidos en
 `BOX_CHANNEL_ID`, salvo que el usuario esté en `ADMIN_USER_IDS`. Los botones
 de la tienda y los de aceptar desafíos siguen la misma restricción.
 
-La duración debe estar entre 1 y 1440 minutos. Mientras una acción está activa,
-el usuario no puede iniciar otra acción de Box. Las recompensas se calculan con
+La duración debe estar entre `BOX_MINUTOS_MINIMO` y `BOX_MINUTOS_MAXIMO`
+minutos (1 y 1440 por defecto). Mientras una acción está activa, el usuario no
+puede iniciar otra acción de Box. Las recompensas se calculan con
 `BOX_EXPERIENCIA_POR_MINUTO` y `BOX_DINERO_POR_MINUTO`; ambas acciones se guardan
 en la base de datos y continúan contando aunque el bot se reinicie.
 
-El contrincante debe aceptar el desafío dentro de una hora. Al aceptarlo,
-ambos usuarios quedan en modo `SPARRING` durante una hora y reciben experiencia
-equivalente a cinco veces la recompensa de entrenamiento de ese mismo tiempo.
+El contrincante debe aceptar el desafío dentro de `BOX_DESAFIO_DURACION_HORAS`
+(una hora por defecto). Al aceptarlo, ambos usuarios quedan en modo `SPARRING`
+durante ese mismo tiempo y reciben experiencia equivalente a
+`BOX_DESAFIO_EXP_SPARRING` veces (5 por defecto) la recompensa de entrenamiento
+de ese mismo tiempo.
 
 `/box desafio` funciona de forma similar, pero inicia el modo `FIGHTING` y
-otorga experiencia equivalente a diez veces la recompensa de entrenamiento de
-una hora. El ganador se decide al aceptar mediante una probabilidad ponderada
+otorga experiencia equivalente a `BOX_DESAFIO_EXP_PELEA` veces (10 por defecto)
+la recompensa de entrenamiento de una hora. El ganador se decide al aceptar mediante una probabilidad ponderada
 por la experiencia acumulada de ambos usuarios; si uno tiene el doble de
 experiencia, tiene el doble de probabilidad. El ganador recibe como dinero la
 suma de la experiencia acumulada de ambos contrincantes.
 
-La tienda incluye estas mejoras, con un máximo de nivel 10. El primer nivel
-cuesta 1000 y cada compra posterior aumenta el precio un 25% compuesto,
-redondeando hacia arriba:
+La tienda incluye estas mejoras, con un máximo de `BOX_MEJORA_NIVEL_MAXIMO`
+nivel (10 por defecto). El primer nivel cuesta `BOX_PRECIO_MEJORA_ENTRENAMIENTO`
+y `BOX_PRECIO_MEJORA_TRABAJO` (1000 por defecto) y cada compra posterior
+aumenta el precio un `BOX_PRECIO_MEJORA_CRECIMIENTO` compuesto (+25% por
+defecto), redondeando hacia arriba:
 
-- `Creatina`: suma 5 EXP por minuto de entrenamiento.
-- `Cafe`: suma 50 de dinero por minuto de trabajo.
+- `Creatina`: suma `BOX_MEJORA_ENTRENAMIENTO_EXP_POR_NIVEL` EXP por minuto de
+  entrenamiento (5 por defecto).
+- `Cafe`: suma `BOX_MEJORA_TRABAJO_DINERO_POR_NIVEL` de dinero por minuto de
+  trabajo (50 por defecto).
 
-Cada hora de una acción aumenta la probabilidad de lesión en 1%. Al finalizar,
-se realiza un sorteo con esa probabilidad. Si el usuario se lesiona, queda en
-estado `LESIONADO` durante 24 horas y no puede iniciar acciones ni desafíos.
-Mientras esté sin ninguna acción en curso (esté o no lesionado), su
-probabilidad baja **0.01 puntos porcentuales por hora**: el bot reduce ese
-monto una vez por hora para los usuarios inactivos, sin pasar de 0%.
-`/box descanso` reinicia la probabilidad a 0%, pero no cura una lesión activa.
-El `Tratamiento Fisioterapeutico` cuesta 10000, quita la lesión y conserva la
-probabilidad acumulada. El `Tratamiento 5 estrellas` cuesta 50000, quita la
-lesión y reinicia también la probabilidad a 0%.
+Cada hora de una acción aumenta la probabilidad de lesión en
+`BOX_LESION_PROBABILIDAD_POR_HORA` puntos (1% por defecto), con un techo de
+`BOX_LESION_PROBABILIDAD_MAXIMA` (100% por defecto). Al finalizar, se realiza
+un sorteo con esa probabilidad. Si el usuario se lesiona, queda en estado
+`LESIONADO` durante `BOX_LESION_HORAS` horas (3 por defecto) y no puede iniciar
+acciones ni desafíos. Mientras esté sin ninguna acción en curso (esté o no
+lesionado), su probabilidad baja
+`BOX_LESION_DECAIMIENTO_POR_HORA` puntos porcentuales por hora (0.01 por
+defecto): el bot reduce ese monto una vez por hora para los usuarios inactivos,
+sin pasar de 0%. `/box descanso` reinicia la probabilidad a 0%, pero no cura
+una lesión activa. El `Tratamiento Fisioterapeutico` cuesta
+`BOX_PRECIO_TRATAMIENTO_FISIOTERAPEUTICO` (10000 por defecto), quita la lesión
+y conserva la probabilidad acumulada. El `Tratamiento 5 estrellas` cuesta
+`BOX_PRECIO_TRATAMIENTO_CINCO_ESTRELLAS` (50000 por defecto), quita la lesión
+y reinicia también la probabilidad a 0%.
+
+Además, `BOX_PRECIO_MULTIPLICADOR` multiplica el precio de todos los artículos
+de la tienda (mejoras, tratamientos, suministros y equipamiento; 1.0 por
+defecto), y el precio de cada pieza de equipamiento se multiplica por
+`BOX_PRECIO_EQUIPAMIENTO_CRECIMIENTO` en cada calidad (se duplica por
+defecto).
 
 ### Suministros de recuperación
 
@@ -327,8 +351,10 @@ funcionando en mensajes de tienda anteriores a un reinicio del bot.
 quienes prefieran escribir el comando. `/box comprar tipo=suministro` orienta
 al `/box suministro`, porque el artículo genérico necesita elegir el tipo.
 
-El precio del siguiente nivel se calcula como `ceil(1000 x 1.25^nivel_actual)`.
-Por ejemplo: nivel 0 cuesta 1000, nivel 1 cuesta 1250 y nivel 2 cuesta 1563.
+El precio del siguiente nivel se calcula como
+`ceil(precio_base x BOX_PRECIO_MEJORA_CRECIMIENTO^nivel_actual)`, con el
+precio base ya multiplicado por `BOX_PRECIO_MULTIPLICADOR`. Con los valores
+por defecto: nivel 0 cuesta 1000, nivel 1 cuesta 1250 y nivel 2 cuesta 1563.
 
 `/box topdesafios` muestra cada participante como `ganadas/perdidas` y calcula
 el ratio de victorias divididas por derrotas. Un usuario sin derrotas aparece

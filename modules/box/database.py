@@ -3,46 +3,54 @@ import math
 import random
 import sqlite3
 
+from config import (
+    BOX_CANSANCIO_INICIAL,
+    BOX_DANO_INICIAL,
+    BOX_DANO_MAXIMO,
+    BOX_DEFENSA_INICIAL,
+    BOX_DEFENSA_MAXIMO,
+    BOX_DESAFIO_DURACION_HORAS,
+    BOX_DESAFIO_EXP_SPARRING,
+    BOX_LESION_DECAIMIENTO_POR_HORA,
+    BOX_LESION_HORAS,
+    BOX_LESION_PROBABILIDAD_MAXIMA,
+    BOX_LESION_PROBABILIDAD_POR_HORA,
+    BOX_MEDICO_CICLO_HORAS,
+    BOX_MEDICO_REDUCCION,
+    BOX_PROMOCION_PROBABILIDAD,
+    BOX_SPONSOR_CICLO_PAGO_HORAS,
+    BOX_SPONSOR_DURACION_DIAS,
+    BOX_SPONSOR_EQUIPAMIENTO_BONUS,
+    BOX_SPONSOR_MAXIMO,
+    BOX_SPONSOR_PAGO,
+    BOX_SPONSOR_PROBABILIDAD,
+    BOX_VIDA_INICIAL,
+)
+
 from core.database import conectar_db
+from modules.box.logic import precio_mejora
 
 
 # ============================================================
 # CONFIGURACIÓN DE SPONSORS
 # ============================================================
+#
+# Los valores se leen del .env (variables BOX_SPONSOR_*) y se validan
+# al arrancar en config/settings.py. Acá solo se adaptan al formato
+# que usa el resto del módulo.
 
-PROBABILIDAD_PROMOCION = {
-    1: 5.0,
-    2: 10.0,
-    4: 20.0,
-    8: 40.0,
-    12: 60.0,
-    16: 80.0,
-    24: 100.0,
-}
+PROBABILIDAD_PROMOCION = BOX_PROMOCION_PROBABILIDAD
 
-PROBABILIDAD_SPONSORS = {
-    "redes": 50,
-    "radio": 30,
-    "equipamiento": 15,
-    "medico": 5,
-}
+PROBABILIDAD_SPONSORS = BOX_SPONSOR_PROBABILIDAD
 
 DURACION_SPONSOR = {
-    "redes": timedelta(days=7),
-    "radio": timedelta(days=7),
-    "equipamiento": timedelta(days=14),
-    "medico": timedelta(days=30),
+    tipo: timedelta(days=dias)
+    for tipo, dias in BOX_SPONSOR_DURACION_DIAS.items()
 }
 
-PAGO_SPONSOR = {
-    "redes": 500,
-    "radio": 1000,
-}
+PAGO_SPONSOR = BOX_SPONSOR_PAGO
 
-MAX_SPONSORS = {
-    "redes": 10,
-    "radio": 10,
-}
+MAX_SPONSORS = BOX_SPONSOR_MAXIMO
 
 
 def inicializar_db():
@@ -148,18 +156,18 @@ def inicializar_db():
             """
         )
         db.execute(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS box_equipo (
                 guild_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
-                vida INTEGER NOT NULL DEFAULT 32,
-                vida_maxima INTEGER NOT NULL DEFAULT 32,
-                dano INTEGER NOT NULL DEFAULT 1,
-                dano_maximo INTEGER NOT NULL DEFAULT 25,
-                defensa INTEGER NOT NULL DEFAULT 1,
-                defensa_maxima INTEGER NOT NULL DEFAULT 22,
-                cansancio INTEGER NOT NULL DEFAULT 25,
-                cansancio_maximo INTEGER NOT NULL DEFAULT 25,
+                vida INTEGER NOT NULL DEFAULT {BOX_VIDA_INICIAL},
+                vida_maxima INTEGER NOT NULL DEFAULT {BOX_VIDA_INICIAL},
+                dano INTEGER NOT NULL DEFAULT {BOX_DANO_INICIAL},
+                dano_maximo INTEGER NOT NULL DEFAULT {BOX_DANO_MAXIMO},
+                defensa INTEGER NOT NULL DEFAULT {BOX_DEFENSA_INICIAL},
+                defensa_maxima INTEGER NOT NULL DEFAULT {BOX_DEFENSA_MAXIMO},
+                cansancio INTEGER NOT NULL DEFAULT {BOX_CANSANCIO_INICIAL},
+                cansancio_maximo INTEGER NOT NULL DEFAULT {BOX_CANSANCIO_INICIAL},
                 puntos_habilidad INTEGER NOT NULL DEFAULT 0,
                 casco INTEGER NOT NULL DEFAULT 0,
                 guantes INTEGER NOT NULL DEFAULT 0,
@@ -168,8 +176,8 @@ def inicializar_db():
                 botas INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (guild_id, user_id)
             )
-            """
-        )
+            """)
+
         # Migrar columnas de texto a enteros si es necesario
         columnas_equipo = {
             columna[1]
@@ -717,7 +725,7 @@ def comprar_mejora(
         ).fetchone()
 
         nivel = fila[0] if fila else 0
-        precio = math.ceil(precio_base * 1.25 ** nivel)
+        precio = precio_mejora(precio_base, nivel)
 
         if nivel >= nivel_maximo:
             db.rollback()
@@ -758,14 +766,20 @@ def comprar_mejora(
 # ============================================================
 
 def _probabilidad_promocion(minutos: float) -> float:
-    """Calcula la probabilidad de conseguir sponsor según el tiempo."""
+    """Calcula la probabilidad de conseguir sponsor según el tiempo.
+
+    Usa la curva configurada en ``BOX_PROMOCION_PROBABILIDAD``
+    (puntos 'horas=porcentaje' interpolados linealmente); por debajo
+    del primer punto vale el primero, y por encima del último, el
+    último.
+    """
 
     horas = minutos / 60
 
-    if horas <= 1:
-        return 5.0
+    puntos = PROBABILIDAD_PROMOCION
 
-    puntos = sorted(PROBABILIDAD_PROMOCION.items())
+    if horas <= puntos[0][0]:
+        return puntos[0][1]
 
     if horas >= puntos[-1][0]:
         return puntos[-1][1]
@@ -780,7 +794,7 @@ def _probabilidad_promocion(minutos: float) -> float:
                 (prob_b - prob_a) * proporcion
             )
 
-    return 5.0
+    return puntos[-1][1]
 
 
 def _sortear_sponsor():
@@ -1129,7 +1143,9 @@ def procesar_sponsors_medicos(ahora: datetime):
                 probabilidad = float(fila[0])
 
             for _ in range(tratamientos_pendientes):
-                probabilidad *= 0.5
+                probabilidad *= (
+                    1 - BOX_MEDICO_REDUCCION / 100
+                )
 
             db.execute(
                 """
@@ -1339,7 +1355,7 @@ def _liquidar_accion(db, fila, ahora: datetime):
     if bonus_exp:
         recompensa_final = math.floor(
             recompensa
-            * (1 + (bonus_exp * 0.10))
+            * (1 + (bonus_exp * BOX_SPONSOR_EQUIPAMIENTO_BONUS / 100))
         )
 
     db.execute(
@@ -1740,7 +1756,7 @@ def aceptar_desafio(
                 ),
             )
 
-        finaliza_en = ahora + timedelta(hours=1)
+        finaliza_en = ahora + timedelta(hours=BOX_DESAFIO_DURACION_HORAS)
 
         for user_id in (
             retador_id,
@@ -2349,7 +2365,7 @@ def admin_modificar_probabilidad_lesion(
 ):
     """Establece manualmente la probabilidad de lesión."""
 
-    if not 0 <= probabilidad <= 100:
+    if not 0 <= probabilidad <= BOX_LESION_PROBABILIDAD_MAXIMA:
         return False, None
 
     with conectar_db() as db:

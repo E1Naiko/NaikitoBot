@@ -6,10 +6,18 @@ import discord
 from discord import app_commands
 
 from commands.box.base import solo_servidor
-from config import BOX_CHANNEL_IDS, BOX_EXPERIENCIA_POR_MINUTO
+from config import (
+    BOX_CHANNEL_IDS,
+    BOX_DESAFIO_DURACION_HORAS,
+    BOX_DESAFIO_EXP_PELEA,
+    BOX_DESAFIO_EXP_SPARRING,
+    BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
+    BOX_EXPERIENCIA_POR_MINUTO,
+)
 from core.mensajes import crear_embed, responder, responder_error, seccion
 from core.permissions import es_admin
 from core.utils import ahora
+from modules.box.logic import texto_horas
 from modules.box.services import (
     aceptar_desafio,
     crear_desafio,
@@ -17,7 +25,7 @@ from modules.box.services import (
     obtener_estado_box,
 )
 
-DURACION_DESAFIO = timedelta(hours=1)
+DURACION_DESAFIO = timedelta(hours=BOX_DESAFIO_DURACION_HORAS)
 
 MENSAJES_DESAFIO_NO_DISPONIBLE = {
     "expirado": "⌛ El desafío ya expiró.",
@@ -36,7 +44,7 @@ class ChallengeView(discord.ui.View):
         contrincante_id: int,
         tipo: str,
     ):
-        super().__init__(timeout=3600)
+        super().__init__(timeout=int(BOX_DESAFIO_DURACION_HORAS * 3600))
         self.box = box
         self.desafio_id = desafio_id
         self.contrincante_id = contrincante_id
@@ -83,7 +91,8 @@ class ChallengeView(discord.ui.View):
             nombre = self.tipo.lower()
             embed = crear_embed(
                 "🥊 ¡Desafío aceptado!",
-                f"Ambos competirán durante 1 hora.",
+                "Ambos competirán durante "
+                f"{texto_horas(BOX_DESAFIO_DURACION_HORAS)}.",
                 color_area="box",
             )
             seccion(embed, "Modalidad", f"**{nombre}**")
@@ -139,10 +148,17 @@ class DesafiosMixin:
             guild_id=interaction.guild.id,
             contrincante_id=contrincante_id,
             ahora=ahora(),
-            recompensa=60 * BOX_EXPERIENCIA_POR_MINUTO,
+            recompensa=(
+                int(BOX_DESAFIO_DURACION_HORAS * 60)
+                * BOX_EXPERIENCIA_POR_MINUTO
+            ),
             tipo=tipo,
-            multiplicador_experiencia=10 if tipo == "FIGHTING" else 5,
-            recompensa_por_mejora=5,
+            multiplicador_experiencia=(
+                BOX_DESAFIO_EXP_PELEA
+                if tipo == "FIGHTING"
+                else BOX_DESAFIO_EXP_SPARRING
+            ),
+            recompensa_por_mejora=BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
         )
 
     async def _crear_desafio(
@@ -206,13 +222,20 @@ class DesafiosMixin:
             color_area="box",
         )
         seccion(embed, "Modalidad", f"**{tipo.lower()}**")
-        seccion(embed, "Tiempo", "Tienes **1 hora** para aceptar.")
+        seccion(
+            embed,
+            "Tiempo",
+            f"Tienes **{texto_horas(BOX_DESAFIO_DURACION_HORAS)}** para aceptar.",
+        )
         await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()
 
     @app_commands.command(
         name="sparring",
-        description="Desafía a otro usuario a un sparring de una hora.",
+        description=(
+            "Desafía a otro usuario a un sparring de "
+            f"{texto_horas(BOX_DESAFIO_DURACION_HORAS)}."
+        ),
     )
     @app_commands.describe(contrincante="Usuario al que quieres desafiar.")
     async def sparring(
@@ -224,7 +247,10 @@ class DesafiosMixin:
 
     @app_commands.command(
         name="desafio",
-        description="Desafía a otro usuario a una pelea de una hora.",
+        description=(
+            "Desafía a otro usuario a una pelea de "
+            f"{texto_horas(BOX_DESAFIO_DURACION_HORAS)}."
+        ),
     )
     @app_commands.describe(contrincante="Usuario al que quieres desafiar.")
     async def desafio(
