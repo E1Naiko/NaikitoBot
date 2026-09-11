@@ -42,6 +42,7 @@ ENTORNO_ALTERNATIVO = {
     "BOX_LESION_PROBABILIDAD_POR_HORA": "2.0",
     "BOX_LESION_PROBABILIDAD_MAXIMA": "80",
     "BOX_LESION_DECAIMIENTO_POR_HORA": "0.5",
+    "BOX_DESAFIO_VENTANA_HORAS": "0.5",
     "BOX_DESAFIO_DURACION_HORAS": "1.5",
     "BOX_DESAFIO_EXP_SPARRING": "8",
     "BOX_DESAFIO_EXP_PELEA": "12",
@@ -93,6 +94,7 @@ ENTORNO_POR_DEFECTO = {
     "BOX_LESION_PROBABILIDAD_POR_HORA": "1.0",
     "BOX_LESION_PROBABILIDAD_MAXIMA": "100",
     "BOX_LESION_DECAIMIENTO_POR_HORA": "0.01",
+    "BOX_DESAFIO_VENTANA_HORAS": "1",
     "BOX_DESAFIO_DURACION_HORAS": "1",
     "BOX_DESAFIO_EXP_SPARRING": "5",
     "BOX_DESAFIO_EXP_PELEA": "10",
@@ -177,6 +179,11 @@ print(json.dumps({
         config.BOX_DESAFIO_EXP_PELEA,
         config.BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
     ],
+    "ventana_desafio": config.BOX_DESAFIO_VENTANA_HORAS,
+    "texto_ventana": texto_horas(config.BOX_DESAFIO_VENTANA_HORAS),
+    "ventana_desafio_segundos": (
+        config.BOX_DESAFIO_VENTANA_HORAS * 3600
+    ),
     "texto_desafio": texto_horas(config.BOX_DESAFIO_DURACION_HORAS),
     "duracion_desafio_segundos": (
         config.BOX_DESAFIO_DURACION_HORAS * 3600
@@ -276,6 +283,9 @@ def test_el_env_cambia_lesiones_desafios_y_sponsors():
     assert datos["texto_lesion"] == "2.5 horas"
 
     assert datos["desafio"] == [1.5, 8, 12, 9]
+    assert datos["ventana_desafio"] == 0.5
+    assert datos["texto_ventana"] == "0.5 horas"
+    assert datos["ventana_desafio_segundos"] == 1800
     assert datos["texto_desafio"] == "1.5 horas"
     assert datos["duracion_desafio_segundos"] == 5400
 
@@ -366,6 +376,9 @@ def test_valores_por_defecto_mantienen_el_balance_historico():
     assert datos["texto_lesion"] == "3 horas"
 
     assert datos["desafio"] == [1.0, 5, 10, 5]
+    assert datos["ventana_desafio"] == 1.0
+    assert datos["texto_ventana"] == "1 hora"
+    assert datos["ventana_desafio_segundos"] == 3600
     assert datos["texto_desafio"] == "1 hora"
     assert datos["duracion_desafio_segundos"] == 3600
 
@@ -431,6 +444,7 @@ def test_valores_por_defecto_mantienen_el_balance_historico():
         ("BOX_LESION_PROBABILIDAD_MAXIMA", "-1"),
         ("BOX_LESION_DECAIMIENTO_POR_HORA", "-0.01"),
         # Desafíos.
+        ("BOX_DESAFIO_VENTANA_HORAS", "0"),
         ("BOX_DESAFIO_DURACION_HORAS", "0"),
         ("BOX_DESAFIO_EXP_SPARRING", "-5"),
         ("BOX_DESAFIO_RECOMPENSA_POR_MEJORA", "cinco"),

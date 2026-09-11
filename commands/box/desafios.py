@@ -9,6 +9,7 @@ from commands.box.base import solo_servidor
 from config import (
     BOX_CHANNEL_IDS,
     BOX_DESAFIO_DURACION_HORAS,
+    BOX_DESAFIO_VENTANA_HORAS,
     BOX_DESAFIO_EXP_PELEA,
     BOX_DESAFIO_EXP_SPARRING,
     BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
@@ -26,6 +27,7 @@ from modules.box.services import (
     preparar_bot_para_desafio,
 )
 
+VENTANA_DESAFIO = timedelta(hours=BOX_DESAFIO_VENTANA_HORAS)
 DURACION_DESAFIO = timedelta(hours=BOX_DESAFIO_DURACION_HORAS)
 
 MENSAJES_DESAFIO_NO_DISPONIBLE = {
@@ -45,7 +47,7 @@ class ChallengeView(discord.ui.View):
         contrincante_id: int,
         tipo: str,
     ):
-        super().__init__(timeout=int(BOX_DESAFIO_DURACION_HORAS * 3600))
+        super().__init__(timeout=int(BOX_DESAFIO_VENTANA_HORAS * 3600))
         self.box = box
         self.desafio_id = desafio_id
         self.contrincante_id = contrincante_id
@@ -244,7 +246,7 @@ class DesafiosMixin:
                 retador_id=interaction.user.id,
                 contrincante_id=contrincante.id,
                 ahora=inicio,
-                expira_en=inicio + DURACION_DESAFIO,
+                expira_en=inicio + VENTANA_DESAFIO,
             )
             if desafio_id is None:
                 await responder_error(
@@ -321,7 +323,7 @@ class DesafiosMixin:
             retador_id=interaction.user.id,
             contrincante_id=contrincante.id,
             ahora=inicio,
-            expira_en=inicio + DURACION_DESAFIO,
+            expira_en=inicio + VENTANA_DESAFIO,
         )
         if desafio_id is None:
             await responder_error(
@@ -342,7 +344,7 @@ class DesafiosMixin:
         seccion(
             embed,
             "Tiempo",
-            f"Tienes **{texto_horas(BOX_DESAFIO_DURACION_HORAS)}** para aceptar.",
+            f"Tienes **{texto_horas(BOX_DESAFIO_VENTANA_HORAS)}** para aceptar.",
         )
         await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()
