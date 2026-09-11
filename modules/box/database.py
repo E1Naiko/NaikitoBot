@@ -1893,6 +1893,253 @@ def obtener_top_desafios(
         reverse=True,
     )[:limite]
 
+
+# ============================================================
+# BOT COMO CONTRINCANTE
+# ============================================================
+
+def preparar_bot_para_desafio(
+    guild_id: int,
+    bot_id: int,
+) -> dict:
+    """Randomiza los stats del bot entre los extremos del servidor.
+
+    Para cada stat de ``box_equipo`` se busca el mínimo y máximo
+    entre todos los jugadores del servidor (excluyendo al propio
+    bot) y se elige un valor aleatorio inclusivo entre ellos. Si
+    el servidor no tiene jugadores, se usan los valores iniciales
+    de ``config``. También randomiza experiencia y niveles de
+    mejora entre los mismos extremos.
+
+    Además limpia cualquier acción/lesión/desafío pendiente del bot
+    para que siempre pueda aceptar.
+
+    Devuelve un diccionario con los valores generados y los rangos
+    usados, útil para mostrar en el embed de aceptación.
+    """
+
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        # Asegurar filas del bot
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, bot_id),
+        )
+        db.execute(
+            """
+            INSERT INTO box_equipo (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, bot_id),
+        )
+
+        # Bot siempre disponible: limpiar acción, lesión y desafíos viejos
+        db.execute(
+            "DELETE FROM box_acciones WHERE guild_id = ? AND user_id = ?",
+            (guild_id, bot_id),
+        )
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET lesionado_hasta = NULL, probabilidad_lesion = 0
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, bot_id),
+        )
+        db.execute(
+            """
+            DELETE FROM box_desafios
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, bot_id, bot_id),
+        )
+
+        # ---------- RANGOS DE EQUIPO ----------
+        columnas_equipo = [
+            "vida",
+            "vida_maxima",
+            "dano",
+            "dano_maximo",
+            "defensa",
+            "defensa_maxima",
+            "cansancio",
+            "cansancio_maximo",
+            "puntos_habilidad",
+            "casco",
+            "guantes",
+            "protector_bucal",
+            "short",
+            "botas",
+        ]
+
+        filas = db.execute(
+            f"""
+            SELECT {", ".join(columnas_equipo)}
+            FROM box_equipo
+            WHERE guild_id = ? AND user_id != ?
+            """,
+            (guild_id, bot_id),
+        ).fetchall()
+
+        rangos_equipo: dict[str, tuple[int, int]] = {}
+        valores: dict[str, int] = {}
+
+        if not filas:
+            # Sin jugadores: usar valores iniciales (determinístico)
+            valores = {
+                "vida": BOX_VIDA_INICIAL,
+                "vida_maxima": BOX_VIDA_INICIAL,
+                "dano": BOX_DANO_INICIAL,
+                "dano_maximo": BOX_DANO_MAXIMO,
+                "defensa": BOX_DEFENSA_INICIAL,
+                "defensa_maxima": BOX_DEFENSA_MAXIMO,
+                "cansancio": BOX_CANSANCIO_INICIAL,
+                "cansancio_maximo": BOX_CANSANCIO_INICIAL,
+                "puntos_habilidad": 0,
+                "casco": 0,
+                "guantes": 0,
+                "protector_bucal": 0,
+                "short": 0,
+                "botas": 0,
+            }
+            for col in columnas_equipo:
+                rangos_equipo[col] = (valores[col], valores[col])
+        else:
+            # Calcular min/max por columna entre todos los jugadores
+            for idx, col in enumerate(columnas_equipo):
+                col_vals = [fila[idx] for fila in filas]
+                mn = min(col_vals)
+                mx = max(col_vals)
+                if mn > mx:
+                    mn, mx = mx, mn
+                rangos_equipo[col] = (mn, mx)
+                valores[col] = random.randint(mn, mx)
+
+            # Consistencia: vida/cansancio/defensa/dano no pueden superar su máximo
+            if valores["vida"] > valores["vida_maxima"]:
+                valores["vida"] = valores["vida_maxima"]
+            if valores["cansancio"] > valores["cansancio_maximo"]:
+                valores["cansancio"] = valores["cansancio_maximo"]
+            if valores["defensa"] > valores["defensa_maxima"]:
+                valores["defensa"] = valores["defensa_maxima"]
+            if valores["dano"] > valores["dano_maximo"]:
+                valores["dano"] = valores["dano_maximo"]
+
+        db.execute(
+            """
+            UPDATE box_equipo
+            SET vida = ?, vida_maxima = ?, dano = ?, dano_maximo = ?,
+                defensa = ?, defensa_maxima = ?, cansancio = ?, cansancio_maximo = ?,
+                puntos_habilidad = ?, casco = ?, guantes = ?, protector_bucal = ?, short = ?, botas = ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (
+                valores["vida"],
+                valores["vida_maxima"],
+                valores["dano"],
+                valores["dano_maximo"],
+                valores["defensa"],
+                valores["defensa_maxima"],
+                valores["cansancio"],
+                valores["cansancio_maximo"],
+                valores["puntos_habilidad"],
+                valores["casco"],
+                valores["guantes"],
+                valores["protector_bucal"],
+                valores["short"],
+                valores["botas"],
+                guild_id,
+                bot_id,
+            ),
+        )
+
+        # ---------- RANGO DE EXPERIENCIA ----------
+        exps = db.execute(
+            """
+            SELECT COALESCE(experiencia, 0)
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id != ?
+            """,
+            (guild_id, bot_id),
+        ).fetchall()
+
+        if exps:
+            vals_exp = [r[0] for r in exps]
+            min_exp = min(vals_exp)
+            max_exp = max(vals_exp)
+            bot_exp = random.randint(min_exp, max_exp)
+            rango_exp = (min_exp, max_exp)
+        else:
+            bot_exp = 0
+            rango_exp = (0, 0)
+
+        db.execute(
+            "UPDATE box_usuarios SET experiencia = ? WHERE guild_id = ? AND user_id = ?",
+            (bot_exp, guild_id, bot_id),
+        )
+
+        # ---------- RANGO DE MEJORAS ----------
+        filas_mejoras = db.execute(
+            """
+            SELECT mejora, nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id != ?
+            """,
+            (guild_id, bot_id),
+        ).fetchall()
+
+        from collections import defaultdict
+
+        grupos: dict[str, list[int]] = defaultdict(list)
+        for mejora, nivel in filas_mejoras:
+            grupos[mejora].append(nivel)
+
+        rangos_mejoras: dict[str, tuple[int, int]] = {}
+        niveles_bot: dict[str, int] = {}
+
+        for mejora_tipo in ("entrenamiento", "trabajo"):
+            niveles = grupos.get(mejora_tipo, [])
+            if niveles:
+                mn = min(niveles)
+                mx = max(niveles)
+                rangos_mejoras[mejora_tipo] = (mn, mx)
+                niveles_bot[mejora_tipo] = random.randint(mn, mx)
+            else:
+                rangos_mejoras[mejora_tipo] = (0, 0)
+                niveles_bot[mejora_tipo] = 0
+
+            db.execute(
+                "DELETE FROM box_mejoras WHERE guild_id = ? AND user_id = ? AND mejora = ?",
+                (guild_id, bot_id, mejora_tipo),
+            )
+            if niveles_bot[mejora_tipo] > 0:
+                db.execute(
+                    """
+                    INSERT INTO box_mejoras (guild_id, user_id, mejora, nivel)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (guild_id, bot_id, mejora_tipo, niveles_bot[mejora_tipo]),
+                )
+
+        db.commit()
+
+        return {
+            "valores": valores,
+            "rangos_equipo": rangos_equipo,
+            "experiencia": bot_exp,
+            "rango_experiencia": rango_exp,
+            "niveles_mejora": niveles_bot,
+            "rangos_mejora": rangos_mejoras,
+        }
+
+
 def obtener_equipo(guild_id: int, user_id: int):
     """Devuelve el equipo del usuario, inicializando si es necesario."""
 

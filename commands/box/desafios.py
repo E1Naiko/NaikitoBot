@@ -9,6 +9,7 @@ from commands.box.base import solo_servidor
 from config import (
     BOX_CHANNEL_IDS,
     BOX_DESAFIO_DURACION_HORAS,
+    BOX_DESAFIO_VENTANA_HORAS,
     BOX_DESAFIO_EXP_PELEA,
     BOX_DESAFIO_EXP_SPARRING,
     BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
@@ -23,8 +24,10 @@ from modules.box.services import (
     crear_desafio,
     obtener_accion_activa,
     obtener_estado_box,
+    preparar_bot_para_desafio,
 )
 
+VENTANA_DESAFIO = timedelta(hours=BOX_DESAFIO_VENTANA_HORAS)
 DURACION_DESAFIO = timedelta(hours=BOX_DESAFIO_DURACION_HORAS)
 
 MENSAJES_DESAFIO_NO_DISPONIBLE = {
@@ -44,7 +47,7 @@ class ChallengeView(discord.ui.View):
         contrincante_id: int,
         tipo: str,
     ):
-        super().__init__(timeout=int(BOX_DESAFIO_DURACION_HORAS * 3600))
+        super().__init__(timeout=int(BOX_DESAFIO_VENTANA_HORAS * 3600))
         self.box = box
         self.desafio_id = desafio_id
         self.contrincante_id = contrincante_id
@@ -198,13 +201,129 @@ class DesafiosMixin:
             )
             return
 
+        # ------------------------------------------------------------
+        # CASO ESPECIAL: desafiar al bot -> auto-acepta con stats random
+        # ------------------------------------------------------------
+        es_bot = getattr(contrincante, "bot", False)
+        if not es_bot and self.bot.user is not None:
+            es_bot = contrincante.id == self.bot.user.id
+
+        if es_bot:
+            inicio = ahora()
+
+            # Randomiza stats del bot entre los extremos del servidor
+            # (min por stat = jugador más bajo, max = jugador más alto)
+            info_bot = preparar_bot_para_desafio(
+                interaction.guild.id,
+                contrincante.id,
+            )
+
+            # Asegurar que no quede un desafío pendiente duplicado previo
+            # (preparar_bot ya limpia, pero reforzamos para el par exacto)
+            try:
+                from core.database import conectar_db
+
+                with conectar_db() as _db:
+                    _db.execute(
+                        """
+                        DELETE FROM box_desafios
+                        WHERE guild_id = ?
+                        AND retador_id = ?
+                        AND contrincante_id = ?
+                        """,
+                        (
+                            interaction.guild.id,
+                            interaction.user.id,
+                            contrincante.id,
+                        ),
+                    )
+                    _db.commit()
+            except Exception:
+                pass
+
+            desafio_id = crear_desafio(
+                guild_id=interaction.guild.id,
+                retador_id=interaction.user.id,
+                contrincante_id=contrincante.id,
+                ahora=inicio,
+                expira_en=inicio + VENTANA_DESAFIO,
+            )
+            if desafio_id is None:
+                await responder_error(
+                    interaction,
+                    "⚠️ Desafío pendiente",
+                    "Ya existe un desafío pendiente con ese usuario.",
+                )
+                return
+
+            resultado = await self._aceptar_desafio(
+                interaction,
+                desafio_id,
+                contrincante.id,
+                tipo,
+            )
+
+            if resultado["estado"] == "aceptado":
+                vals = info_bot["valores"]
+                rangos = info_bot["rangos_equipo"]
+                embed = crear_embed(
+                    "🤖 ¡El bot aceptó tu desafío!",
+                    f"Has desafiado al bot y **aceptó al instante**.\n"
+                    f"Ambos competirán durante {texto_horas(BOX_DESAFIO_DURACION_HORAS)}.",
+                    color_area="box",
+                )
+                seccion(embed, "Modalidad", f"**{tipo.lower()}**")
+                seccion(
+                    embed,
+                    "Stats del bot (randomizados)",
+                    (
+                        f"❤️ Vida: **{vals['vida']}/{vals['vida_maxima']}** "
+                        f"(rango server {rangos['vida'][0]}-{rangos['vida'][1]})\n"
+                        f"💥 Daño: **{vals['dano']}/{vals['dano_maximo']}** "
+                        f"(rango {rangos['dano'][0]}-{rangos['dano'][1]})\n"
+                        f"🛡️ Defensa: **{vals['defensa']}/{vals['defensa_maxima']}** "
+                        f"(rango {rangos['defensa'][0]}-{rangos['defensa'][1]})\n"
+                        f"⚡ Cansancio: **{vals['cansancio']}/{vals['cansancio_maximo']}** "
+                        f"(rango {rangos['cansancio'][0]}-{rangos['cansancio'][1]})\n"
+                        f"⭐ Exp: **{info_bot['experiencia']}** "
+                        f"(rango {info_bot['rango_experiencia'][0]}-{info_bot['rango_experiencia'][1]})\n"
+                        f"🎒 Equipamiento: casco **{vals['casco']}**, guantes **{vals['guantes']}**, "
+                        f"bucal **{vals['protector_bucal']}**, short **{vals['short']}**, botas **{vals['botas']}**"
+                    ),
+                )
+                if resultado.get("ganador_id") is not None:
+                    ganador_mencion = (
+                        contrincante.mention
+                        if resultado["ganador_id"] == contrincante.id
+                        else interaction.user.mention
+                    )
+                    seccion(
+                        embed,
+                        "Pelea — ganador sorteado",
+                        f"{ganador_mencion} se lleva **${resultado['premio_dinero']:,}**",
+                    )
+                await interaction.response.send_message(embed=embed)
+                return
+
+            # Si el bot no pudo aceptar (ej. error inesperado), mapear a mensaje humano
+            mensaje = MENSAJES_DESAFIO_NO_DISPONIBLE.get(
+                resultado["estado"],
+                "El desafío al bot no pudo completarse.",
+            )
+            await responder_error(
+                interaction,
+                "⚠️ Desafío no disponible",
+                mensaje,
+            )
+            return
+
         inicio = ahora()
         desafio_id = crear_desafio(
             guild_id=interaction.guild.id,
             retador_id=interaction.user.id,
             contrincante_id=contrincante.id,
             ahora=inicio,
-            expira_en=inicio + DURACION_DESAFIO,
+            expira_en=inicio + VENTANA_DESAFIO,
         )
         if desafio_id is None:
             await responder_error(
@@ -225,7 +344,7 @@ class DesafiosMixin:
         seccion(
             embed,
             "Tiempo",
-            f"Tienes **{texto_horas(BOX_DESAFIO_DURACION_HORAS)}** para aceptar.",
+            f"Tienes **{texto_horas(BOX_DESAFIO_VENTANA_HORAS)}** para aceptar.",
         )
         await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()

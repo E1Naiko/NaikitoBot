@@ -55,6 +55,7 @@ __all__ = [
     "BOX_LESION_PROBABILIDAD_POR_HORA",
     "BOX_LESION_PROBABILIDAD_MAXIMA",
     "BOX_LESION_DECAIMIENTO_POR_HORA",
+    "BOX_DESAFIO_VENTANA_HORAS",
     "BOX_DESAFIO_DURACION_HORAS",
     "BOX_DESAFIO_EXP_SPARRING",
     "BOX_DESAFIO_EXP_PELEA",
@@ -680,6 +681,11 @@ _comprobar(
 
 # Duración del sparring y la pelea, en horas (admite decimales).
 
+BOX_DESAFIO_VENTANA_HORAS = _leer_decimal(
+    "BOX_DESAFIO_VENTANA_HORAS",
+    1.0,
+)
+
 BOX_DESAFIO_DURACION_HORAS = _leer_decimal(
     "BOX_DESAFIO_DURACION_HORAS",
     1.0,
@@ -701,6 +707,12 @@ BOX_DESAFIO_EXP_PELEA = _leer_entero(
 BOX_DESAFIO_RECOMPENSA_POR_MEJORA = _leer_entero(
     "BOX_DESAFIO_RECOMPENSA_POR_MEJORA",
     5,
+)
+
+_comprobar(
+    BOX_DESAFIO_VENTANA_HORAS > 0,
+    "BOX_DESAFIO_VENTANA_HORAS debe ser mayor que 0, pero se recibió "
+    f"{BOX_DESAFIO_VENTANA_HORAS}.",
 )
 
 _comprobar(

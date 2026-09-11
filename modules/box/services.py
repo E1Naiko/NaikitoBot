@@ -40,7 +40,6 @@ from modules.box.database import (
     completar_acciones_vencidas,
     crear_desafio,
     descansar,
-    reducir_probabilidad_lesion_inactivos,
     iniciar_accion,
     obtener_accion_activa,
     obtener_bonus_experiencia_sponsor,
@@ -52,8 +51,10 @@ from modules.box.database import (
     obtener_sponsor_para_promocion,
     obtener_sponsors_activos,
     obtener_top_desafios,
+    preparar_bot_para_desafio,
     procesar_pagos_sponsors,
     procesar_sponsors_medicos,
+    reducir_probabilidad_lesion_inactivos,
     usar_suministro,
 )
 
@@ -109,6 +110,7 @@ __all__ = [
     "obtener_sponsors_activos",
     "obtener_bonus_experiencia_sponsor",
     "obtener_sponsor_para_promocion",
+    "preparar_bot_para_desafio",
     "procesar_pagos_sponsors",
     "procesar_sponsors_medicos",
     "usar_suministro",
