@@ -132,10 +132,46 @@ def inicializar_db():
                 retador_id INTEGER NOT NULL,
                 contrincante_id INTEGER NOT NULL,
                 expira_en TEXT NOT NULL,
+                tipo TEXT NOT NULL DEFAULT 'SPARRING',
+                canal_id INTEGER,
+                mensaje_id INTEGER,
                 UNIQUE (guild_id, retador_id, contrincante_id)
             )
             """
         )
+
+        # El tipo y la tarjeta publicada vivían solo en la view del botón, que
+        # es memoria del proceso: sin estas columnas, ``/box cancelar`` no
+        # puede decir qué se canceló ni retirar la tarjeta del canal después
+        # de un reinicio del bot.
+        columnas_desafios = {
+            columna[1]
+            for columna in db.execute("PRAGMA table_info(box_desafios)")
+        }
+
+        if "tipo" not in columnas_desafios:
+            db.execute(
+                """
+                ALTER TABLE box_desafios
+                ADD COLUMN tipo TEXT NOT NULL DEFAULT 'SPARRING'
+                """
+            )
+
+        if "canal_id" not in columnas_desafios:
+            db.execute(
+                """
+                ALTER TABLE box_desafios
+                ADD COLUMN canal_id INTEGER
+                """
+            )
+
+        if "mensaje_id" not in columnas_desafios:
+            db.execute(
+                """
+                ALTER TABLE box_desafios
+                ADD COLUMN mensaje_id INTEGER
+                """
+            )
 
         db.execute(
             """
@@ -1603,8 +1639,16 @@ def crear_desafio(
     contrincante_id: int,
     ahora: datetime,
     expira_en: datetime,
+    *,
+    tipo: str = "SPARRING",
+    canal_id: int | None = None,
 ):
-    """Crea un desafío pendiente."""
+    """Crea un desafío pendiente.
+
+    ``tipo`` (``SPARRING`` o ``FIGHTING``) y ``canal_id`` se guardan para que
+    la solicitud se pueda describir y retirar sin depender de la view del
+    botón, que se pierde con cada reinicio del bot.
+    """
 
     with conectar_db() as db:
         try:
@@ -1622,15 +1666,19 @@ def crear_desafio(
                     guild_id,
                     retador_id,
                     contrincante_id,
-                    expira_en
+                    expira_en,
+                    tipo,
+                    canal_id
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     guild_id,
                     retador_id,
                     contrincante_id,
                     expira_en.isoformat(),
+                    tipo,
+                    canal_id,
                 ),
             )
 
@@ -1642,6 +1690,128 @@ def crear_desafio(
         return db.execute(
             "SELECT last_insert_rowid()"
         ).fetchone()[0]
+
+
+_COLUMNAS_DESAFIO = """
+    id,
+    retador_id,
+    contrincante_id,
+    tipo,
+    expira_en,
+    canal_id,
+    mensaje_id
+"""
+
+
+def _fila_desafio(fila) -> dict:
+    """Diccionario de una fila de ``box_desafios``, con la fecha parseada."""
+
+    return {
+        "id": fila[0],
+        "retador_id": fila[1],
+        "contrincante_id": fila[2],
+        "tipo": fila[3],
+        "expira_en": datetime.fromisoformat(fila[4]),
+        "canal_id": fila[5],
+        "mensaje_id": fila[6],
+    }
+
+
+def registrar_mensaje_desafio(desafio_id: int, mensaje_id: int):
+    """Guarda el id de la tarjeta publicada, para poder retirarla después."""
+
+    with conectar_db() as db:
+        db.execute(
+            "UPDATE box_desafios SET mensaje_id = ? WHERE id = ?",
+            (mensaje_id, desafio_id),
+        )
+        db.commit()
+
+
+def desafios_pendientes(guild_id: int, user_id: int, ahora: datetime):
+    """Solicitudes vigentes en las que participa el usuario, en cualquier rol.
+
+    Sirve a ``/box cancelar``: el que propuso puede retirar su solicitud y el
+    desafiado puede rechazarla, que en la base es el mismo borrado.
+    """
+
+    with conectar_db() as db:
+        filas = db.execute(
+            f"""
+            SELECT {_COLUMNAS_DESAFIO}
+            FROM box_desafios
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            AND expira_en > ?
+            ORDER BY id ASC
+            """,
+            (guild_id, user_id, user_id, ahora.isoformat()),
+        ).fetchall()
+
+    return [_fila_desafio(fila) for fila in filas]
+
+
+def desafio_registrado(desafio_id: int) -> bool:
+    """Si la solicitud sigue escrita en la base, vigente o no.
+
+    Lo mira la view del botón antes de anunciar "expirado" en su timeout: la
+    view vive en memoria hasta una hora después de publicada la tarjeta, así
+    que si la solicitud ya se canceló o ya se aceptó, la tarjeta del canal
+    está contando otra cosa y no hay que pisarla.
+    """
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios
+            WHERE id = ?
+            """,
+            (desafio_id,),
+        ).fetchone()
+
+    return bool(fila[0])
+
+
+def cancelar_desafio(
+    desafio_id: int,
+    guild_id: int,
+    user_id: int,
+    ahora: datetime,
+):
+    """Borra una solicitud pendiente y devuelve lo que se borró, o ``None``.
+
+    Solo puede cancelarla quien participa (el que propuso o el desafiado) y
+    solo mientras siga vigente. Se hace dentro de una transacción con
+    ``BEGIN IMMEDIATE`` para no pisarse con una aceptación simultánea: si el
+    botón gana la carrera, la fila ya no está y acá devuelve ``None``.
+    """
+
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        fila = db.execute(
+            f"""
+            SELECT {_COLUMNAS_DESAFIO}
+            FROM box_desafios
+            WHERE id = ?
+            AND guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            AND expira_en > ?
+            """,
+            (desafio_id, guild_id, user_id, user_id, ahora.isoformat()),
+        ).fetchone()
+
+        if fila is None:
+            return None
+
+        db.execute(
+            "DELETE FROM box_desafios WHERE id = ?",
+            (desafio_id,),
+        )
+        db.commit()
+
+    return _fila_desafio(fila)
 
 
 def aceptar_desafio(

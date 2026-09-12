@@ -211,6 +211,8 @@ TEXTO_AYUDA = (
     "`/box sparring contrincante` — Desafía a sparring.\n"
     "`/box desafio contrincante` — Desafía a una pelea. Ganarle al bot\n"
     "paga menos premio que ganarle a otro jugador.\n"
+    "`/box cancelar` — Retira una solicitud pendiente: la que mandaste\n"
+    "o la que te mandaron.\n"
     "`/box saldo` — Muestra tu experiencia y dinero.\n"
     "`/box stats` — Muestra tus estadísticas privadas.\n"
     "`/box equipo` — Muestra tu equipo y estadísticas de combate.\n"

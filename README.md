@@ -244,6 +244,7 @@ día perdido (`2026-09-04`) queda con racha 1. Se corrige con
 | `/box trabajar` | `minutos` o `hasta` | Trabaja durante el tiempo indicado o hasta una hora `HH:MM`. |
 | `/box sparring` | `contrincante` | Envía un desafío de sparring de una hora a otro usuario. |
 | `/box desafio` | `contrincante` | Envía un desafío de pelea de una hora a otro usuario. |
+| `/box cancelar` | `contrincante` (opcional) | Retira una solicitud de sparring o pelea pendiente: la que mandaste o la que te mandaron. |
 | `/box tienda` | Ninguno | Muestra el catálogo con el nivel actual y un botón por artículo para comprarlo. |
 | `/box comprar` | `tipo` y `articulo` | Compra una mejora, una pieza de equipamiento o un tratamiento usando dinero. |
 | `/box saldo` | Ninguno | Muestra la experiencia y el dinero del usuario. |
@@ -278,6 +279,33 @@ por la experiencia acumulada de ambos usuarios; si uno tiene el doble de
 experiencia, tiene el doble de probabilidad. El ganador recibe como dinero la
 suma de la experiencia acumulada de ambos contrincantes.
 
+**La tarjeta la ve el desafiado.** La solicitud se publica como un mensaje del
+canal con el botón *Aceptar desafío*, y no como respuesta de la interacción:
+el comando difiere efímero (para que la base no gaste la ventana de tres
+segundos) y todo lo que salga por ahí viaja atado a quien ejecutó el comando,
+o sea justo el que no tiene nada que aceptar. La mención al desafiado va en el
+contenido del mensaje y no solo en el embed, porque dentro de un embed no
+notifica a nadie. El que desafió recibe por separado un acuse privado con el
+plazo, y la fila de `box_desafios` anota la modalidad (`tipo`), el canal y el
+id de la tarjeta publicada.
+
+**`/box cancelar`** retira una solicitud pendiente: la que mandaste (se anuncia
+como *cancelada*) o la que te mandaron (*rechazada*). Borra la fila y reemplaza
+la tarjeta del canal por un aviso sin botón, para que nadie acepte algo que ya
+no existe; si la tarjeta ya no está (la borraron a mano, el bot se reinició y
+perdió la caché del canal) alcanza con la fila, porque el botón huérfano
+responde "desafío no disponible" y se retira solo. Con varias solicitudes
+pendientes pide el parámetro `contrincante` para saber cuál. Las vencidas no
+cuentan: ya no son una solicitud.
+
+Cuando el botón no se puede aceptar **en ese momento** —el rival ya tiene una
+acción activa, está lesionado o hay otra pelea narrándose— la solicitud sigue
+pendiente y la tarjeta conserva su botón: el motivo se le responde en privado
+al que intentó aceptar y vuelve a intentarlo cuando pueda. Solo los estados
+definitivos (expirado, inexistente) retiran la tarjeta. El timeout de la view,
+que vive en memoria hasta una hora después, consulta la base antes de escribir
+"expirado" para no pisar una tarjeta que ya se canceló o ya se aceptó.
+
 ### Narración en vivo del combate
 
 Al aceptar un desafío, el combate se resuelve completo y queda guardado como un
@@ -287,6 +315,14 @@ ese plan. Cada **asalto es un mensaje del canal** y cada latido de
 mensaje, que al cerrar el asalto queda con su veredicto. Como todo se recalcula
 desde la semilla del plan, un reinicio del bot no cambia lo ya publicado: el
 asalto se vuelve a renderizar y la pelea sigue siendo la misma.
+
+El primer mensaje lleva arriba la **cabecera de la velada** (`Pelea pactada a N
+asaltos`, el motivo del favoritismo y `favorito al 62 %`) y la conserva durante
+todo el asalto y también cuando cierra: editar un mensaje de Discord es
+reemplazarlo entero, así que la cabecera se vuelve a armar en cada latido en vez
+de concatenarse una sola vez al publicar. Los asaltos siguientes no la repiten
+(el anuncio es uno solo), y si un asalto se estirara por encima del límite de la
+descripción el recorte suelta líneas de relato, nunca la cabecera.
 
 La cantidad de asaltos depende de la diferencia de experiencia comprimida
 (`log1p` sobre `BOX_COMBATE_SUELO_EXP`, acotada entre `BOX_COMBATE_PROB_PISO` y
