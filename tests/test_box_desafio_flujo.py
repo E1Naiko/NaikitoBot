@@ -74,9 +74,18 @@ def base(base_datos_limpia):
 # ============================================================
 
 
-def test_desafio_defiere_y_responde_con_followup(base):
+def test_desafio_defiere_y_publica_la_tarjeta_en_el_canal(base):
+    """La tarjeta con el botón la tiene que ver el desafiado.
+
+    El comando difiere la interacción como efímera para que la base no gaste
+    la ventana de tres segundos; si la tarjeta saliera por ``followup`` viajaría
+    atada a esa interacción y solo la vería el que desafió, que es justamente
+    quien no tiene nada que aceptar. Por eso va al canal, y el que desafió
+    recibe por separado su confirmación privada.
+    """
+
     cog = construir_cog(Box)
-    interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR)
+    interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
     rival = UsuarioFalso(CONTRINCANTE, "Rival")
 
     correr(cog._crear_desafio(interaccion, rival, "FIGHTING"))
@@ -90,23 +99,118 @@ def test_desafio_defiere_y_responde_con_followup(base):
     assert respuestas[0].contenido is None
     assert respuestas[0].kwargs.get("ephemeral") is True
 
-    # 2. La tarjeta con el botón va por followup y la view la apunta
-    tarjeta = respuestas[1]
+    # 2. La tarjeta sale por el canal: pública, con el botón y la view
+    #    apuntándola para poder retirarla después
+    [tarjeta] = interaccion.channel.mensajes
 
     assert "🥊 ¡Nuevo desafío!" in tarjeta.texto
+    assert rival.mention in tarjeta.texto, "la tarjeta nombra al desafiado"
+    # ...y lo nombra en el contenido, que es lo único que notifica: una
+    # mención dentro del embed se ve pero no le llega a nadie.
+    assert rival.mention in (tarjeta.contenido or "")
+    assert tarjeta.efimero is False
 
     view = tarjeta.kwargs.get("view")
 
     assert isinstance(view, ChallengeView)
     assert view.message is tarjeta
+    assert view.retador_id == RETADOR
+    assert view.contrincante_id == CONTRINCANTE
+    assert view.tipo == "FIGHTING"
+
+    # 3. El que desafió recibe su acuse privado (y así se cierra el defer)
+    aviso = respuestas[-1]
+
+    assert "Solicitud enviada" in aviso.texto
+    assert aviso.efimero is True
 
     with conectar_db() as db:
-        pendientes = db.execute(
-            "SELECT COUNT(*) FROM box_desafios WHERE guild_id = ? AND retador_id = ?",
+        fila = db.execute(
+            """
+            SELECT tipo, canal_id, mensaje_id
+            FROM box_desafios
+            WHERE guild_id = ? AND retador_id = ?
+            """,
             (GUILD, RETADOR),
+        ).fetchone()
+
+    # La fila anota la modalidad y la tarjeta: es lo que necesita
+    # /box cancelar para describir y retirar la solicitud sin depender de la
+    # view, que es memoria del proceso.
+    assert fila == ("FIGHTING", CANAL, tarjeta.id)
+
+
+def test_el_sparring_tambien_se_publica_en_el_canal(base):
+    """La modalidad cambia el rótulo, no la visibilidad de la tarjeta."""
+
+    cog = construir_cog(Box)
+    interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
+    rival = UsuarioFalso(CONTRINCANTE, "Rival")
+
+    correr(cog._crear_desafio(interaccion, rival, "SPARRING"))
+
+    [tarjeta] = interaccion.channel.mensajes
+
+    assert "**sparring**" in tarjeta.texto
+    assert "🥊 ¡Nuevo desafío!" in tarjeta.texto
+
+    with conectar_db() as db:
+        tipo = db.execute(
+            "SELECT tipo FROM box_desafios WHERE guild_id = ?", (GUILD,)
         ).fetchone()[0]
 
-    assert pendientes == 1
+    assert tipo == "SPARRING"
+
+
+def test_sin_canal_no_queda_una_solicitud_invisible(base, monkeypatch):
+    """Si no se puede publicar la tarjeta, no se deja nada pendiente.
+
+    Una solicitud que nadie ve es una trampa: bloquea el par
+    (retador, contrincante) en la base y no se puede aceptar ni cancelar.
+    """
+
+    import commands.box.desafios as desafios_mod
+
+    async def sin_canal(bot, interaction):
+        return None
+
+    monkeypatch.setattr(desafios_mod, "canal_de_la_interaccion", sin_canal)
+
+    cog = construir_cog(Box)
+    interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
+    rival = UsuarioFalso(CONTRINCANTE, "Rival")
+
+    correr(cog._crear_desafio(interaccion, rival, "FIGHTING"))
+
+    assert "No se pudo publicar el desafío" in interaccion.texto
+
+    with conectar_db() as db:
+        pendientes = db.execute("SELECT COUNT(*) FROM box_desafios").fetchone()[0]
+
+    assert pendientes == 0
+
+
+def test_un_canal_sin_permisos_tampoco_deja_solicitud(base):
+    """Lo mismo cuando el canal existe pero el bot no puede escribir ahí."""
+
+    from tests.harness import prohibido
+
+    cog = construir_cog(Box)
+    interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
+
+    async def sin_permiso(*args, **kwargs):
+        raise prohibido()
+
+    interaccion.channel.send = sin_permiso
+
+    correr(cog._crear_desafio(interaccion, UsuarioFalso(CONTRINCANTE, "Rival"), "SPARRING"))
+
+    assert "No se pudo publicar el desafío" in interaccion.texto
+
+    with conectar_db() as db:
+        pendientes = db.execute("SELECT COUNT(*) FROM box_desafios").fetchone()[0]
+
+    assert pendientes == 0
 
 
 def test_error_despues_de_defer_ir_por_followup(base):
@@ -223,7 +327,7 @@ def test_aceptar_defiere_y_edita_el_mensaje_del_boton(base, monkeypatch):
     )
 
     cog = construir_cog(Box)
-    view = ChallengeView(cog, desafio_id, CONTRINCANTE, "FIGHTING")
+    view = ChallengeView(cog, desafio_id, RETADOR, CONTRINCANTE, "FIGHTING")
 
     interaccion = InteraccionFalsa(guild_id=GUILD, user_id=CONTRINCANTE, canal=CANAL)
     mensaje_desafio = MensajeDelDesafio()

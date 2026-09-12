@@ -52,11 +52,14 @@ from modules.box.database import (
     admin_obtener_top_box,
     admin_quitar_sponsor,
     admin_reset_usuario,
+    cancelar_desafio,
     comprar_equipamiento_progresivo,
     comprar_mejora,
     comprar_tratamiento,
     completar_acciones_vencidas,
     crear_desafio,
+    desafio_registrado,
+    desafios_pendientes,
     descansar,
     iniciar_accion,
     obtener_accion_activa,
@@ -73,6 +76,7 @@ from modules.box.database import (
     procesar_pagos_sponsors,
     procesar_sponsors_medicos,
     reducir_probabilidad_lesion_inactivos,
+    registrar_mensaje_desafio,
     usar_suministro,
 )
 
@@ -159,6 +163,10 @@ __all__ = [
     # Persistencia
     "completar_acciones_vencidas",
     "crear_desafio",
+    "cancelar_desafio",
+    "desafio_registrado",
+    "desafios_pendientes",
+    "registrar_mensaje_desafio",
     "aceptar_desafio",
     "comprar_mejora",
     "comprar_equipamiento_progresivo",

@@ -189,7 +189,7 @@ def test_boton_desafio_rechaza_fuera_del_canal(config_canales):
         async def _aceptar_desafio(self, *args, **kwargs):
             return {"estado": "aceptado"}
 
-    vista = ChallengeView(Caja(), 1, USUARIO, "SPARRING")
+    vista = ChallengeView(Caja(), 1, OTRO, USUARIO, "SPARRING")
     interaccion = InteraccionFalsa(
         {},
         OTRO,

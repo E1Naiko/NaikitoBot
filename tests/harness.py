@@ -77,17 +77,85 @@ class MensajeFalso:
         return None
 
 
+class _Respuesta404:
+    """Respuesta HTTP mínima para construir ``discord.NotFound``.
+
+    ``discord.py`` lee ``response.status`` al armar la excepción, así que
+    ``None`` no sirve: reventaría con ``AttributeError`` en vez de
+    ``NotFound`` y la prueba no ejercitaría la rama que quiere ejercitar.
+    """
+
+    status = 404
+    reason = "Not Found"
+
+
+def _no_encontrado(mensaje="Not Found"):
+    import discord
+
+    return discord.NotFound(_Respuesta404(), mensaje)
+
+
+def prohibido(mensaje="Missing Permissions"):
+    """``discord.Forbidden`` lista para hacer fallar un ``send`` de prueba."""
+
+    import discord
+
+    return discord.Forbidden(_RespuestaProhibida(), mensaje)
+
+
+class CanalFalso:
+    """Canal del servidor: lo que se publica fuera de la interacción.
+
+    Las respuestas de una interacción viajan atadas a quien la ejecutó (y si
+    el comando difirió efímero, solo las ve esa persona). Lo que tiene que
+    llegar a todo el canal —la tarjeta de un desafío, por ejemplo— sale por
+    acá.
+    """
+
+    def __init__(self, canal_id=77):
+        self.id = canal_id
+        self.mensajes: list = []
+
+    async def send(self, content=None, **kwargs):
+        # ``abc.Messageable.send`` distingue "sin vista" con el centinela
+        # MISSING: pasar ``view=None`` revienta con TypeError en discord.py.
+        if kwargs.get("view", MISSING) is None:
+            raise TypeError("view must not be None")
+
+        mensaje = _Mensaje(content, kwargs, id=len(self.mensajes) + 1)
+        self.mensajes.append(mensaje)
+        return mensaje
+
+    async def fetch_message(self, mensaje_id):
+        for mensaje in self.mensajes:
+            if mensaje.id == mensaje_id:
+                return mensaje
+
+        raise _no_encontrado()
+
+    @property
+    def ultimo(self):
+        return self.mensajes[-1] if self.mensajes else None
+
+
 class GuildFalso:
-    def __init__(self, guild_id=1, miembros=None, nombre="Servidor"):
+    def __init__(
+        self,
+        guild_id=1,
+        miembros=None,
+        nombre="Servidor",
+        canales=None,
+    ):
         self.id = guild_id
         self.name = nombre
         self._miembros = miembros or {}
+        self._canales = canales or {}
 
     def get_member(self, user_id):
         return self._miembros.get(user_id)
 
     def get_channel(self, canal_id):
-        return None
+        return self._canales.get(canal_id)
 
     @property
     def members(self):
@@ -145,37 +213,63 @@ class UsuarioFalso:
 class _Mensaje:
     contenido: str | None
     kwargs: dict = field(default_factory=dict)
+    id: int = 1
+    ediciones: int = 0
 
     @property
     def texto(self):
-        """Texto plano equivalente a la respuesta, incluidos los embeds."""
+        """Texto plano equivalente a la respuesta, incluidos los embeds.
 
-        if self.contenido:
-            return self.contenido
-
-        embed = self.kwargs.get("embed")
-        if embed is None:
-            return ""
+        El contenido y el embed se concatenan: un mensaje puede llevar las dos
+        cosas (la tarjeta de un desafío menciona en el contenido, porque dentro
+        de un embed la mención no notifica a nadie).
+        """
 
         partes = []
-        if embed.title:
-            partes.append(str(embed.title))
-        if embed.description:
-            partes.append(str(embed.description))
-        partes.extend(
-            f"{campo.name}: {campo.value}"
-            for campo in embed.fields
-        )
-        if embed.footer and embed.footer.text:
-            partes.append(str(embed.footer.text))
+
+        if self.contenido:
+            partes.append(str(self.contenido))
+
+        embed = self.kwargs.get("embed")
+        if embed is not None:
+            if embed.title:
+                partes.append(str(embed.title))
+            if embed.description:
+                partes.append(str(embed.description))
+            partes.extend(
+                f"{campo.name}: {campo.value}"
+                for campo in embed.fields
+            )
+            if embed.footer and embed.footer.text:
+                partes.append(str(embed.footer.text))
+
         return "\n".join(partes)
 
     @property
     def efimero(self):
         return bool(self.kwargs.get("ephemeral"))
 
+    @property
+    def embed(self):
+        return self.kwargs.get("embed")
+
+    @property
+    def view(self):
+        return self.kwargs.get("view")
+
     async def edit(self, *args, **kwargs):
-        """Edit mínimo: ``view.message`` puede apuntar a una respuesta."""
+        """Edit mínimo que registra el cambio, para poder afirmar sobre él.
+
+        A diferencia de ``send``, ``Message.edit`` sí admite ``view=None``:
+        es cómo se quitan los botones de una tarjeta.
+        """
+
+        self.ediciones += 1
+
+        if kwargs.get("embed") is not None:
+            self.kwargs["embed"] = kwargs["embed"]
+        if "view" in kwargs:
+            self.kwargs["view"] = kwargs["view"]
 
         return self
 
@@ -190,10 +284,23 @@ class InteraccionFalsa:
         nombre="Tester",
         en_servidor=True,
         canal=None,
+        canal_obj=None,
     ):
-        self.guild = GuildFalso(guild_id) if en_servidor else None
-        self.user = UsuarioFalso(user_id, nombre)
         self.channel_id = canal if canal is not None else (guild_id if en_servidor else None)
+        # El canal público va separado de las respuestas de la interacción:
+        # es la diferencia entre "lo ve el desafiado" y "lo ve solo el que
+        # ejecutó el comando". ``canal_obj`` permite que varias interacciones
+        # (y el bot) compartan el mismo canal, como pasa en el servidor.
+        if canal_obj is not None:
+            self.channel = canal_obj
+        else:
+            self.channel = CanalFalso(self.channel_id) if en_servidor else None
+        self.guild = (
+            GuildFalso(guild_id, canales={self.channel_id: self.channel})
+            if en_servidor
+            else None
+        )
+        self.user = UsuarioFalso(user_id, nombre)
         self.respuestas = []
         self.response = RespuestaFalsa(self.respuestas)
         self.followup = RespuestaFalsa(self.respuestas)

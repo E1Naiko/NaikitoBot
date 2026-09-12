@@ -5,7 +5,11 @@ from datetime import datetime, timedelta
 import discord
 from discord import app_commands
 
-from commands.box.base import solo_servidor
+from commands.box.base import (
+    canal_de_la_interaccion,
+    resolver_canal,
+    solo_servidor,
+)
 from config import (
     BOX_CHANNEL_IDS,
     BOX_COMBATE_ACTIVO,
@@ -18,17 +22,27 @@ from config import (
     BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
     BOX_EXPERIENCIA_POR_MINUTO,
 )
-from core.mensajes import crear_embed, responder, responder_error, seccion
+from core.mensajes import (
+    crear_embed,
+    responder,
+    responder_error,
+    responder_ok,
+    seccion,
+)
 from core.permissions import es_admin
 from core.utils import ahora
 from modules.box.logic import texto_horas
 from modules.box.services import (
     aceptar_desafio,
+    cancelar_desafio,
     combate_en_curso,
     crear_desafio,
+    desafio_registrado,
+    desafios_pendientes,
     obtener_accion_activa,
     obtener_estado_box,
     preparar_bot_para_desafio,
+    registrar_mensaje_desafio,
 )
 
 VENTANA_DESAFIO = timedelta(hours=BOX_DESAFIO_VENTANA_HORAS)
@@ -41,6 +55,23 @@ MENSAJES_DESAFIO_NO_DISPONIBLE = {
     "combate_en_curso": "🥊 Hay una pelea narrándose en el canal.",
 }
 
+# Estados en los que la solicitud sigue pendiente en la base: la tarjeta del
+# canal conserva su botón para volver a intentar más tarde. En los demás
+# ("expirado", "invalido") la fila ya no está y la tarjeta se retira.
+ESTADOS_TRANSITORIOS = ("ocupado", "lesionado", "combate_en_curso")
+
+# Etiqueta legible de cada modalidad, para no mostrar "FIGHTING" en el canal.
+MODALIDADES = {
+    "SPARRING": "sparring",
+    "FIGHTING": "pelea",
+}
+
+
+def modalidad(tipo: str) -> str:
+    """Nombre legible de la modalidad de una solicitud."""
+
+    return MODALIDADES.get(tipo, tipo.lower())
+
 
 def _mencion(guild, user_id: int) -> str:
     """Mención legible de un peleador, sin explotar si no está en el guild."""
@@ -51,18 +82,25 @@ def _mencion(guild, user_id: int) -> str:
 
 
 class ChallengeView(discord.ui.View):
-    """Permite que solo el contrincante acepte un desafío."""
+    """Permite que solo el contrincante acepte un desafío.
+
+    La tarjeta que lleva este botón se publica en el canal (no como respuesta
+    efímera de la interacción), porque quien tiene que apretarlo es el
+    desafiado y no el que ejecutó ``/box desafio`` o ``/box sparring``.
+    """
 
     def __init__(
         self,
         box,
         desafio_id: int,
+        retador_id: int,
         contrincante_id: int,
         tipo: str,
     ):
         super().__init__(timeout=int(BOX_DESAFIO_VENTANA_HORAS * 3600))
         self.box = box
         self.desafio_id = desafio_id
+        self.retador_id = retador_id
         self.contrincante_id = contrincante_id
         self.tipo = tipo
         self.message = None
@@ -121,14 +159,15 @@ class ChallengeView(discord.ui.View):
 
         if resultado["estado"] == "aceptado":
             button.disabled = True
-            nombre = self.tipo.lower()
             embed = crear_embed(
                 "🥊 ¡Desafío aceptado!",
-                "Ambos competirán durante "
+                f"{_mencion(interaction.guild, self.retador_id)} vs "
+                f"{_mencion(interaction.guild, self.contrincante_id)}: ambos "
+                "competirán durante "
                 f"{texto_horas(BOX_DESAFIO_DURACION_HORAS)}.",
                 color_area="box",
             )
-            seccion(embed, "Modalidad", f"**{nombre}**")
+            seccion(embed, "Modalidad", f"**{modalidad(self.tipo)}**")
             # El helper vive en el cog (``DesafiosMixin``), no en la view:
             # ``self`` acá es la view y la llamada directa revienta con
             # ``AttributeError`` nada más aceptarse el desafío.
@@ -137,51 +176,87 @@ class ChallengeView(discord.ui.View):
                 embed=embed,
                 view=self,
             )
+            # La tarjeta del canal ya cuenta lo que pasó, pero el que apretó
+            # el botón difirió una interacción efímera: si no llega una
+            # respuesta propia se queda con la burbuja de "pensando" colgada.
+            await responder_ok(
+                interaction,
+                "🥊 ¡Aceptaste el desafío!",
+                f"Son {texto_horas(BOX_DESAFIO_DURACION_HORAS)} de "
+                f"**{modalidad(self.tipo)}** contra "
+                f"{_mencion(interaction.guild, self.retador_id)}.",
+            )
             self.stop()
             return
 
-        embed = crear_embed(
-            "⚠️ Desafío no disponible",
-            MENSAJES_DESAFIO_NO_DISPONIBLE.get(
-                resultado["estado"],
-                "El desafío ya no está disponible.",
-            ),
-            color_area="error",
+        estado = resultado["estado"]
+        detalle = MENSAJES_DESAFIO_NO_DISPONIBLE.get(
+            estado,
+            "El desafío ya no está disponible.",
         )
 
-        if resultado["estado"] == "combate_en_curso":
+        if estado == "combate_en_curso":
             en_curso = resultado["combate"]
-            seccion(
-                embed,
-                "En el ring",
+            detalle += (
+                "\n\n**En el ring:** "
                 f"{_mencion(interaction.guild, en_curso['retador_id'])} vs "
                 f"{_mencion(interaction.guild, en_curso['contrincante_id'])} · "
-                f"pelea #{en_curso['id']}",
-            )
-            seccion(
-                embed,
-                "Qué hacer",
-                "Terminá de mirar esa y volvé a aceptar: el desafío sigue "
-                "pendiente. /box combate muestra cómo va.",
+                f"pelea #{en_curso['id']}."
+                "\nTerminá de mirar esa y volvé a aceptar: el desafío sigue "
+                "pendiente. `/box combate` muestra cómo va."
             )
 
-        await interaction.message.edit(
-            embed=embed,
-            view=None,
+        if estado in ESTADOS_TRANSITORIOS:
+            # La solicitud sigue pendiente en la base, así que la tarjeta se
+            # queda intacta y con su botón: antes se la reemplazaba por el
+            # error y el "volvé a aceptar" no tenía con qué. El motivo viaja
+            # en privado, al único que le interesa.
+            await responder_error(
+                interaction,
+                "⚠️ Todavía no se puede aceptar",
+                detalle,
+            )
+            return
+
+        # Expirado o inexistente: la fila ya no está y la tarjeta es un botón
+        # que no lleva a nada. Se retira del canal y se avisa al que apretó.
+        if interaction.message is not None:
+            await interaction.message.edit(
+                embed=crear_embed(
+                    "⚠️ Desafío no disponible",
+                    detalle,
+                    color_area="error",
+                ),
+                view=None,
+            )
+
+        await responder_error(
+            interaction,
+            "⚠️ Desafío no disponible",
+            detalle,
         )
         self.stop()
 
     async def on_timeout(self):
-        if self.message is not None:
-            embed = crear_embed(
-                "⌛ Desafío expirado",
-                f"El desafío de {self.tipo.lower()} expiró.",
-                color_area="aviso",
-            )
-            await self.message.edit(
-                embed=embed,
-                view=None,
-            )
+        if self.message is None:
+            return
+
+        # La view vive en memoria hasta una hora después de publicada la
+        # tarjeta. Si la solicitud ya se canceló (``/box cancelar``) o se
+        # aceptó por otro camino, el canal está mostrando otra cosa y el
+        # timeout no tiene que pisarla con un "expirado" mentiroso.
+        if not desafio_registrado(self.desafio_id):
+            return
+
+        embed = crear_embed(
+            "⌛ Desafío expirado",
+            f"El desafío de {modalidad(self.tipo)} expiró.",
+            color_area="aviso",
+        )
+        await self.message.edit(
+            embed=embed,
+            view=None,
+        )
 
 
 class DesafiosMixin:
@@ -389,6 +464,8 @@ class DesafiosMixin:
                 contrincante_id=contrincante.id,
                 ahora=inicio,
                 expira_en=inicio + VENTANA_DESAFIO,
+                tipo=tipo,
+                canal_id=interaction.channel_id,
             )
             if desafio_id is None:
                 await responder_error(
@@ -414,7 +491,7 @@ class DesafiosMixin:
                     f"Ambos competirán durante {texto_horas(BOX_DESAFIO_DURACION_HORAS)}.",
                     color_area="box",
                 )
-                seccion(embed, "Modalidad", f"**{tipo.lower()}**")
+                seccion(embed, "Modalidad", f"**{modalidad(tipo)}**")
                 if tipo == "FIGHTING":
                     seccion(
                         embed,
@@ -454,7 +531,10 @@ class DesafiosMixin:
                         "Pelea — ganador sorteado",
                         f"{ganador_mencion} se lleva **${resultado['premio_dinero']:,}**",
                     )
-                await interaction.followup.send(embed=embed)
+                # Privada a propósito: contra el bot no hay desafiado que
+                # esperar y la tarjeta trae el ganador ya sorteado, que el
+                # canal no tiene por qué conocer antes del relato.
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
             # Si el bot no pudo aceptar (ej. error inesperado), mapear a mensaje humano
@@ -470,12 +550,31 @@ class DesafiosMixin:
             return
 
         inicio = ahora()
+
+        # La tarjeta la tiene que ver el desafiado, que es quien puede
+        # aceptarla, así que se publica en el canal. Por
+        # ``interaction.followup`` no sirve: el comando difiere la interacción
+        # como efímera (para que la base no gaste la ventana de tres segundos)
+        # y por ahí la respuesta le llega solo al que desafió.
+        canal = await canal_de_la_interaccion(self.bot, interaction)
+
+        if canal is None:
+            await responder_error(
+                interaction,
+                "⚠️ No se pudo publicar el desafío",
+                "No encuentro el canal donde publicar la tarjeta con el "
+                "botón. Probá de nuevo desde el canal de Box.",
+            )
+            return
+
         desafio_id = crear_desafio(
             guild_id=interaction.guild.id,
             retador_id=interaction.user.id,
             contrincante_id=contrincante.id,
             ahora=inicio,
             expira_en=inicio + VENTANA_DESAFIO,
+            tipo=tipo,
+            canal_id=interaction.channel_id,
         )
         if desafio_id is None:
             await responder_error(
@@ -485,21 +584,315 @@ class DesafiosMixin:
             )
             return
 
-        view = ChallengeView(self, desafio_id, contrincante.id, tipo)
+        view = ChallengeView(
+            self,
+            desafio_id,
+            interaction.user.id,
+            contrincante.id,
+            tipo,
+        )
         embed = crear_embed(
             "🥊 ¡Nuevo desafío!",
             f"{contrincante.mention}, {interaction.user.mention} "
             "te desafía.",
             color_area="box",
         )
-        seccion(embed, "Modalidad", f"**{tipo.lower()}**")
+        seccion(embed, "Modalidad", f"**{modalidad(tipo)}**")
         seccion(
             embed,
             "Tiempo",
-            f"Tienes **{texto_horas(BOX_DESAFIO_VENTANA_HORAS)}** para aceptar.",
+            f"{contrincante.mention} tiene "
+            f"**{texto_horas(BOX_DESAFIO_VENTANA_HORAS)}** para aceptar.",
         )
-        mensaje = await interaction.followup.send(embed=embed, view=view)
+        seccion(
+            embed,
+            "Para aceptar",
+            "Tocá **Aceptar desafío** acá abajo. Si nadie lo toca, la "
+            "solicitud expira sola y el que la mandó puede retirarla con "
+            "`/box cancelar`.",
+        )
+        # Publicar puede fallar (sin permiso de envío en el canal, por
+        # ejemplo): se retira la fila, porque una solicitud cuya tarjeta nadie
+        # vio no se puede aceptar y bloquearía el par hasta que expire.
+        try:
+            mensaje = await canal.send(
+                # La mención va en el contenido y no solo en el embed: dentro
+                # de un embed no notifica a nadie, y una solicitud que el
+                # desafiado no ve es una solicitud que expira sola.
+                content=(
+                    f"🥊 {contrincante.mention}, tenés una solicitud de "
+                    f"**{modalidad(tipo)}** esperando."
+                ),
+                embed=embed,
+                view=view,
+            )
+        except discord.HTTPException as error:
+            print(
+                f"[BOX] no se publicó la tarjeta del desafío {desafio_id}: "
+                f"{type(error).__name__}: {error}",
+                flush=True,
+            )
+            cancelar_desafio(
+                desafio_id,
+                interaction.guild.id,
+                interaction.user.id,
+                ahora(),
+            )
+            await responder_error(
+                interaction,
+                "⚠️ No se pudo publicar el desafío",
+                "No pude mandar la tarjeta al canal: revisá que el bot tenga "
+                "permiso de enviar mensajes ahí. La solicitud no quedó "
+                "registrada.",
+            )
+            return
+
         view.message = mensaje
+
+        # La tarjeta queda anotada en la fila para que ``/box cancelar`` la
+        # pueda retirar del canal, incluso después de un reinicio del bot.
+        try:
+            registrar_mensaje_desafio(desafio_id, mensaje.id)
+        except Exception as error:
+            print(
+                f"[BOX] no se anotó la tarjeta del desafío {desafio_id}: "
+                f"{type(error).__name__}: {error}",
+                flush=True,
+            )
+
+        await responder(
+            interaction,
+            "🥊 Solicitud enviada",
+            f"{contrincante.mention} tiene "
+            f"**{texto_horas(BOX_DESAFIO_VENTANA_HORAS)}** para aceptar la "
+            f"**{modalidad(tipo)}**.",
+            color_area="box",
+            secciones_=[
+                (
+                    "Dónde",
+                    "La tarjeta con el botón quedó publicada en este canal: "
+                    "ahí la ve el desafiado.",
+                ),
+                ("Cancelar", "`/box cancelar` la retira si te arrepentís."),
+            ],
+            ephemeral=True,
+        )
+
+    # ============================================================
+    # /box cancelar
+    # ============================================================
+
+    @app_commands.command(
+        name="cancelar",
+        description="Cancela una solicitud de sparring o de pelea pendiente.",
+    )
+    @app_commands.describe(
+        contrincante=(
+            "Con quién tenés la solicitud. Hace falta si tenés más de una."
+        ),
+    )
+    async def cancelar(
+        self,
+        interaction: discord.Interaction,
+        contrincante: discord.Member | None = None,
+    ):
+        """Retira una solicitud pendiente: la que mandaste o la que te mandaron.
+
+        Para la base es el mismo borrado en los dos roles (lo único que cambia
+        es el aviso: "cancelada" si la propusiste, "rechazada" si te la
+        propusieron). Además retira la tarjeta del canal, para que nadie
+        apriete un botón que ya no lleva a ninguna parte.
+        """
+
+        if not await solo_servidor(interaction):
+            return
+
+        # Lee y borra en la base y después toca el canal: se difiere igual que
+        # en la creación, para no gastar la ventana de tres segundos.
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            await self._cancelar_solicitud(interaction, contrincante)
+        except Exception as error:
+            print(
+                "[BOX] cancelar desafío falló: "
+                f"{type(error).__name__}: {error}",
+                flush=True,
+            )
+            await responder_error(
+                interaction,
+                "⚠️ Error al cancelar",
+                "Algo se rompió al cancelar la solicitud. Volvé a intentarlo.",
+            )
+
+    async def _cancelar_solicitud(
+        self,
+        interaction: discord.Interaction,
+        contrincante: discord.Member | None,
+    ):
+        guild_id = interaction.guild.id
+        user_id = interaction.user.id
+        momento = ahora()
+
+        pendientes = desafios_pendientes(guild_id, user_id, momento)
+
+        if contrincante is not None:
+            pendientes = [
+                pendiente
+                for pendiente in pendientes
+                if contrincante.id
+                in (pendiente["retador_id"], pendiente["contrincante_id"])
+            ]
+
+            if not pendientes:
+                await responder_error(
+                    interaction,
+                    "⚠️ Solicitud inexistente",
+                    f"No tenés ninguna solicitud pendiente con "
+                    f"{contrincante.mention}.",
+                )
+                return
+
+        if not pendientes:
+            await responder_error(
+                interaction,
+                "🗑️ Sin solicitudes pendientes",
+                "No tenés ningún desafío ni sparring esperando. Se crean con "
+                "`/box desafio` o `/box sparring`.",
+            )
+            return
+
+        if len(pendientes) > 1:
+            await responder(
+                interaction,
+                "⚠️ Tenés varias solicitudes",
+                "Decime cuál cancelar pasando el parámetro `contrincante`.",
+                color_area="aviso",
+                secciones_=[
+                    (
+                        "Pendientes",
+                        "\n".join(
+                            self._linea_pendiente(
+                                interaction.guild,
+                                user_id,
+                                pendiente,
+                            )
+                            for pendiente in pendientes
+                        ),
+                    ),
+                ],
+                ephemeral=True,
+            )
+            return
+
+        cancelado = cancelar_desafio(
+            pendientes[0]["id"],
+            guild_id,
+            user_id,
+            momento,
+        )
+
+        if cancelado is None:
+            # Carrera con el botón: entre la lectura y el borrado la solicitud
+            # se aceptó (o expiró y otra creación la limpió).
+            await responder_error(
+                interaction,
+                "⚠️ Ya no se puede cancelar",
+                "La solicitud se aceptó o expiró mientras tanto: ya no queda "
+                "nada pendiente con esa persona.",
+            )
+            return
+
+        await self._retirar_tarjeta(interaction.guild, cancelado)
+
+        propuso = cancelado["retador_id"] == user_id
+        otro = _mencion(
+            interaction.guild,
+            (
+                cancelado["contrincante_id"]
+                if propuso
+                else cancelado["retador_id"]
+            ),
+        )
+        nombre = modalidad(cancelado["tipo"])
+
+        await responder(
+            interaction,
+            "🛑 Solicitud cancelada" if propuso else "🛑 Solicitud rechazada",
+            (
+                f"Retiraste la solicitud de **{nombre}** que le mandaste a "
+                f"{otro}."
+                if propuso
+                else f"Rechazaste la solicitud de **{nombre}** de {otro}."
+            ),
+            color_area="box",
+            secciones_=[
+                (
+                    "Tarjeta",
+                    "El mensaje del canal quedó sin botón: nadie puede "
+                    "aceptarla.",
+                ),
+            ],
+            ephemeral=True,
+        )
+
+    @staticmethod
+    def _linea_pendiente(guild, user_id: int, pendiente: dict) -> str:
+        """Una solicitud pendiente resumida en una línea."""
+
+        la_propuso = pendiente["retador_id"] == user_id
+        otro_id = (
+            pendiente["contrincante_id"]
+            if la_propuso
+            else pendiente["retador_id"]
+        )
+
+        return (
+            f"· {modalidad(pendiente['tipo'])} "
+            f"{'enviada' if la_propuso else 'recibida'} · "
+            f"{_mencion(guild, otro_id)} · expira "
+            f"<t:{int(pendiente['expira_en'].timestamp())}:R>"
+        )
+
+    async def _retirar_tarjeta(self, guild, desafio: dict) -> None:
+        """Cambia la tarjeta publicada por un aviso de solicitud cancelada.
+
+        Si el mensaje ya no está (lo borraron a mano, cambió el canal, el bot
+        perdió la caché) no se hace nada: la fila ya salió de la base, así que
+        el botón —si alguien llega a apretarlo— responde "desafío no
+        disponible" y retira la tarjeta él solo.
+        """
+
+        canal_id = desafio.get("canal_id")
+        mensaje_id = desafio.get("mensaje_id")
+
+        if not canal_id or not mensaje_id:
+            return
+
+        canal = await resolver_canal(self.bot, canal_id)
+
+        if canal is None:
+            return
+
+        try:
+            mensaje = await canal.fetch_message(mensaje_id)
+            await mensaje.edit(
+                embed=crear_embed(
+                    "🛑 Solicitud cancelada",
+                    f"La {modalidad(desafio['tipo'])} entre "
+                    f"{_mencion(guild, desafio['retador_id'])} y "
+                    f"{_mencion(guild, desafio['contrincante_id'])} quedó sin "
+                    "efecto: ya no se puede aceptar.",
+                    color_area="aviso",
+                ),
+                view=None,
+            )
+        except discord.HTTPException as error:
+            print(
+                f"[BOX] no se pudo retirar la tarjeta del desafío "
+                f"{desafio['id']}: {type(error).__name__}: {error}",
+                flush=True,
+            )
 
     @app_commands.command(
         name="sparring",
