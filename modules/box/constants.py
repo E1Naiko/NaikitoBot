@@ -255,7 +255,7 @@ NARRACION_FIGHTING_INTENSO = (
     "¡Acá no se pelea solamente por ganar, se pelea por dejar un legado!\n"
     "{atacante} no quiere ser la sombra de nadie.\n"
     "{defensor} está recibiendo castigo, pero todavía tiene fuego en los ojos.\n"
-    "{defensor} no está peleando solamente contra {atacante; está peleando contra sus propias dudas.\n"
+    "{defensor} no está peleando solamente contra {atacante} está peleando contra sus propias dudas.\n"
     "¡Acá se está poniendo a prueba el legado!\n"
     "{atacante} quiere demostrar que pertenece a este nivel.\n"
     "{defensor} se mete peligrosamente en la zona de fuego sin meter golpes.\n"
@@ -382,10 +382,10 @@ NARRACION_FIGHTING_CANTICO = (
     "El Público: ¡{atacante}, compadre, la concha de tu madre!\n"
     "El Público: ¡{defensor}, compadre, la concha de tu madre!\n"
     "El Público: ¡OLE, OLE, OLE, OLE!\n"
-    "El Público: ¡QUE SE AGARREN, QUE SE AGARREN!\n"
-    "El Público: ¡PEGÁLE, {atacante}!\n"
+    "El Público: ¡{atacante}, MUEEEERTOOOO!\n"
+    "El Público: ¡{defensor}, MUEEEERTOOOO!\n"
     "El Público: ¡VAMOS {defensor}!\n"
-    "El Público: ¡FIGHT! ¡FIGHT! ¡FIGHT!\n"
+    "El Público: Y YA LO VEEE, Y YA LO VEEEE, EL QUE NO SALTA, ES UN INGLEEES\n"
 )
 
 NARRACION_FIGHTING_CAIDA = (
@@ -397,11 +397,11 @@ NARRACION_FIGHTING_CAIDA = (
 )
 
 NARRACION_FIGHTING_KO = (
-    "¡SE TERMINÓ! ¡SE TERMINÓ! ¡SE TERMINÓ!\n"
+    "¡SE TERMINÓ! ¡SE TERMINÓ! ¡SE TERMINÓ! {defensor} NOCÁUT!\n"
     "¡NO HAY MÁS! ¡{defensor} NO PUEDE CONTINUAR!\n"
-    "¡NOCÁUT! ¡NOCÁUT DE {atacante}!\n"
+    "¡NOCÁUT! ¡NOCÁUT A FAVOR DE {atacante}!\n"
     "¡LO DURMIÓ! ¡QUÉ MANERA DE TERMINAR LA PELEA!\n"
-    "¡EL ÁRBITRO DICE QUE NO VA MÁS!\n"
+    "¡EL ÁRBITRO DICE QUE {defensor} NO VA MÁS!\n"
     "¡{atacante} ACABA DE APAGARLE LAS LUCES A {defensor}!\n"
 )
 
