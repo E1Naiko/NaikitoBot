@@ -14,6 +14,12 @@ class RespuestaFalsa:
 
     def __init__(self, registro):
         self._registro = registro
+        self.done = False
+
+    def is_done(self):
+        """Igual que en discord.py: True una vez respondida o diferida."""
+
+        return self.done
 
     @staticmethod
     def _validar_view(kwargs):
@@ -32,19 +38,32 @@ class RespuestaFalsa:
 
     async def send_message(self, content=None, **kwargs):
         self._validar_view(kwargs)
-        self._registro.append(_Mensaje(content, kwargs))
+        mensaje = _Mensaje(content, kwargs)
+        self._registro.append(mensaje)
+        self.done = True
+        return mensaje
 
     async def send(self, content=None, **kwargs):
         """Equivalente de ``followup.send`` sobre el mismo registro."""
 
         self._validar_view(kwargs)
-        self._registro.append(_Mensaje(content, kwargs))
+        mensaje = _Mensaje(content, kwargs)
+        self._registro.append(mensaje)
+        return mensaje
 
     async def edit_message(self, content=None, **kwargs):
+        # discord.py revienta con ``InteractionResponded`` si la interacción
+        # ya fue respondida (por ejemplo, después de un ``defer``): se
+        # reproduce para detectar ese error de integración.
+        if self.done:
+            raise RuntimeError(
+                "la interacción ya fue respondida (InteractionResponded)"
+            )
         self._registro.append(_Mensaje(content, kwargs))
 
     async def defer(self, **kwargs):
         self._registro.append(_Mensaje(None, kwargs))
+        self.done = True
 
     async def edit_original_response(self, content=None, **kwargs):
         self._registro.append(_Mensaje(content, kwargs))
@@ -155,6 +174,11 @@ class _Mensaje:
     def efimero(self):
         return bool(self.kwargs.get("ephemeral"))
 
+    async def edit(self, *args, **kwargs):
+        """Edit mínimo: ``view.message`` puede apuntar a una respuesta."""
+
+        return self
+
 
 class InteraccionFalsa:
     """Doble mínimo de ``discord.Interaction`` suficiente para Box."""
@@ -173,6 +197,9 @@ class InteraccionFalsa:
         self.respuestas = []
         self.response = RespuestaFalsa(self.respuestas)
         self.followup = RespuestaFalsa(self.respuestas)
+        # El mensaje que dispara la interacción (componentes): las views lo
+        # editan directo (``interaction.message.edit``) una vez diferida.
+        self.message = MensajeFalso()
 
     async def original_response(self):
         return MensajeFalso()

@@ -103,18 +103,29 @@ async def responder(
     ephemeral: bool = False,
     view: discord.ui.View | None = None,
 ) -> None:
-    """Envía una respuesta de interacción como embed con secciones."""
+    """Envía una respuesta de interacción como embed con secciones.
+
+    Si la interacción ya fue atendida (el comando defirió primero para no
+    perder la ventana de 3 segundos), se responde con un followup: llamar a
+    ``response.send_message`` sobre una interacción ya respondida revienta
+    con ``InteractionResponded``.
+    """
     embed = crear_embed(titulo, descripcion, color_area, pie)
     if secciones_:
         secciones(embed, secciones_)
-    # ``send_message`` distingue "sin vista" mediante el centinela MISSING:
-    # si se pasa ``view=None`` discord.py intenta llamar ``view.is_finished()``
-    # sobre ``None`` y la respuesta revienta con AttributeError.
-    await interaction.response.send_message(
+    # ``send_message`` y ``send`` distinguen "sin vista" mediante el
+    # centinela MISSING: si se pasa ``view=None`` discord.py intenta
+    # llamar ``view.is_finished()`` sobre ``None`` y la respuesta
+    # revienta con ``AttributeError``.
+    kwargs = dict(
         embed=embed,
         view=MISSING if view is None else view,
         ephemeral=ephemeral,
     )
+    if interaction.response.is_done():
+        await interaction.followup.send(**kwargs)
+    else:
+        await interaction.response.send_message(**kwargs)
 
 
 async def responder_error(
