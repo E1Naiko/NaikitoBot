@@ -6,6 +6,12 @@ de ese mensaje. Todo lo que se muestra se recalcula desde el plan guardado en
 reinicia, el asalto se vuelve a renderizar y el canal sigue contando la misma
 pelea.
 
+Ese "se recalcula todo" incluye la cabecera de la velada del primer mensaje
+(asaltos pactados y favoritismo): editar un mensaje es reemplazarlo entero, así
+que la cabecera se vuelve a armar en cada latido del primer asalto en vez de
+concatenarse una sola vez al publicarlo. Si no, el primer diálogo la borraba y
+el canal se quedaba sin el dato de por qué la pelea se cuenta como se cuenta.
+
 El plan ya está resuelto cuando se acepta el desafío (ver
 ``modules.box.combate``), por lo que este módulo solo traduce, formatea y
 habla con Discord. No decide nada.
@@ -246,6 +252,9 @@ class NarracionMixin:
             )
             return enviados + 1
 
+        # Editar es reemplazar el embed entero, así que se rearma desde el
+        # plan: la cabecera de la velada que le toca al primer asalto va de
+        # nuevo en cada latido y no se la lleva el relato.
         try:
             await mensaje.edit(
                 embed=self._embed_asalto(
@@ -320,7 +329,6 @@ class NarracionMixin:
         *,
         revelados: int,
         en_curso: bool,
-        apertura_en_curso: bool = False,
         canticos: bool = BOX_COMBATE_CANTICOS,
     ) -> tuple[str, list]:
         """Texto y secciones de un asalto.
@@ -329,6 +337,15 @@ class NarracionMixin:
         de rendering, así lo que ve quien pregunta es literalmente lo que se
         está publicando (y si algo se corta por el límite de Discord, se corta
         igual en los dos lados).
+
+        La cabecera de la velada (asaltos pactados, por qué se llegó a ese
+        favoritismo y el porcentaje del favorito) le pertenece al primer
+        mensaje y se vuelve a armar en **cada** render de ese asalto, no solo
+        al publicarlo: un asalto es un mensaje que se edita latido a latido,
+        así que si la cabecera se concatenara una sola vez la primera edición
+        la borraría y el canal perdería el único dato que explica cómo se va a
+        contar la pelea. Por eso se decide acá, desde ``asalto_index``, y no
+        con un flag que cada llamador puede olvidarse de pasar.
         """
 
         asalto = plan.asaltos[asalto_index]
@@ -347,8 +364,17 @@ class NarracionMixin:
 
         texto = "\n".join(cuerpo) if cuerpo else "…suena la campana…"
 
-        if apertura_en_curso:
-            texto = f"{apertura(plan, plan.nombres)}\n\n{texto}"
+        if asalto_index == 0:
+            cabecera = apertura(plan, plan.nombres)
+            # ``recortar`` suelta líneas desde arriba (lo último es lo que se
+            # está leyendo en vivo), así que recortaría justo la cabecera: se
+            # le reserva su lugar y el recorte actúa solo sobre el relato.
+            limite_cuerpo = max(
+                0, LIMITE_DESCRIPCION - len(cabecera) - len("\n\n")
+            )
+            texto = f"{cabecera}\n\n{recortar(texto, limite_cuerpo)}"
+        else:
+            texto = recortar(texto, LIMITE_DESCRIPCION)
 
         secciones = [
             (
@@ -365,7 +391,10 @@ class NarracionMixin:
             ("Pelea pactada", f"{plan.asaltos_pactados} asaltos"),
         ]
 
-        return recortar(texto, LIMITE_DESCRIPCION), secciones
+        # Ya recortado arriba (con la cabecera del primer asalto reservada),
+        # así que acá no se vuelve a pasar por ``recortar``: eso soltaría
+        # justamente las líneas de la cabecera.
+        return texto, secciones
 
     def _embed_asalto(
         self,
@@ -375,7 +404,6 @@ class NarracionMixin:
         revelados: int,
         en_curso: bool,
         cerrado: bool = False,
-        apertura_en_curso: bool = False,
         canticos: bool = BOX_COMBATE_CANTICOS,
     ) -> discord.Embed:
         """Embed de un asalto: líneas reveladas, barras y marcador."""
@@ -386,7 +414,6 @@ class NarracionMixin:
             asalto_index,
             revelados=revelados,
             en_curso=en_curso,
-            apertura_en_curso=apertura_en_curso,
             canticos=canticos,
         )
 
@@ -454,7 +481,6 @@ class NarracionMixin:
             revelados=plan.dialogos_por_round if cerrado else (revelados or 1),
             en_curso=not cerrado,
             cerrado=cerrado,
-            apertura_en_curso=asalto_index == 0 and not cerrado,
             canticos=canticos,
         )
 
@@ -562,7 +588,6 @@ class NarracionMixin:
             asalto_index,
             revelados=beat,
             en_curso=True,
-            apertura_en_curso=asalto_index == 0,
             canticos=canticos,
         )
 

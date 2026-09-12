@@ -288,6 +288,14 @@ mensaje, que al cerrar el asalto queda con su veredicto. Como todo se recalcula
 desde la semilla del plan, un reinicio del bot no cambia lo ya publicado: el
 asalto se vuelve a renderizar y la pelea sigue siendo la misma.
 
+El primer mensaje lleva arriba la **cabecera de la velada** (`Pelea pactada a N
+asaltos`, el motivo del favoritismo y `favorito al 62 %`) y la conserva durante
+todo el asalto y también cuando cierra: editar un mensaje de Discord es
+reemplazarlo entero, así que la cabecera se vuelve a armar en cada latido en vez
+de concatenarse una sola vez al publicar. Los asaltos siguientes no la repiten
+(el anuncio es uno solo), y si un asalto se estirara por encima del límite de la
+descripción el recorte suelta líneas de relato, nunca la cabecera.
+
 La cantidad de asaltos depende de la diferencia de experiencia comprimida
 (`log1p` sobre `BOX_COMBATE_SUELO_EXP`, acotada entre `BOX_COMBATE_PROB_PISO` y
 `BOX_COMBATE_PROB_TOPE`): una pelea pareja va a `BOX_COMBATE_ROUNDS_MAXIMO`

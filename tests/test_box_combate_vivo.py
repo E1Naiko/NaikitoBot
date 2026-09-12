@@ -529,6 +529,102 @@ def test_el_asalto_se_edita_hasta_el_veredicto(narrador, combate):
     assert "Asalto 1 para" in canal.textos[0] or "el corner corrige" in canal.textos[0]
 
 
+def _favorito(plan) -> str:
+    """La línea de favoritismo que anuncia la cabecera de la velada."""
+
+    return f"favorito al {max(plan.probabilidad, 1 - plan.probabilidad):.0%}"
+
+
+def test_la_apertura_sobrevive_a_las_ediciones_del_primer_asalto(narrador, combate):
+    """El favoritismo se anuncia una vez y se queda en el mensaje.
+
+    Un asalto es un mensaje que se edita en cada latido: si la cabecera se
+    armara solo al publicarlo, la primera edición la reemplazaría por el
+    relato y el canal perdería el único dato que explica por qué la pelea se
+    cuenta como se cuenta.
+    """
+
+    narrador, canal, reloj, adelantar = narrador
+    plan = Plan.de_json(combate["plan"])
+
+    for latido in range(0, plan.ciclo):
+        adelantar(latido)
+        correr(narrador._narrar_combate(combate))
+
+        descripcion = canal.mensajes[0].embed.description
+
+        assert len(canal.mensajes) == 1, "el primer asalto es un solo mensaje"
+        assert _favorito(plan) in descripcion
+        assert f"{plan.asaltos_pactados} asaltos" in descripcion
+        assert descripcion.startswith("🥊"), "la cabecera abre el mensaje"
+
+    # El último latido del asalto ya trae el veredicto, y la cabecera sigue
+    # arriba suyo: no se la comió el cierre.
+    assert "salto 1" in descripcion.split("\n")[-1]
+
+
+def test_un_primer_asalto_asentado_de_una_sola_vez_trae_la_apertura(
+    narrador, combate
+):
+    """Catch-up: publicado ya cerrado, el primer asalto tampoco pierde la cabecera.
+
+    Es el camino del reinicio del bot (o de un canal que no respondió): el
+    asalto se asienta con todo su relato de una vez y nunca pasa por la
+    publicación "en curso".
+    """
+
+    narrador, canal, reloj, adelantar = narrador
+    plan = Plan.de_json(combate["plan"])
+
+    # Un solo latido, ya metido en el segundo asalto: el primero se asienta.
+    adelantar(plan.ciclo + 1)
+    correr(narrador._narrar_combate(combate))
+
+    assert _favorito(plan) in canal.mensajes[0].embed.description
+
+
+def test_la_apertura_no_se_repite_en_los_asaltos_siguientes(narrador, combate):
+    """La cabecera es del primer mensaje: reanunciarla por asalto es ruido."""
+
+    narrador, canal, reloj, adelantar = narrador
+    plan = Plan.de_json(combate["plan"])
+
+    for latido in range(0, plan.ciclo * 2):
+        adelantar(latido)
+        correr(narrador._narrar_combate(combate))
+
+    assert len(canal.mensajes) == 2
+    assert _favorito(plan) in canal.mensajes[0].embed.description
+    assert _favorito(plan) not in canal.mensajes[1].embed.description
+
+
+def test_el_recorte_suelta_relato_y_no_la_apertura(narrador, combate, monkeypatch):
+    """Si el asalto se estira, la cabecera tiene el lugar reservado.
+
+    ``recortar`` suelta líneas desde arriba para conservar lo último que se
+    está leyendo; sin reserva, un asalto largo se llevaría puesto justamente
+    al favorito.
+    """
+
+    import commands.box.narracion as modulo
+
+    narrador, canal, reloj, adelantar = narrador
+    plan = correr(narrador._plan_con_nombres(combate))
+
+    monkeypatch.setattr(modulo, "LIMITE_DESCRIPCION", 220)
+
+    texto, _ = narrador._cuerpo_del_asalto(
+        plan,
+        0,
+        revelados=plan.dialogos_por_round,
+        en_curso=False,
+    )
+
+    assert len(texto) <= 220
+    assert texto.startswith("🥊")
+    assert _favorito(plan) in texto
+
+
 def test_cada_asalto_tiene_su_mensaje(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
