@@ -27,6 +27,10 @@ class RespuestaFalsa:
     def __init__(self):
         self.mensajes = []
 
+    def is_done(self):
+        # Estas interacciones nunca se defieren en estas pruebas.
+        return False
+
     async def send_message(self, content=None, **kwargs):
         from tests.harness import _Mensaje
 

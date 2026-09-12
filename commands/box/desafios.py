@@ -94,12 +94,29 @@ class ChallengeView(discord.ui.View):
             )
             return
 
-        resultado = await self.box._aceptar_desafio(
-            interaction,
-            self.desafio_id,
-            self.contrincante_id,
-            self.tipo,
-        )
+        # Igual que en el comando: la aceptación resuelve el plan completo
+        # sobre la base y no puede gastar la ventana de 3 segundos.
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            resultado = await self.box._aceptar_desafio(
+                interaction,
+                self.desafio_id,
+                self.contrincante_id,
+                self.tipo,
+            )
+        except Exception as error:
+            print(
+                f"[BOX] aceptar desafío falló: {type(error).__name__}: {error}",
+                flush=True,
+            )
+            await responder_error(
+                interaction,
+                "⚠️ Error al aceptar el desafío",
+                "Algo se rompió al procesar la aceptación. El desafío sigue "
+                "pendiente; podés volver a intentarlo.",
+            )
+            return
 
         if resultado["estado"] == "aceptado":
             button.disabled = True
@@ -111,8 +128,11 @@ class ChallengeView(discord.ui.View):
                 color_area="box",
             )
             seccion(embed, "Modalidad", f"**{nombre}**")
-            self._agregar_relato(embed, resultado)
-            await interaction.response.edit_message(
+            # El helper vive en el cog (``DesafiosMixin``), no en la view:
+            # ``self`` acá es la view y la llamada directa revienta con
+            # ``AttributeError`` nada más aceptarse el desafío.
+            self.box._agregar_relato(embed, resultado)
+            await interaction.message.edit(
                 embed=embed,
                 view=self,
             )
@@ -144,7 +164,7 @@ class ChallengeView(discord.ui.View):
                 "pendiente. /box combate muestra cómo va.",
             )
 
-        await interaction.response.edit_message(
+        await interaction.message.edit(
             embed=embed,
             view=None,
         )
@@ -215,6 +235,35 @@ class DesafiosMixin:
         )
 
     async def _crear_desafio(
+        self,
+        interaction: discord.Interaction,
+        contrincante: discord.Member,
+        tipo: str,
+    ):
+        """Desafía a un usuario (o al bot) a una pelea o sparring.
+
+        La respuesta inicial solo se acepta durante 3 segundos y este
+        camino toca la base varias veces (acción activa, lesión, candado;
+        contra el bot, la resolución completa del plan). Se defiere al
+        toque para que, si la base se demora, el comando tarde —y no
+        reviente con 10062 "Unknown interaction".
+        """
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            await self._procesar_desafio(interaction, contrincante, tipo)
+        except Exception as error:
+            print(
+                f"[BOX] crear desafío falló: {type(error).__name__}: {error}",
+                flush=True,
+            )
+            await responder_error(
+                interaction,
+                "⚠️ Error al crear el desafío",
+                "Algo se rompió al procesar el desafío. Volvé a intentarlo.",
+            )
+
+    async def _procesar_desafio(
         self,
         interaction: discord.Interaction,
         contrincante: discord.Member,
@@ -369,7 +418,7 @@ class DesafiosMixin:
                         "Pelea — ganador sorteado",
                         f"{ganador_mencion} se lleva **${resultado['premio_dinero']:,}**",
                     )
-                await interaction.response.send_message(embed=embed)
+                await interaction.followup.send(embed=embed)
                 return
 
             # Si el bot no pudo aceptar (ej. error inesperado), mapear a mensaje humano
@@ -413,8 +462,8 @@ class DesafiosMixin:
             "Tiempo",
             f"Tienes **{texto_horas(BOX_DESAFIO_VENTANA_HORAS)}** para aceptar.",
         )
-        await interaction.response.send_message(embed=embed, view=view)
-        view.message = await interaction.original_response()
+        mensaje = await interaction.followup.send(embed=embed, view=view)
+        view.message = mensaje
 
     @app_commands.command(
         name="sparring",
