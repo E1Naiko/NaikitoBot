@@ -14,6 +14,7 @@ from config import (
     BOX_DEFENSA_MAXIMO,
     BOX_DESAFIO_DURACION_HORAS,
     BOX_DESAFIO_EXP_SPARRING,
+    BOX_DESAFIO_PREMIO_VS_BOT,
     BOX_LESION_DECAIMIENTO_POR_HORA,
     BOX_LESION_HORAS,
     BOX_LESION_PROBABILIDAD_MAXIMA,
@@ -1653,11 +1654,16 @@ def aceptar_desafio(
     multiplicador_experiencia: int = 5,
     recompensa_por_mejora: int = 0,
     canal_id: int | None = None,
+    contrincante_es_bot: bool = False,
 ):
     """Acepta un desafío y crea las dos acciones enfrentadas.
 
     Además resuelve y registra el combate en vivo (``box_combates``) para que
     el narrador lo vaya revelando asalto por asalto en ``canal_id``.
+
+    ``contrincante_es_bot`` marca la pelea contra la casa: el premio del
+    ganador se reduce a ``BOX_DESAFIO_PREMIO_VS_BOT`` (un cuarto por
+    defecto) de lo que pagaría la misma pelea contra otro jugador.
     """
 
     with conectar_db() as db:
@@ -1828,6 +1834,17 @@ def aceptar_desafio(
                 + experiencias[contrincante_id]
             )
 
+            # Pelear contra el bot es el camino sin riesgo de la casa: el
+            # que lo elige y gana cobra solo una fracción del premio real
+            # (un cuarto por defecto). Se escala el premio de la pelea
+            # entera, así el aviso de aceptación, la liquidación y el
+            # embed muestran siempre la misma cifra.
+            if contrincante_es_bot and premio_dinero > 0:
+                premio_dinero = max(
+                    1,
+                    math.floor(premio_dinero * BOX_DESAFIO_PREMIO_VS_BOT),
+                )
+
             db.execute(
                 """
                 INSERT INTO box_desafios_historial (
@@ -1854,14 +1871,6 @@ def aceptar_desafio(
             retador_id,
             contrincante_id,
         ):
-            recompensa_usuario = (
-                recompensa
-                + niveles_entrenamiento[user_id]
-                * recompensa_por_mejora
-                * multiplicador_experiencia
-            )
-
-            # Bonus temporal de Equipamiento.
             recompensa_usuario = (
                 recompensa
                 + niveles_entrenamiento[user_id]

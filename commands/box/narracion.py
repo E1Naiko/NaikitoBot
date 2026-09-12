@@ -359,10 +359,10 @@ class NarracionMixin:
                 f"{asalto.puntos[0]}-{asalto.puntos[1]}",
             ),
             ("Estado físico", self._barras(plan, asalto_index)),
-            (
-                "Pelea pactada",
-                f"{plan.asaltos_pactados} asaltos · tono {plan.tono.lower()}",
-            ),
+            # El tono narrativo ya no se muestra: era un spoiler gratis (un
+            # "tono remontada" delata que el favorito va a caer) y no aporta
+            # a lo que se lee asalto por asalto.
+            ("Pelea pactada", f"{plan.asaltos_pactados} asaltos"),
         ]
 
         return recortar(texto, LIMITE_DESCRIPCION), secciones

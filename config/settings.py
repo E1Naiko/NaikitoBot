@@ -81,6 +81,7 @@ __all__ = [
     "BOX_DESAFIO_EXP_SPARRING",
     "BOX_DESAFIO_EXP_PELEA",
     "BOX_DESAFIO_RECOMPENSA_POR_MEJORA",
+    "BOX_DESAFIO_PREMIO_VS_BOT",
     "BOX_PROMOCION_PROBABILIDAD",
     "BOX_SPONSOR_PROBABILIDAD",
     "BOX_SPONSOR_DURACION_DIAS",
@@ -751,6 +752,14 @@ BOX_DESAFIO_RECOMPENSA_POR_MEJORA = _leer_entero(
     5,
 )
 
+# Fracción del premio en dinero que cobra el que gana una pelea contra el
+# bot: ganarle a la casa paga menos que ganarle a otro jugador.
+
+BOX_DESAFIO_PREMIO_VS_BOT = _leer_decimal(
+    "BOX_DESAFIO_PREMIO_VS_BOT",
+    0.25,
+)
+
 _comprobar(
     BOX_DESAFIO_VENTANA_HORAS > 0,
     "BOX_DESAFIO_VENTANA_HORAS debe ser mayor que 0, pero se recibió "
@@ -773,6 +782,12 @@ for _nombre, _valor in (
         f"{_nombre} debe ser mayor o igual que 0, pero se recibió "
         f"{_valor}.",
     )
+
+_comprobar(
+    0 < BOX_DESAFIO_PREMIO_VS_BOT <= 1,
+    "BOX_DESAFIO_PREMIO_VS_BOT debe estar entre 0 (exclusivo) y 1 "
+    f"(inclusive), pero se recibió {BOX_DESAFIO_PREMIO_VS_BOT}.",
+)
 
 # ------------------------------------------------------------
 # NARRACIÓN DE COMBATES (desafíos y sparring en tiempo real)
