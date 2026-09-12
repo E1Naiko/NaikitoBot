@@ -55,6 +55,27 @@ __all__ = [
     "BOX_LESION_PROBABILIDAD_POR_HORA",
     "BOX_LESION_PROBABILIDAD_MAXIMA",
     "BOX_LESION_DECAIMIENTO_POR_HORA",
+    "BOX_COMBATE_ACTIVO",
+    "BOX_COMBATE_CANTICOS",
+    "BOX_COMBATE_EQUIPO_ACTIVO",
+    "BOX_COMBATE_EQUIPO_FUERZA",
+    "BOX_COMBATE_EQUIPO_POR_NIVEL",
+    "BOX_COMBATE_ESCALA_DANO",
+    "BOX_COMBATE_UNICO_GLOBAL",
+    "BOX_COMBATE_COMPRESION",
+    "BOX_COMBATE_DIALOGOS_POR_ROUND",
+    "BOX_COMBATE_KO_BASE",
+    "BOX_COMBATE_KO_DESDE_ASALTO",
+    "BOX_COMBATE_KO_POR_BRECHA",
+    "BOX_COMBATE_MAX_ASELLAR_POR_TICK",
+    "BOX_COMBATE_MAX_POR_TICK",
+    "BOX_COMBATE_NEUTRALES",
+    "BOX_COMBATE_PROB_PISO",
+    "BOX_COMBATE_PROB_TOPE",
+    "BOX_COMBATE_ROUNDS_MAXIMO",
+    "BOX_COMBATE_ROUNDS_MINIMO",
+    "BOX_COMBATE_SUELO_EXP",
+    "BOX_COMBATE_TICK_SEGUNDOS",
     "BOX_DESAFIO_VENTANA_HORAS",
     "BOX_DESAFIO_DURACION_HORAS",
     "BOX_DESAFIO_EXP_SPARRING",
@@ -147,6 +168,27 @@ def _leer_decimal(nombre, defecto):
             f"decimal (por ejemplo {defecto}), pero se recibió "
             f"'{valor}'."
         ) from None
+
+
+def _leer_booleano(nombre, defecto):
+    """Lee un interruptor ``1/0`` (también acepta sí/no, true/false).
+
+    Se usa para features que conviene poder apagar desde el ``.env`` sin
+    tocar el código, como la narración en vivo de los combates.
+    """
+
+    valor = os.getenv(nombre, str(defecto)).strip().lower()
+
+    if valor in {"1", "si", "sí", "true", "on", "verdadero"}:
+        return True
+
+    if valor in {"0", "no", "false", "off", "falso"}:
+        return False
+
+    raise RuntimeError(
+        f"Configuración inválida: {nombre} debe ser 1 (activado) o 0 "
+        f"(apagado), pero se recibió '{valor}'."
+    )
 
 
 def _leer_mapa(nombre, defecto, tipo_valor):
@@ -730,6 +772,250 @@ for _nombre, _valor in (
         _valor >= 0,
         f"{_nombre} debe ser mayor o igual que 0, pero se recibió "
         f"{_valor}.",
+    )
+
+# ------------------------------------------------------------
+# NARRACIÓN DE COMBATES (desafíos y sparring en tiempo real)
+# ------------------------------------------------------------
+#
+# El combate se planea entero al aceptar el desafío y el bot solo lo
+# revela: cada asalto es un mensaje del canal y cada latido de
+# ``BOX_COMBATE_TICK_SEGUNDOS`` muestra un diálogo más. La duración real
+# del combate es, entonces, ``asaltos * (diálogos + 1) * tick`` segundos;
+# ``BOX_DESAFIO_DURACION_HORAS`` sigue siendo el bloqueo de la acción.
+
+BOX_COMBATE_ACTIVO = _leer_booleano(
+    "BOX_COMBATE_ACTIVO",
+    True,
+)
+
+# Latido del narrador, en segundos. discord.py exige más de 0.35 s en un
+# ``tasks.loop``, así que el piso práctico es 1.
+BOX_COMBATE_TICK_SEGUNDOS = _leer_entero(
+    "BOX_COMBATE_TICK_SEGUNDOS",
+    15,
+)
+
+# Diálogos de un asalto. La cantidad de eventos dentro del asalto es
+# aleatoria pero nunca supera este techo, que es lo que fija el reloj.
+BOX_COMBATE_DIALOGOS_POR_ROUND = _leer_entero(
+    "BOX_COMBATE_DIALOGOS_POR_ROUND",
+    7,
+)
+
+# Asaltos pactados: una pelea pareja va a la decisión, una muy desigual
+# se acorta hasta ``BOX_COMBATE_ROUNDS_MINIMO``. Se fuerza a impar para
+# que el combate no pueda terminar empatado.
+BOX_COMBATE_ROUNDS_MAXIMO = _leer_entero(
+    "BOX_COMBATE_ROUNDS_MAXIMO",
+    9,
+)
+
+BOX_COMBATE_ROUNDS_MINIMO = _leer_entero(
+    "BOX_COMBATE_ROUNDS_MINIMO",
+    3,
+)
+
+# Banda de relleno: fracción de intercambios que no suman puntos para
+# ninguno (el comentario táctico). Mantiene la proporción entre los dos
+# peleadores y deja lugar a los diálogos intermedios.
+BOX_COMBATE_NEUTRALES = _leer_decimal(
+    "BOX_COMBATE_NEUTRALES",
+    0.35,
+)
+
+# Probabilidad de victoria del más fuerte, comprimida y acotada: nadie es
+# un saco de boxeo (piso) ni gana por decreto (tope).
+BOX_COMBATE_PROB_PISO = _leer_decimal(
+    "BOX_COMBATE_PROB_PISO",
+    0.10,
+)
+
+BOX_COMBATE_PROB_TOPE = _leer_decimal(
+    "BOX_COMBATE_PROB_TOPE",
+    0.90,
+)
+
+# Compresión de la experiencia: se compara log1p(EXP + suelo) para que una
+# diferencia de un millón de EXP no sea un 100 % de probabilidad. Como la
+# fórmula nunca se mueve más de ``compresion`` del 50 %, el valor también fija
+# cuán parejo se lee todo: con 0.45 el rango natural es 5 %-95 % y los dos
+# ``BOX_COMBATE_PROB_*`` recién ahí son los que recortan las palizas.
+BOX_COMBATE_SUELO_EXP = _leer_entero(
+    "BOX_COMBATE_SUELO_EXP",
+    5000,
+)
+
+BOX_COMBATE_COMPRESION = _leer_decimal(
+    "BOX_COMBATE_COMPRESION",
+    0.45,
+)
+
+# Probabilidad de que la pelea se corte antes del límite cuando uno va
+# arriba por dos asaltos o más: ``base + pendiente * brecha``.
+BOX_COMBATE_KO_BASE = _leer_decimal(
+    "BOX_COMBATE_KO_BASE",
+    0.025,
+)
+
+BOX_COMBATE_KO_POR_BRECHA = _leer_decimal(
+    "BOX_COMBATE_KO_POR_BRECHA",
+    0.07,
+)
+
+# Asalto recién desde el cual puede haber nocaut, para que el combate no
+# termine en el primer golpe.
+BOX_COMBATE_KO_DESDE_ASALTO = _leer_entero(
+    "BOX_COMBATE_KO_DESDE_ASALTO",
+    3,
+)
+
+# Un solo combate a la vez. El bot corre en servidores privados y dos peleas
+# narradas en el mismo canal se pisan: el segundo desafío se rechaza hasta que
+# el combate en curso termine. Con ``BOX_COMBATE_UNICO_GLOBAL=0`` el candado
+# pasa a ser por servidor (útil si algún día el bot atiende más de un guild).
+BOX_COMBATE_UNICO_GLOBAL = _leer_booleano(
+    "BOX_COMBATE_UNICO_GLOBAL",
+    True,
+)
+
+# El equipamiento deja de ser decorativo: cada nivel de una pieza suma
+# ``BOX_COMBATE_EQUIPO_POR_NIVEL`` a la estadística que le corresponde (la
+# tabla está en ``constants.EQUIPAMIENTO_COMBATE``) y
+# ``BOX_COMBATE_EQUIPO_FUERZA`` al peso del peleador en el sorteo del ganador.
+# El bono es acotado a propósito: el equipamiento inclina las peleas parejas y
+# los nocauts, pero no le gana a una diferencia de experiencia real.
+BOX_COMBATE_EQUIPO_ACTIVO = _leer_booleano(
+    "BOX_COMBATE_EQUIPO_ACTIVO",
+    True,
+)
+
+BOX_COMBATE_EQUIPO_POR_NIVEL = _leer_decimal(
+    "BOX_COMBATE_EQUIPO_POR_NIVEL",
+    0.03,
+)
+
+BOX_COMBATE_EQUIPO_FUERZA = _leer_decimal(
+    "BOX_COMBATE_EQUIPO_FUERZA",
+    0.01,
+)
+
+# Cuánto golpea un intercambio, en fracciones de la barra de vida. Es la perilla
+# que decide si una pelea llega a la tarjeta o se corta: 1.0 vacía la vida en un
+# asalto, 8.0 no derrumba a nadie nunca.
+BOX_COMBATE_ESCALA_DANO = _leer_decimal(
+    "BOX_COMBATE_ESCALA_DANO",
+    2.8,
+)
+
+# Combates narrados como máximo por latido, para no exceder los límites de
+# Discord cuando hay muchos simultáneos o se recuperan tras un reinicio.
+BOX_COMBATE_MAX_POR_TICK = _leer_entero(
+    "BOX_COMBATE_MAX_POR_TICK",
+    6,
+)
+
+# Mensajes extra que se recuperan por combate tras un reinicio.
+BOX_COMBATE_MAX_ASELLAR_POR_TICK = _leer_entero(
+    "BOX_COMBATE_MAX_ASELLAR_POR_TICK",
+    3,
+)
+
+# Cantico del público ("¡X, compadre, ...!") en peleas: conviene dejarlo
+# apagado en servidores grandes porque nombra a un miembro real.
+BOX_COMBATE_CANTICOS = _leer_booleano(
+    "BOX_COMBATE_CANTICOS",
+    False,
+)
+
+_comprobar(
+    BOX_COMBATE_TICK_SEGUNDOS >= 1,
+    "BOX_COMBATE_TICK_SEGUNDOS debe ser mayor o igual que 1 segundo, "
+    f"pero se recibió {BOX_COMBATE_TICK_SEGUNDOS}.",
+)
+
+_comprobar(
+    BOX_COMBATE_DIALOGOS_POR_ROUND >= 3,
+    "BOX_COMBATE_DIALOGOS_POR_ROUND debe ser mayor o igual que 3 para que "
+    "un asalto tenga comienzo, nudo y cierre, pero se recibió "
+    f"{BOX_COMBATE_DIALOGOS_POR_ROUND}.",
+)
+
+_comprobar(
+    1 <= BOX_COMBATE_ROUNDS_MINIMO <= BOX_COMBATE_ROUNDS_MAXIMO <= 36,
+    "los asaltos deben cumplir 1 <= BOX_COMBATE_ROUNDS_MINIMO <= "
+    f"BOX_COMBATE_ROUNDS_MAXIMO <= 36, pero se recibió mínimo "
+    f"{BOX_COMBATE_ROUNDS_MINIMO} y máximo {BOX_COMBATE_ROUNDS_MAXIMO}.",
+)
+
+_comprobar(
+    0 <= BOX_COMBATE_NEUTRALES < 0.9,
+    "BOX_COMBATE_NEUTRALES debe estar entre 0 y 0.9 (si no, casi ningún "
+    f"intercambio suma), pero se recibió {BOX_COMBATE_NEUTRALES}.",
+)
+
+_comprobar(
+    0 < BOX_COMBATE_PROB_PISO <= BOX_COMBATE_PROB_TOPE < 1,
+    "la probabilidad debe cumplir 0 < BOX_COMBATE_PROB_PISO <= "
+    f"BOX_COMBATE_PROB_TOPE < 1, pero se recibió piso "
+    f"{BOX_COMBATE_PROB_PISO} y tope {BOX_COMBATE_PROB_TOPE}.",
+)
+
+_comprobar(
+    0 < BOX_COMBATE_COMPRESION <= 0.5,
+    "BOX_COMBATE_COMPRESION debe estar entre 0 y 0.5 (es cuánto se mueve "
+    f"la probabilidad desde el 50 %), pero se recibió "
+    f"{BOX_COMBATE_COMPRESION}.",
+)
+
+_comprobar(
+    BOX_COMBATE_SUELO_EXP >= 0,
+    "BOX_COMBATE_SUELO_EXP debe ser mayor o igual que 0, pero se recibió "
+    f"{BOX_COMBATE_SUELO_EXP}.",
+)
+
+for _nombre, _valor in (
+    ("BOX_COMBATE_KO_BASE", BOX_COMBATE_KO_BASE),
+    ("BOX_COMBATE_KO_POR_BRECHA", BOX_COMBATE_KO_POR_BRECHA),
+):
+    _comprobar(
+        0 <= _valor <= 1,
+        f"{_nombre} debe ser una probabilidad entre 0 y 1, pero se "
+        f"recibió {_valor}.",
+    )
+
+_comprobar(
+    BOX_COMBATE_KO_DESDE_ASALTO >= 2,
+    "BOX_COMBATE_KO_DESDE_ASALTO debe ser mayor o igual que 2 para que la "
+    "pelea tenga tiempo de desarrollarse, pero se recibió "
+    f"{BOX_COMBATE_KO_DESDE_ASALTO}.",
+)
+
+_comprobar(
+    BOX_COMBATE_ESCALA_DANO >= 1,
+    "BOX_COMBATE_ESCALA_DANO debe ser mayor o igual que 1 (es el divisor de "
+    f"la escala de daño), pero se recibió {BOX_COMBATE_ESCALA_DANO}.",
+)
+
+_comprobar(
+    0 <= BOX_COMBATE_EQUIPO_POR_NIVEL <= 0.5,
+    "BOX_COMBATE_EQUIPO_POR_NIVEL debe ser un porcentaje por nivel entre 0 y "
+    f"0.5, pero se recibió {BOX_COMBATE_EQUIPO_POR_NIVEL}.",
+)
+
+_comprobar(
+    0 <= BOX_COMBATE_EQUIPO_FUERZA <= 0.2,
+    "BOX_COMBATE_EQUIPO_FUERZA debe ser un porcentaje por nivel entre 0 y "
+    f"0.2, pero se recibió {BOX_COMBATE_EQUIPO_FUERZA}.",
+)
+
+for _nombre, _valor in (
+    ("BOX_COMBATE_MAX_POR_TICK", BOX_COMBATE_MAX_POR_TICK),
+    ("BOX_COMBATE_MAX_ASELLAR_POR_TICK", BOX_COMBATE_MAX_ASELLAR_POR_TICK),
+):
+    _comprobar(
+        _valor >= 1,
+        f"{_nombre} debe ser mayor o igual que 1, pero se recibió {_valor}.",
     )
 
 # ------------------------------------------------------------

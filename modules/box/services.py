@@ -4,6 +4,7 @@ Los cogs importan desde acá y no directamente de ``database`` ni ``logic``,
 igual que en los módulos Madrugue y SSF.
 """
 
+from modules.box.combate import Plan, planificar, probabilidad_victoria
 from modules.box.constants import (
     CALIDADES,
     EQUIPAMIENTO,
@@ -19,6 +20,23 @@ from modules.box.constants import (
 
 from modules.box.database import (
     aceptar_desafio,
+    asaltos_publicados,
+    cerrar_combate,
+    combate_en_curso,
+    ESTADO_CANCELADO,
+    ESTADO_TERMINADO,
+    ESTADO_VIVO,
+    fijar_canticos,
+    latido_de,
+    mensaje_de_asalto,
+    obtener_canticos,
+    obtener_combate_en_curso,
+    obtener_combates_vivos,
+    reclamar_asalto,
+    registrar_mensaje_asalto,
+    tiene_accion_activa,
+    ultimos_combates,
+    actualizar_mensaje_combate,
     admin_cancelar_accion,
     admin_completar_acciones_vencidas,
     admin_curar_usuario,
@@ -58,9 +76,11 @@ from modules.box.database import (
     usar_suministro,
 )
 
+from modules.box.fighting import REGLAS_PELEA, planificar_pelea
 from modules.box.logic import (
     Duracion,
     calidad_equipamiento,
+    estadisticas_de_combate,
     es_nivel_maximo,
     formato_ratio,
     precio_equipamiento,
@@ -69,7 +89,53 @@ from modules.box.logic import (
     texto_horas,
 )
 
+from modules.box.narracion import (
+    POOLS,
+    apertura,
+    cierre,
+    dialogos,
+    problemas_del_catalogo,
+    recortar,
+    veredicto,
+)
+
+from modules.box.sparring import REGLAS_SPARRING, planificar_sparring
+
 __all__ = [
+    # Combates en vivo
+    "ESTADO_VIVO",
+    "ESTADO_TERMINADO",
+    "ESTADO_CANCELADO",
+    "Plan",
+    "REGLAS_PELEA",
+    "REGLAS_SPARRING",
+    "asaltos_publicados",
+    "actualizar_mensaje_combate",
+    "cerrar_combate",
+    "combate_en_curso",
+    "estadisticas_de_combate",
+    "fijar_canticos",
+    "latido_de",
+    "obtener_canticos",
+    "mensaje_de_asalto",
+    "obtener_combate_en_curso",
+    "obtener_combates_vivos",
+    "planificar",
+    "planificar_pelea",
+    "planificar_sparring",
+    "probabilidad_victoria",
+    "reclamar_asalto",
+    "registrar_mensaje_asalto",
+    "tiene_accion_activa",
+    "ultimos_combates",
+    # Narración
+    "POOLS",
+    "apertura",
+    "cierre",
+    "dialogos",
+    "problemas_del_catalogo",
+    "recortar",
+    "veredicto",
     # Constantes
     "CALIDADES",
     "EQUIPAMIENTO",

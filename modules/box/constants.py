@@ -161,6 +161,23 @@ EQUIPAMIENTO = {
 }
 
 
+# Qué hace cada pieza arriba del ring. Cada nivel agrega
+# ``BOX_COMBATE_EQUIPO_POR_NIVEL`` multiplicado por el peso de la fila a la
+# estadística indicada. ``fatiga`` no es una estadística de ``box_equipo``: es
+# el multiplicador con el que se acumula el cansancio propio en cada asalto,
+# así que un peso negativo significa "se cansa más tarde".
+#
+# Sin esta tabla el equipamiento sería puro adorno: ``box_equipo`` guarda los
+# niveles desde siempre pero ningún desafío los leía.
+EQUIPAMIENTO_COMBATE = {
+    "guantes": ("dano", 1.0),                  # pegan más fuerte
+    "casco": ("defensa", 1.0),                 # ven venir el golpe
+    "protector_bucal": ("vida_maxima", 0.8),   # aguantan la mandíbula
+    "short": ("defensa", 0.5),                 # movilidad para no ser blanco
+    "botas": ("fatiga", -0.8),                 # las piernas no se caen en el 4
+}
+
+
 # Nombre en infinitivo de cada acción, para los avisos del bot.
 NOMBRES_ACCIONES = {
     "TRABAJANDO": "trabajar",
@@ -202,7 +219,8 @@ TEXTO_AYUDA = (
     "`/box suministro tipo` — Usa suministros que restauran vida, cansancio,\n"
     "defensa (servicio de reparación) o la lesión.\n"
     "`/box descanso` — Reinicia la probabilidad de lesión.\n"
-    "`/box topdesafios` — Muestra el ranking de desafíos.\n\n"
+    "`/box topdesafios` — Muestra el ranking de desafíos.\n"
+    "`/box combate` — Muestra tu pelea o sparring narrado en vivo.\n\n"
     "Las acciones duran el tiempo indicado y continúan aunque el bot se reinicie."
 )
 
@@ -255,7 +273,7 @@ NARRACION_FIGHTING_INTENSO = (
     "¡Acá no se pelea solamente por ganar, se pelea por dejar un legado!\n"
     "{atacante} no quiere ser la sombra de nadie.\n"
     "{defensor} está recibiendo castigo, pero todavía tiene fuego en los ojos.\n"
-    "{defensor} no está peleando solamente contra {atacante; está peleando contra sus propias dudas.\n"
+    "{defensor} no está peleando solamente contra {atacante}; está peleando contra sus propias dudas.\n"
     "¡Acá se está poniendo a prueba el legado!\n"
     "{atacante} quiere demostrar que pertenece a este nivel.\n"
     "{defensor} se mete peligrosamente en la zona de fuego sin meter golpes.\n"

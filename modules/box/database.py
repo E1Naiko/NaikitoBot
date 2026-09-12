@@ -5,6 +5,9 @@ import sqlite3
 
 from config import (
     BOX_CANSANCIO_INICIAL,
+    BOX_COMBATE_ACTIVO,
+    BOX_COMBATE_TICK_SEGUNDOS,
+    BOX_COMBATE_UNICO_GLOBAL,
     BOX_DANO_INICIAL,
     BOX_DANO_MAXIMO,
     BOX_DEFENSA_INICIAL,
@@ -28,7 +31,9 @@ from config import (
 )
 
 from core.database import conectar_db
-from modules.box.logic import precio_mejora
+from modules.box.fighting import planificar_pelea
+from modules.box.logic import precio_mejora, estadisticas_de_combate
+from modules.box.sparring import planificar_sparring
 
 
 # ============================================================
@@ -192,6 +197,66 @@ def inicializar_db():
                 if columna[1] == "casco" and columna[2] == "text":
                     # La migración ya se hizo arriba al crear la tabla con INTEGER
                     pass
+
+        # ====================================================
+        # COMBATES EN VIVO (narración de desafíos y sparring)
+        # ====================================================
+        #
+        # El combate se resuelve al aceptar el desafío y queda guardado como
+        # un plan JSON; el narrador solo lo revela contra el reloj. Por eso
+        # alcanza con guardar la semilla, el latido y los asaltos ya
+        # publicados: no hace falta persistir el texto de cada diálogo.
+
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS box_combates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                canal_id INTEGER,
+                modo TEXT NOT NULL,
+                retador_id INTEGER NOT NULL,
+                contrincante_id INTEGER NOT NULL,
+                semilla INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                iniciado_en TEXT NOT NULL,
+                latido_segundos INTEGER NOT NULL,
+                latidos_totales INTEGER NOT NULL,
+                fin_narracion_en TEXT NOT NULL,
+                estado TEXT NOT NULL DEFAULT 'VIVO',
+                mensaje_id INTEGER,
+                resumen TEXT,
+                terminado_en TEXT
+            )
+            """
+        )
+
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS box_combates_asaltos (
+                combate_id INTEGER NOT NULL,
+                asalto INTEGER NOT NULL,
+                mensaje_id INTEGER,
+                publicado_en TEXT NOT NULL,
+                PRIMARY KEY (combate_id, asalto)
+            )
+            """
+        )
+
+        # Ajustes que el servidor decide para su velada. ``canticos`` arranca
+        # en NULL ("nadie decidió") y el narrador cae al valor de configuración:
+        # el cántico nombra en voz alta a un miembro real, así que se enciende
+        # con consentimiento explícito del servidor y no por default.
+
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS box_config_guild (
+                guild_id INTEGER PRIMARY KEY,
+                canticos INTEGER,
+                actualizado_en TEXT,
+                actualizado_por INTEGER
+            )
+            """
+        )
 
         # ====================================================
         # SPONSORS
@@ -1587,8 +1652,13 @@ def aceptar_desafio(
     tipo: str = "SPARRING",
     multiplicador_experiencia: int = 5,
     recompensa_por_mejora: int = 0,
+    canal_id: int | None = None,
 ):
-    """Acepta un desafío y crea las dos acciones enfrentadas."""
+    """Acepta un desafío y crea las dos acciones enfrentadas.
+
+    Además resuelve y registra el combate en vivo (``box_combates``) para que
+    el narrador lo vaya revelando asalto por asalto en ``canal_id``.
+    """
 
     with conectar_db() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -1620,6 +1690,28 @@ def aceptar_desafio(
             )
             db.commit()
             return {"estado": "expirado"}
+
+        # Un solo combate a la vez. Se comprueba acá, dentro de la misma
+        # transacción que crea la fila, porque es el punto donde dos
+        # aceptaciones simultáneas podrían pasar las dos por el candado
+        # "amable" del comando. El desafío NO se borra: queda pendiente y se
+        # puede aceptar cuando termine la pelea que estorbaba.
+        en_curso = _hay_combate_vivo(
+            db,
+            None if BOX_COMBATE_UNICO_GLOBAL else guild_id,
+        )
+
+        if en_curso is not None:
+            return {
+                "estado": "combate_en_curso",
+                "combate": {
+                    "id": en_curso[0],
+                    "guild_id": en_curso[1],
+                    "retador_id": en_curso[2],
+                    "contrincante_id": en_curso[3],
+                    "modo": en_curso[4],
+                },
+            }
 
         usuarios = db.execute(
             """
@@ -1808,12 +1900,25 @@ def aceptar_desafio(
             (desafio_id,),
         )
 
+        combate_id = _crear_combate(
+            db,
+            guild_id,
+            modo=tipo,
+            retador_id=retador_id,
+            contrincante_id=contrincante_id,
+            experiencias=experiencias,
+            ganador_id=ganador_id,
+            ahora=ahora,
+            canal_id=canal_id,
+        )
+
         db.commit()
 
         return {
             "estado": "aceptado",
             "ganador_id": ganador_id,
             "premio_dinero": premio_dinero,
+            "combate_id": combate_id,
         }
 
 
@@ -2990,3 +3095,575 @@ def admin_obtener_lesionados(
                 ahora.isoformat(),
             ),
         ).fetchall()
+
+
+# ============================================================
+# COMBATES EN VIVO
+# ============================================================
+#
+# Un combate es el relato de un desafío aceptado: se resuelve acá, al aceptar,
+# y el narrador del cog lo va revelando asalto por asalto. Se guarda el plan
+# serializado (no el texto de cada línea) para que el resultado sea
+# reproducible y un reinicio del bot no escriba una versión alternativa de la
+# pelea en el canal.
+
+ESTADO_VIVO = "VIVO"
+ESTADO_TERMINADO = "TERMINADO"
+ESTADO_CANCELADO = "CANCELADO"
+
+
+def _fila_estadisticas_combate(db, guild_id: int, user_id: int) -> dict:
+    """Vida, daño, defensa y equipamiento de un peleador, listos para simular.
+
+    ``box_equipo`` guardaba los niveles de casco, guantes, bucal, short y botas
+    como una etiqueta de la tienda: ningún desafío los leía y comprar no servía
+    de nada arriba del ring. Acá se convierten en los números que entiende el
+    motor (ver ``logic.estadisticas_de_combate``), con el techo que pone
+    ``BOX_COMBATE_EQUIPO_POR_NIVEL``.
+
+    El ``cansancio`` actual no entra a propósito: hoy ninguna acción lo baja,
+    así que siempre está en su máximo y usarlo sería decorativo. Cuando pelear
+    desgaste la fila, ahí vale la pena.
+    """
+
+    fila = db.execute(
+        """
+        SELECT
+            vida_maxima,
+            dano,
+            defensa,
+            casco,
+            guantes,
+            protector_bucal,
+            short,
+            botas
+        FROM box_equipo
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (guild_id, user_id),
+    ).fetchone()
+
+    base = {
+        "vida_maxima": BOX_VIDA_INICIAL,
+        "dano": BOX_DANO_INICIAL,
+        "defensa": BOX_DEFENSA_INICIAL,
+    }
+    niveles = {}
+
+    if fila is not None:
+        base = {
+            "vida_maxima": fila[0] or BOX_VIDA_INICIAL,
+            "dano": fila[1] or BOX_DANO_INICIAL,
+            "defensa": fila[2] or BOX_DEFENSA_INICIAL,
+        }
+        niveles = dict(
+            zip(
+                ("casco", "guantes", "protector_bucal", "short", "botas"),
+                fila[3:8],
+            )
+        )
+
+    return estadisticas_de_combate(base, niveles)
+
+
+def _crear_combate(
+    db,
+    guild_id: int,
+    *,
+    modo: str,
+    retador_id: int,
+    contrincante_id: int,
+    experiencias: dict,
+    ganador_id: int | None,
+    ahora: datetime,
+    canal_id: int | None = None,
+):
+    """Resuelve el combate y lo registra, dentro de la transacción abierta.
+
+    ``ganador_id`` es el que ya sorteó el desafío: la narración se arma
+    acondicionada a ese resultado, así el relato y la recompensa que paga
+    ``_liquidar_accion`` nunca se contradicen. En el sparring no hay ganador
+    y tampoco hay premio.
+    """
+
+    if not BOX_COMBATE_ACTIVO:
+        return None
+
+    equipos = {
+        user_id: _fila_estadisticas_combate(db, guild_id, user_id)
+        for user_id in (retador_id, contrincante_id)
+    }
+
+    semilla = random.SystemRandom().randrange(1 << 30)
+
+    forzado = None
+
+    if ganador_id == retador_id:
+        forzado = 0
+    elif ganador_id == contrincante_id:
+        forzado = 1
+
+    comunes = dict(
+        nombres=("Retador", "Contrincante"),
+        experiencia=(
+            experiencias.get(retador_id, 0),
+            experiencias.get(contrincante_id, 0),
+        ),
+        vida_maxima=(
+            equipos[retador_id]["vida_maxima"],
+            equipos[contrincante_id]["vida_maxima"],
+        ),
+        dano=(equipos[retador_id]["dano"], equipos[contrincante_id]["dano"]),
+        defensa=(
+            equipos[retador_id]["defensa"],
+            equipos[contrincante_id]["defensa"],
+        ),
+        semilla=semilla,
+        fatiga=(
+            equipos[retador_id]["fatiga"],
+            equipos[contrincante_id]["fatiga"],
+        ),
+        bono_fuerza=(
+            equipos[retador_id]["fuerza"],
+            equipos[contrincante_id]["fuerza"],
+        ),
+    )
+
+    if modo == "FIGHTING":
+        plan = planificar_pelea(ganador_forzado=forzado, **comunes)
+    else:
+        plan = planificar_sparring(**comunes)
+
+    latidos = max(1, plan.latidos)
+
+    fila = db.execute(
+        """
+        INSERT INTO box_combates (
+            guild_id,
+            canal_id,
+            modo,
+            retador_id,
+            contrincante_id,
+            semilla,
+            plan,
+            iniciado_en,
+            latido_segundos,
+            latidos_totales,
+            fin_narracion_en,
+            estado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            guild_id,
+            canal_id,
+            modo,
+            retador_id,
+            contrincante_id,
+            semilla,
+            plan.a_json(),
+            ahora.isoformat(),
+            BOX_COMBATE_TICK_SEGUNDOS,
+            latidos,
+            (
+                ahora + timedelta(seconds=latidos * BOX_COMBATE_TICK_SEGUNDOS)
+            ).isoformat(),
+            ESTADO_VIVO,
+        ),
+    )
+
+    return fila.lastrowid
+
+
+def _hay_combate_vivo(db, guild_id: int | None):
+    """Fila del combate en curso, leída dentro de una transacción abierta."""
+
+    if guild_id is None:
+        return db.execute(
+            """
+            SELECT id, guild_id, retador_id, contrincante_id, modo
+            FROM box_combates
+            WHERE estado = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (ESTADO_VIVO,),
+        ).fetchone()
+
+    return db.execute(
+        """
+        SELECT id, guild_id, retador_id, contrincante_id, modo
+        FROM box_combates
+        WHERE estado = ?
+        AND guild_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (ESTADO_VIVO, guild_id),
+    ).fetchone()
+
+
+def combate_en_curso(guild_id: int | None = None):
+    """El único combate que puede haber a la vez, o ``None``.
+
+    El candado existe porque el canal de Box es uno: dos peleas narrándose
+    juntas se pisan mensaje a mensaje y el reloj de cada una deja de tener
+    sentido. ``BOX_COMBATE_UNICO_GLOBAL`` define el alcance: con 1 es una pelea
+    por bot (la suposición real: servidores privados de poca gente), con 0 una
+    por servidor.
+    """
+
+    with conectar_db() as db:
+        fila = _hay_combate_vivo(
+            db,
+            None if BOX_COMBATE_UNICO_GLOBAL else guild_id,
+        )
+
+    if fila is None:
+        return None
+
+    return {
+        "id": fila[0],
+        "guild_id": fila[1],
+        "retador_id": fila[2],
+        "contrincante_id": fila[3],
+        "modo": fila[4],
+    }
+
+
+def obtener_canticos(guild_id: int):
+    """Si el servidor consintió los cánticos que nombran miembros reales.
+
+    ``None`` significa "nadie decidió todavía", y el narrador cae al valor de
+    ``BOX_COMBATE_CANTICOS``. Se pidió una decisión por servidor -y no un
+    global- porque el cántico tira el apodo de una persona al aire: en un grupo
+    chico, acordado entre todos, está bien; usado a escondidas en un canal de
+    cuatrocientos, no.
+    """
+
+    with conectar_db() as db:
+        fila = db.execute(
+            "SELECT canticos FROM box_config_guild WHERE guild_id = ?",
+            (guild_id,),
+        ).fetchone()
+
+    if fila is None or fila[0] is None:
+        return None
+
+    return bool(fila[0])
+
+
+def fijar_canticos(
+    guild_id: int,
+    activado: bool,
+    moderador_id: int,
+    ahora: datetime,
+) -> None:
+    """Guarda la decisión del servidor sobre los cánticos."""
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_config_guild (
+                guild_id,
+                canticos,
+                actualizado_en,
+                actualizado_por
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                canticos = excluded.canticos,
+                actualizado_en = excluded.actualizado_en,
+                actualizado_por = excluded.actualizado_por
+            """,
+            (
+                guild_id,
+                int(bool(activado)),
+                ahora.isoformat(),
+                moderador_id,
+            ),
+        )
+        db.commit()
+
+
+def obtener_combates_vivos(ahora: datetime, guild_id: int | None = None):
+    """Combates en vivo, listos para el latido del narrador.
+
+    Se devuelven también los que ya vencieron: hay que cerrarlos y asentar el
+    resultado, si no quedarían marcados como vivos para siempre.
+    """
+
+    consulta = """
+        SELECT
+            id,
+            guild_id,
+            canal_id,
+            modo,
+            retador_id,
+            contrincante_id,
+            plan,
+            iniciado_en,
+            latido_segundos,
+            latidos_totales,
+            fin_narracion_en,
+            estado,
+            mensaje_id
+        FROM box_combates
+        WHERE estado = ?
+    """
+    parametros: list = [ESTADO_VIVO]
+
+    if guild_id is not None:
+        consulta += " AND guild_id = ?"
+        parametros.append(guild_id)
+
+    consulta += " ORDER BY iniciado_en"
+
+    with conectar_db() as db:
+        filas = db.execute(consulta, parametros).fetchall()
+
+    combatientes = []
+
+    for fila in filas:
+        combatientes.append(
+            {
+                "id": fila[0],
+                "guild_id": fila[1],
+                "canal_id": fila[2],
+                "modo": fila[3],
+                "retador_id": fila[4],
+                "contrincante_id": fila[5],
+                "plan": fila[6],
+                "iniciado_en": datetime.fromisoformat(fila[7]),
+                "latido_segundos": fila[8],
+                "latidos_totales": fila[9],
+                "fin_narracion_en": datetime.fromisoformat(fila[10]),
+                "estado": fila[11],
+                "mensaje_id": fila[12],
+            }
+        )
+
+    return combatientes
+
+
+def latido_de(combate: dict, ahora: datetime) -> int:
+    """Cuántos latidos pasaron desde que empezó el combate."""
+
+    segundos = (ahora - combate["iniciado_en"]).total_seconds()
+
+    # Un reloj atrasado (arranque antes de sincronizar el horario, por
+    # ejemplo) no puede dar un latido negativo: el combate recién empieza.
+    return max(0, int(segundos // max(1, combate["latido_segundos"])))
+
+
+def asaltos_publicados(combate_id: int) -> set:
+    """Asaltos que ya tienen su mensaje en el canal."""
+
+    with conectar_db() as db:
+        return {
+            fila[0]
+            for fila in db.execute(
+                "SELECT asalto FROM box_combates_asaltos WHERE combate_id = ?",
+                (combate_id,),
+            )
+        }
+
+
+def mensaje_de_asalto(combate_id: int, asalto: int):
+    """Mensaje del asalto, si ya fue publicado."""
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT mensaje_id
+            FROM box_combates_asaltos
+            WHERE combate_id = ? AND asalto = ?
+            """,
+            (combate_id, asalto),
+        ).fetchone()
+
+    return fila[0] if fila else None
+
+
+def reclamar_asalto(combate_id: int, asalto: int, ahora: datetime) -> bool:
+    """Marca el asalto como propio; ``False`` si ya lo estaba publicando otro.
+
+    Es el seguro contra dobles envíos: el tick, un retry de Discord o el
+    catch-up después de un reinicio pueden pedir el mismo asalto, y solo uno
+    de los tres gana la carrera.
+    """
+
+    with conectar_db() as db:
+        cursor = db.execute(
+            """
+            INSERT OR IGNORE INTO box_combates_asaltos (
+                combate_id,
+                asalto,
+                publicado_en
+            ) VALUES (?, ?, ?)
+            """,
+            (combate_id, asalto, ahora.isoformat()),
+        )
+        db.commit()
+
+        return cursor.rowcount == 1
+
+
+def registrar_mensaje_asalto(
+    combate_id: int,
+    asalto: int,
+    mensaje_id: int,
+    ahora: datetime,
+):
+    """Guarda el mensaje de un asalto (o lo reemplaza si fue borrado)."""
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_combates_asaltos (
+                combate_id,
+                asalto,
+                mensaje_id,
+                publicado_en
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(combate_id, asalto) DO UPDATE SET
+                mensaje_id = excluded.mensaje_id,
+                publicado_en = excluded.publicado_en
+            """,
+            (combate_id, asalto, mensaje_id, ahora.isoformat()),
+        )
+        db.commit()
+
+
+def actualizar_mensaje_combate(combate_id: int, mensaje_id: int):
+    """Recuerda el último mensaje del combate, para poder editarlo."""
+
+    with conectar_db() as db:
+        db.execute(
+            "UPDATE box_combates SET mensaje_id = ? WHERE id = ?",
+            (mensaje_id, combate_id),
+        )
+        db.commit()
+
+
+def cerrar_combate(
+    combate_id: int,
+    estado: str,
+    ahora: datetime,
+    resumen: str | None = None,
+):
+    """Cierra un combate: ya no se narra más."""
+
+    with conectar_db() as db:
+        db.execute(
+            """
+            UPDATE box_combates
+            SET estado = ?,
+                terminado_en = ?,
+                resumen = COALESCE(?, resumen)
+            WHERE id = ?
+            """,
+            (estado, ahora.isoformat(), resumen, combate_id),
+        )
+        db.commit()
+
+
+def tiene_accion_activa(guild_id: int, user_id: int) -> bool:
+    """Indica si el usuario sigue con la acción del desafío en curso.
+
+    El narrador lo consulta en cada latido: si un administrador finalizó o
+    canceló la acción, el combate hay que cerrarlo, si no quedaría narrando
+    para siempre una pelea que ya no existe.
+    """
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT 1
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+    return fila is not None
+
+
+def obtener_combate_en_curso(guild_id: int, user_id: int):
+    """Combate vivo en el que participa el usuario, para /box combate."""
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT
+                id,
+                plan,
+                iniciado_en,
+                latido_segundos,
+                latidos_totales,
+                modo,
+                retador_id,
+                contrincante_id,
+                fin_narracion_en
+            FROM box_combates
+            WHERE guild_id = ?
+            AND estado = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            ORDER BY iniciado_en DESC
+            LIMIT 1
+            """,
+            (guild_id, ESTADO_VIVO, user_id, user_id),
+        ).fetchone()
+
+    if fila is None:
+        return None
+
+    return {
+        "id": fila[0],
+        "plan": fila[1],
+        "iniciado_en": datetime.fromisoformat(fila[2]),
+        "latido_segundos": fila[3],
+        "latidos_totales": fila[4],
+        "modo": fila[5],
+        # El guild_id no está en la consulta porque es el filtro; se completa
+        # acá para que el diccionario tenga la misma forma que devuelve
+        # ``obtener_combates_vivos`` y el narrador pueda consumirlo igual.
+        "guild_id": guild_id,
+        "retador_id": fila[6],
+        "contrincante_id": fila[7],
+        "fin_narracion_en": datetime.fromisoformat(fila[8]),
+    }
+
+
+def ultimos_combates(guild_id: int, limite: int = 5):
+    """Últimos combates narrados del servidor, para el historial."""
+
+    with conectar_db() as db:
+        filas = db.execute(
+            """
+            SELECT
+                id,
+                modo,
+                retador_id,
+                contrincante_id,
+                estado,
+                resumen,
+                fin_narracion_en
+            FROM box_combates
+            WHERE guild_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (guild_id, limite),
+        ).fetchall()
+
+    return [
+        {
+            "id": fila[0],
+            "modo": fila[1],
+            "retador_id": fila[2],
+            "contrincante_id": fila[3],
+            "estado": fila[4],
+            "resumen": fila[5],
+            "fin_narracion_en": fila[6],
+        }
+        for fila in filas
+    ]

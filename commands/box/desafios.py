@@ -8,6 +8,8 @@ from discord import app_commands
 from commands.box.base import solo_servidor
 from config import (
     BOX_CHANNEL_IDS,
+    BOX_COMBATE_ACTIVO,
+    BOX_COMBATE_TICK_SEGUNDOS,
     BOX_DESAFIO_DURACION_HORAS,
     BOX_DESAFIO_VENTANA_HORAS,
     BOX_DESAFIO_EXP_PELEA,
@@ -21,6 +23,7 @@ from core.utils import ahora
 from modules.box.logic import texto_horas
 from modules.box.services import (
     aceptar_desafio,
+    combate_en_curso,
     crear_desafio,
     obtener_accion_activa,
     obtener_estado_box,
@@ -34,7 +37,16 @@ MENSAJES_DESAFIO_NO_DISPONIBLE = {
     "expirado": "⌛ El desafío ya expiró.",
     "ocupado": "⚠️ Uno de los dos usuarios ya tiene una acción activa.",
     "lesionado": "🚑 Uno de los dos usuarios está lesionado.",
+    "combate_en_curso": "🥊 Hay una pelea narrándose en el canal.",
 }
+
+
+def _mencion(guild, user_id: int) -> str:
+    """Mención legible de un peleador, sin explotar si no está en el guild."""
+
+    miembro = guild.get_member(user_id) if guild is not None else None
+
+    return miembro.mention if miembro is not None else f"Usuario {user_id}"
 
 
 class ChallengeView(discord.ui.View):
@@ -99,6 +111,7 @@ class ChallengeView(discord.ui.View):
                 color_area="box",
             )
             seccion(embed, "Modalidad", f"**{nombre}**")
+            self._agregar_relato(embed, resultado)
             await interaction.response.edit_message(
                 embed=embed,
                 view=self,
@@ -114,6 +127,23 @@ class ChallengeView(discord.ui.View):
             ),
             color_area="error",
         )
+
+        if resultado["estado"] == "combate_en_curso":
+            en_curso = resultado["combate"]
+            seccion(
+                embed,
+                "En el ring",
+                f"{_mencion(interaction.guild, en_curso['retador_id'])} vs "
+                f"{_mencion(interaction.guild, en_curso['contrincante_id'])} · "
+                f"pelea #{en_curso['id']}",
+            )
+            seccion(
+                embed,
+                "Qué hacer",
+                "Terminá de mirar esa y volvé a aceptar: el desafío sigue "
+                "pendiente. /box combate muestra cómo va.",
+            )
+
         await interaction.response.edit_message(
             embed=embed,
             view=None,
@@ -135,6 +165,25 @@ class ChallengeView(discord.ui.View):
 
 class DesafiosMixin:
     """Crear y aceptar desafíos de sparring y de pelea."""
+
+    @staticmethod
+    def _agregar_relato(embed, resultado):
+        """Avisá que la pelea se narra en el canal, si es que se narra.
+
+        El relato se arma con el plan ya sorteado, así que lo único que puede
+        faltar es que esté desactivado por configuración o que el canal no se
+        haya resuelto al aceptar (combates viejos, previa a esta versión).
+        """
+
+        if not BOX_COMBATE_ACTIVO or resultado.get("combate_id") is None:
+            return
+
+        seccion(
+            embed,
+            "Relato en vivo",
+            "Se publica acá mesmo: un mensaje por asalto y una línea nueva "
+            f"cada {BOX_COMBATE_TICK_SEGUNDOS} segundos.",
+        )
 
     async def _aceptar_desafio(
         self,
@@ -162,6 +211,7 @@ class DesafiosMixin:
                 else BOX_DESAFIO_EXP_SPARRING
             ),
             recompensa_por_mejora=BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
+            canal_id=interaction.channel_id,
         )
 
     async def _crear_desafio(
@@ -198,6 +248,22 @@ class DesafiosMixin:
                 interaction,
                 "🚑 Lesión activa",
                 "No puedes desafiar a otro usuario mientras estás lesionado.",
+            )
+            return
+
+        # Un solo combate a la vez: se avisa acá, antes de mandar el botón,
+        # para no dejar a nadie con un desafío que no se puede aceptar. El
+        # control duro está en ``aceptar_desafio``, dentro de la transacción.
+        en_curso = combate_en_curso(interaction.guild.id)
+
+        if en_curso is not None:
+            await responder_error(
+                interaction,
+                "🥊 Pelea en curso",
+                f"{_mencion(interaction.guild, en_curso['retador_id'])} vs "
+                f"{_mencion(interaction.guild, en_curso['contrincante_id'])} "
+                "están en el ring ahora mismo. Cuando termine esa velada se "
+                "puede aceptar la tuya; el desafío queda pendiente.",
             )
             return
 
@@ -273,6 +339,7 @@ class DesafiosMixin:
                     color_area="box",
                 )
                 seccion(embed, "Modalidad", f"**{tipo.lower()}**")
+                self._agregar_relato(embed, resultado)
                 seccion(
                     embed,
                     "Stats del bot (randomizados)",

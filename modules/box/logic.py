@@ -10,14 +10,19 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from config import (
+    BOX_COMBATE_EQUIPO_ACTIVO,
+    BOX_COMBATE_EQUIPO_FUERZA,
+    BOX_COMBATE_EQUIPO_POR_NIVEL,
     BOX_PRECIO_EQUIPAMIENTO_CRECIMIENTO,
     BOX_PRECIO_MEJORA_CRECIMIENTO,
 )
 
 from modules.box.constants import (
     EQUIPAMIENTO,
+    EQUIPAMIENTO_COMBATE,
     MINUTOS_MAXIMO,
     MINUTOS_MINIMO,
+    NIVEL_MAXIMO_EQUIPAMIENTO,
 )
 
 
@@ -59,6 +64,77 @@ def es_nivel_maximo(tipo: str, nivel: int) -> bool:
     """Indica si la pieza ya está en su última calidad."""
 
     return nivel >= len(EQUIPAMIENTO[tipo]["calidades"]) - 1
+
+
+# ============================================================
+# COMBATE
+# ============================================================
+
+def estadisticas_de_combate(
+    base,
+    niveles,
+    *,
+    activo=BOX_COMBATE_EQUIPO_ACTIVO,
+    por_nivel=BOX_COMBATE_EQUIPO_POR_NIVEL,
+    fuerza_por_nivel=BOX_COMBATE_EQUIPO_FUERZA,
+):
+    """Estadísticas efectivas de un peleador, con su equipamiento aplicado.
+
+    ``base`` es lo que dice ``box_equipo`` (``vida_maxima``, ``dano``,
+    ``defensa``) y ``niveles`` los niveles de cada pieza. Se devuelven los
+    mismos tres números más dos derivados que entiende el motor:
+
+    - ``fatiga``: con cuánto se acumula el propio cansancio por asalto. Menos
+      cansancio propio es recibir menos daño con el paso de los rounds, porque
+      el motor castiga al que ya no mueve la cabeza.
+    - ``fuerza``: cuánto pesa el peleador en el sorteo de la probabilidad. Es
+      lo único del equipamiento que puede inclinar *quién* gana; el resto
+      inclina *cómo* gana (por nocaut o a los puntos, y en qué asalto).
+
+    El techo de niveles es ``NIVEL_MAXIMO_EQUIPAMIENTO`` por pieza, así el
+    bonus máximo queda acotado aunque alguien tenga ``puntos_habilidad`` de
+    sobra: equipo Legendario completo contra alguien con la mitad de
+    experiencia no convierte al peor en favorito, solamente en un rival
+    incómodo.
+    """
+
+    salida = {
+        "vida_maxima": max(1, int(base.get("vida_maxima") or 1)),
+        "dano": max(1, int(base.get("dano") or 1)),
+        "defensa": max(1, int(base.get("defensa") or 1)),
+        "fatiga": 1.0,
+        "fuerza": 1.0,
+    }
+
+    if not activo:
+        return salida
+
+    niveles_totales = 0
+
+    for tipo, (estadistica, peso) in EQUIPAMIENTO_COMBATE.items():
+        nivel = int(niveles.get(tipo) or 0)
+        nivel = max(0, min(nivel, NIVEL_MAXIMO_EQUIPAMIENTO))
+
+        if nivel == 0:
+            continue
+
+        factor = 1 + por_nivel * peso * nivel
+
+        if estadistica == "fatiga":
+            # Un peleador con buen calzado no deja de cansarse nunca: se le
+            # pone un piso para que las botas no lo vuelvan inmune al 12º
+            # asalto.
+            salida["fatiga"] = max(0.4, salida["fatiga"] * factor)
+        else:
+            salida[estadistica] = max(
+                1, round(salida[estadistica] * factor)
+            )
+
+        niveles_totales += nivel
+
+    salida["fuerza"] = 1 + fuerza_por_nivel * niveles_totales
+
+    return salida
 
 
 # ============================================================

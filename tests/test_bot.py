@@ -41,5 +41,6 @@ def test_todas_las_extensiones_cargan_juntas(base_datos_limpia):
     finally:
         bot.get_cog("Ssf").procesar_ssf_automatico.cancel()
         bot.get_cog("Box").comprobar_acciones.cancel()
+        bot.get_cog("Box").narrar_combates.cancel()
         loop.run_until_complete(asyncio.sleep(0))
         loop.close()

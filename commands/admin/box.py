@@ -7,9 +7,14 @@ from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
 from modules.box.services import (
+    ESTADO_CANCELADO,
     NOMBRES_ACCIONES,
     NOMBRES_SPONSORS,
     admin_cancelar_accion,
+    cerrar_combate,
+    combate_en_curso,
+    fijar_canticos,
+    obtener_canticos,
     admin_completar_acciones_vencidas,
     admin_curar_usuario,
     admin_dar_sponsor,
@@ -1177,5 +1182,125 @@ class BoxAdminMixin:
         )
 
         await responder_texto(interaction, texto,
+            ephemeral=True,
+        )
+
+    @box.command(
+        name="canticos",
+        description="Activa o desactiva los cánticos del público que nombran miembros.",
+    )
+    @app_commands.describe(
+        estado="Qué hacer con los cánticos de este servidor.",
+    )
+    @app_commands.choices(
+        estado=[
+            app_commands.Choice(
+                name="🔊 Activar (consentido por el servidor)",
+                value="activar",
+            ),
+            app_commands.Choice(
+                name="🔇 Desactivar",
+                value="desactivar",
+            ),
+            app_commands.Choice(
+                name="❓ Consultar",
+                value="consultar",
+            ),
+        ]
+    )
+    async def box_canticos(
+        self,
+        interaction: discord.Interaction,
+        estado: app_commands.Choice[str],
+    ):
+        """El interruptor del cántico, por servidor.
+
+        El cántico saca el apodo de una persona real al aire. En un servidor
+        privado donde todos se conocen está bien; en uno grande es una
+        humillación pública sin permiso. Por eso no se decide con una variable
+        de entorno global sino con una declaración explícita de este servidor, y
+        el default es apagado.
+        """
+
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        guild_id = interaction.guild.id
+        actual = obtener_canticos(guild_id)
+
+        if estado.value == "consultar":
+            await responder_texto(
+                interaction,
+                "🔊 Cánticos activados (este servidor decidió)."
+                if actual
+                else (
+                    "🔇 Cánticos desactivados (este servidor decidió)."
+                    if actual is not None
+                    else "🔇 Nadie decidió todavía: rige la configuración "
+                    "general, que viene apagada."
+                ),
+                ephemeral=True,
+            )
+            return
+
+        activado = estado.value == "activar"
+        fijar_canticos(guild_id, activado, interaction.user.id, ahora())
+
+        await responder_texto(
+            interaction,
+            (
+                "🔊 Cánticos activados. Aviso en el canal: a partir de la "
+                "próxima pelea el público va a corear apodos reales."
+                if activado
+                else "🔇 Cánticos desactivados. Desde el próximo asalto el "
+                "público no nombra a nadie."
+            ),
+            ephemeral=True,
+        )
+
+    @box.command(
+        name="cerrar_combate",
+        description="Cierra la pelea narrada que está ocupando el canal.",
+    )
+    async def box_cerrar_combate(self, interaction: discord.Interaction):
+        """Desocupa el candado de "un combate a la vez".
+
+        Hace falta para operar: si un canal se borró o el bot se cayó a mitad
+        de una velada, la fila ``VIVO`` bloquearía todos los desafíos
+        siguientes. Se cierra sin tocar las acciones ni las recompensas; lo
+        único que se suelta es el candado del relato.
+        """
+
+        if not await solo_admin(interaction):
+            return
+
+        if not await solo_servidor(interaction):
+            return
+
+        en_curso = combate_en_curso(interaction.guild.id)
+
+        if en_curso is None:
+            await responder_texto(
+                interaction,
+                "🔇 No hay ninguna pelea narrándose en este servidor.",
+                ephemeral=True,
+            )
+            return
+
+        cerrar_combate(
+            en_curso["id"],
+            ESTADO_CANCELADO,
+            ahora(),
+            f"cerrado a mano por {interaction.user.display_name}",
+        )
+
+        await responder_texto(
+            interaction,
+            f"✅ Cerrada la pelea #{en_curso['id']}. El canal quedó libre "
+            "para el próximo desafío; las acciones y recompensas de los "
+            "peleadores no se tocaron.",
             ephemeral=True,
         )
