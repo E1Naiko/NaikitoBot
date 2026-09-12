@@ -338,12 +338,25 @@ def test_reglas_rechazan_un_asalto_sin_huecos_suficientes():
             vida_para_corte=10,
             admite_ganador=True,
             puede_cortarse=True,
+            escala_asaltos=3.2,
         )
 
 
 def test_reglas_rechazan_una_probabilidad_invertida():
     with pytest.raises(ValueError):
         regalar_reglas(prob_piso=0.9, prob_tope=0.4)
+
+
+def test_reglas_rechazan_una_escala_de_dano_absurda():
+    """Con ``escala_asaltos < 1`` un solo intercambio vacía la barra de vida.
+
+    Es la perilla que se toca primero cuando una pelea "no se termina nunca";
+    el piso existe para que bajarla de más no convierta todo en un nocaut en el
+    asalto 1 sin nadie que se dé cuenta.
+    """
+
+    with pytest.raises(ValueError):
+        regalar_reglas(escala_asaltos=0.5)
 
 
 def test_ganador_forzado_no_puede_perder():

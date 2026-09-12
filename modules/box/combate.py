@@ -76,10 +76,12 @@ class Reglas:
     admite_ganador: bool
     puede_cortarse: bool
     # Divisor de la escala de daño: cuanto más grande, más golpe hace falta
-    # para vaciar la barra de vida. Es LA perilla del balance (ver
-    # ``BOX_COMBATE_ESCALA_DANO``): con 1.0 cualquier pelea es un nocaut en el
-    # asalto 1 y con 8.0 nadie se cae nunca.
-    escala_asaltos: float = 3.2
+    # para vaciar la barra de vida. Es LA perilla del balance
+    # (``BOX_COMBATE_ESCALA_DANO``): con 1.0 cualquier pelea es un nocaut en el
+    # asalto 1 y con 8.0 nadie se cae nunca. No tiene default a propósito: un
+    # modo que olvide pasarlo se queja en la cara antes que pelear con un daño
+    # que nadie calibró.
+    escala_asaltos: float
 
     def __post_init__(self):
         if not 1 <= self.rounds_minimo <= self.rounds_maximo <= 36:
