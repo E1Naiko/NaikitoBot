@@ -328,6 +328,149 @@ def test_el_desafio_normal_no_se_rompe_por_la_narracion(base_datos_limpia, inici
     assert resultado["combate_id"]
 
 
+# ============================================================
+# Premio contra el bot
+# ============================================================
+
+
+def _dar_experiencia(user_id, valor):
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id, experiencia)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, user_id)
+            DO UPDATE SET experiencia = excluded.experiencia
+            """,
+            (GUILD, user_id, valor),
+        )
+        db.commit()
+
+
+def _dinero_de_accion(user_id):
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT dinero_recompensa
+            FROM box_acciones
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND tipo = 'FIGHTING'
+            """,
+            (GUILD, user_id),
+        ).fetchone()
+
+    return fila[0] if fila is not None else None
+
+
+def test_pelear_contra_el_bot_paga_un_cuarto_del_premio(
+    base_datos_limpia, inicio
+):
+    """La pelea contra el bot reduce el premio a BOX_DESAFIO_PREMIO_VS_BOT.
+
+    Ganarle a otro jugador paga la suma de las dos experiencias; ganarle a
+    la casa paga un cuarto de eso, y la acción del ganador cobra exactamente
+    lo que avisó el desafío.
+    """
+
+    _dar_experiencia(RETADOR, 1000)
+    _dar_experiencia(CONTRINCANTE, 3000)
+
+    desafio_id = crear_desafio(
+        GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
+    )
+
+    resultado = aceptar_desafio(
+        desafio_id,
+        GUILD,
+        CONTRINCANTE,
+        inicio,
+        recompensa=1000,
+        tipo="FIGHTING",
+        contrincante_es_bot=True,
+    )
+
+    assert resultado["estado"] == "aceptado"
+
+    # El premio contra un jugador sería 1000 + 3000: contra el bot, un cuarto.
+    assert resultado["premio_dinero"] == 1000
+
+    ganador_id = resultado["ganador_id"]
+    perdedor_id = CONTRINCANTE if ganador_id == RETADOR else RETADOR
+
+    assert _dinero_de_accion(ganador_id) == 1000
+    assert _dinero_de_accion(perdedor_id) == 0
+
+
+def test_pelear_contra_otro_jugador_mantiene_el_premio_completo(
+    base_datos_limpia, inicio
+):
+    """Sin marca de bot, el premio sigue siendo la suma de experiencias."""
+
+    _dar_experiencia(RETADOR, 1000)
+    _dar_experiencia(CONTRINCANTE, 3000)
+
+    desafio_id = crear_desafio(
+        GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
+    )
+
+    resultado = aceptar_desafio(
+        desafio_id,
+        GUILD,
+        CONTRINCANTE,
+        inicio,
+        recompensa=1000,
+        tipo="FIGHTING",
+    )
+
+    assert resultado["premio_dinero"] == 4000
+    assert _dinero_de_accion(resultado["ganador_id"]) == 4000
+
+
+def test_pelear_contra_el_bot_sin_experiencia_no_inventa_premio(
+    base_datos_limpia, inicio
+):
+    """Con premio 0 la fracción del bot no fabrica dinero de la nada."""
+
+    desafio_id = crear_desafio(
+        GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
+    )
+
+    resultado = aceptar_desafio(
+        desafio_id,
+        GUILD,
+        CONTRINCANTE,
+        inicio,
+        recompensa=1000,
+        tipo="FIGHTING",
+        contrincante_es_bot=True,
+    )
+
+    assert resultado["premio_dinero"] == 0
+    assert _dinero_de_accion(resultado["ganador_id"]) == 0
+
+
+def test_la_tarjeta_del_asalto_no_revela_el_tono(narrador, combate):
+    """La sección "Pelea pactada" ya no anuncia el tono: era un spoiler.
+
+    Un "tono remontada" del primer asalto le contaba al canal cómo iba a
+    terminar la pelea antes de que terminara.
+    """
+
+    narrador, canal, reloj, adelantar = narrador
+    plan = Plan.de_json(combate["plan"])
+
+    adelantar(0)
+    correr(narrador._narrar_combate(combate))
+
+    embed = canal.mensajes[0].embed
+    pactada = next(
+        campo for campo in embed.fields if campo.name == "Pelea pactada"
+    )
+
+    assert pactada.value == f"{plan.asaltos_pactados} asaltos"
+
+
 def test_reclamar_un_asalto_dos_veces_no_duplica_el_mensaje(combate):
     primera = reclamar_asalto(combate["id"], 0, ahora())
     segunda = reclamar_asalto(combate["id"], 0, ahora())

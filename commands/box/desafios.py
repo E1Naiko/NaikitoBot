@@ -14,6 +14,7 @@ from config import (
     BOX_DESAFIO_VENTANA_HORAS,
     BOX_DESAFIO_EXP_PELEA,
     BOX_DESAFIO_EXP_SPARRING,
+    BOX_DESAFIO_PREMIO_VS_BOT,
     BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
     BOX_EXPERIENCIA_POR_MINUTO,
 )
@@ -174,7 +175,7 @@ class ChallengeView(discord.ui.View):
         if self.message is not None:
             embed = crear_embed(
                 "⌛ Desafío expirado",
-                "El desafío de sparring expiró.",
+                f"El desafío de {self.tipo.lower()} expiró.",
                 color_area="aviso",
             )
             await self.message.edit(
@@ -232,7 +233,33 @@ class DesafiosMixin:
             ),
             recompensa_por_mejora=BOX_DESAFIO_RECOMPENSA_POR_MEJORA,
             canal_id=interaction.channel_id,
+            contrincante_es_bot=self._contrincante_es_bot(
+                interaction, contrincante_id
+            ),
         )
+
+    def _contrincante_es_bot(
+        self,
+        interaction: discord.Interaction,
+        contrincante_id: int,
+    ) -> bool:
+        """Indica si el desafío es contra el bot (pelear contra la casa).
+
+        Es lo que decide si el premio se reduce a la fracción de
+        ``BOX_DESAFIO_PREMIO_VS_BOT``. Se mira el miembro del guild y, por si
+        la caché todavía no lo tiene, se compara contra el propio bot.
+        """
+
+        miembro = (
+            interaction.guild.get_member(contrincante_id)
+            if interaction.guild is not None
+            else None
+        )
+
+        if getattr(miembro, "bot", False):
+            return True
+
+        return self.bot.user is not None and contrincante_id == self.bot.user.id
 
     async def _crear_desafio(
         self,
@@ -388,6 +415,15 @@ class DesafiosMixin:
                     color_area="box",
                 )
                 seccion(embed, "Modalidad", f"**{tipo.lower()}**")
+                if tipo == "FIGHTING":
+                    seccion(
+                        embed,
+                        "Premio contra el bot",
+                        "Si ganás, cobrás solo el "
+                        f"**{BOX_DESAFIO_PREMIO_VS_BOT:.0%}** del premio de "
+                        "una pelea contra otro jugador. La experiencia se "
+                        "cobra igual.",
+                    )
                 self._agregar_relato(embed, resultado)
                 seccion(
                     embed,
