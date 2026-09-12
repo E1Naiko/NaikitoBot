@@ -16,6 +16,8 @@ ARBOL_ESPERADO = {
     "admin|Group",
     "admin box|Group",
     "admin box cancelar|Command",
+    "admin box canticos|Command",
+    "admin box cerrar_combate|Command",
     "admin box curar|Command",
     "admin box dar_dinero|Command",
     "admin box dar_exp|Command",

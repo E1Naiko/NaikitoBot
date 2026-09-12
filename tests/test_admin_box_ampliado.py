@@ -381,3 +381,115 @@ def test_procesar_sin_vencidas_informa(cog):
     llamar(cog, "box_procesar", interaccion)
 
     assert "No había acciones vencidas" in interaccion.texto
+
+
+# ============================================================
+# /admin box canticos
+# ============================================================
+
+
+def test_admin_box_canticos_consultar_sin_decision(cog):
+    from tests.harness import Choice
+
+    interaccion = interaccion_admin()
+
+    llamar(cog, "box_canticos", interaccion, Choice("consultar"))
+
+    assert "Nadie decidió" in interaccion.texto
+
+
+def test_admin_box_canticos_activar_y_desactivar(cog):
+    from modules.box.database import obtener_canticos
+    from tests.harness import Choice
+
+    interaccion = interaccion_admin()
+
+    llamar(cog, "box_canticos", interaccion, Choice("activar"))
+
+    assert obtener_canticos(GUILD) is True
+    assert "activados" in interaccion.texto
+
+    llamar(cog, "box_canticos", interaccion, Choice("desactivar"))
+
+    assert obtener_canticos(GUILD) is False
+
+    llamar(cog, "box_canticos", interaccion, Choice("consultar"))
+
+    assert "desactivados" in interaccion.texto
+    # La respuesta es privada: el aviso de que "se activaron los cánticos" no
+    # tiene por qué llenar el canal.
+    assert interaccion.respuestas[-1].efimero is True
+
+
+# ============================================================
+# /admin box cerrar_combate
+# ============================================================
+
+
+def _combate_vivo_de_broma(guild_id=GUILD):
+    from core.database import conectar_db
+
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            INSERT INTO box_combates (
+                guild_id,
+                canal_id,
+                modo,
+                retador_id,
+                contrincante_id,
+                semilla,
+                plan,
+                iniciado_en,
+                latido_segundos,
+                latidos_totales,
+                fin_narracion_en,
+                estado
+            ) VALUES (?, ?, 'FIGHTING', ?, ?, 1, '{}', ?, 15, 9, ?, 'VIVO')
+            """,
+            (
+                guild_id,
+                77,
+                USUARIO,
+                USUARIO_2,
+                ahora().isoformat(),
+                ahora().isoformat(),
+            ),
+        )
+        db.commit()
+
+        return fila.lastrowid
+
+
+def test_admin_box_cerrar_combate_suelta_el_candado(cog):
+    from modules.box.database import combate_en_curso, obtener_combates_vivos
+
+    combate_id = _combate_vivo_de_broma()
+
+    assert combate_en_curso(GUILD) is not None
+    assert len(obtener_combates_vivos(ahora())) == 1
+
+    interaccion = interaccion_admin()
+
+    llamar(cog, "box_cerrar_combate", interaccion)
+
+    assert "Cerrada la pelea" in interaccion.texto
+    assert combate_en_curso(GUILD) is None
+    assert obtener_combates_vivos(ahora()) == []
+
+    with __import__("core.database", fromlist=["conectar_db"]).conectar_db() as db:
+        estado, resumen = db.execute(
+            "SELECT estado, resumen FROM box_combates WHERE id = ?",
+            (combate_id,),
+        ).fetchone()
+
+    assert estado == "CANCELADO"
+    assert "cerrado a mano" in resumen
+
+
+def test_admin_box_cerrar_combate_sin_pelea_avisa(cog):
+    interaccion = interaccion_admin()
+
+    llamar(cog, "box_cerrar_combate", interaccion)
+
+    assert "No hay ninguna pelea" in interaccion.texto

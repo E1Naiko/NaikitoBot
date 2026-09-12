@@ -10,6 +10,7 @@ from discord.ext import commands
 from commands.box.acciones import AccionesMixin
 from commands.box.desafios import DesafiosMixin
 from commands.box.info import InfoMixin
+from commands.box.narracion import NarracionMixin
 from commands.box.tienda import TiendaMixin
 
 
@@ -17,6 +18,7 @@ class Box(
     AccionesMixin,
     DesafiosMixin,
     InfoMixin,
+    NarracionMixin,
     TiendaMixin,
     commands.GroupCog,
     group_name="box",
@@ -27,7 +29,9 @@ class Box(
         self.bot = bot
         self.comprobar_acciones.start()
         self.reducir_probabilidad_lesion.start()
+        self._iniciar_narracion()
 
     def cog_unload(self):
         self.comprobar_acciones.cancel()
         self.reducir_probabilidad_lesion.cancel()
+        self.narrar_combates.cancel()

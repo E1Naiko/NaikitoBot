@@ -51,6 +51,8 @@ BOX_DINERO_POR_MINUTO=100
 BOX_PRECIO_MULTIPLICADOR=1.0
 BOX_LESION_HORAS=3
 BOX_DESAFIO_DURACION_HORAS=1
+BOX_COMBATE_ACTIVO=1
+BOX_COMBATE_TICK_SEGUNDOS=15
 MADRUGUE_INICIO_100=05:30
 MADRUGUE_INICIO_25=07:00
 MADRUGUE_INICIO_5=09:00
@@ -198,6 +200,8 @@ restricción de canal: pueden usar cualquier comando desde cualquier canal.
 | `/admin box dar_sponsor` | `usuario`, `tipo` | Otorga manualmente un sponsor a un usuario. |
 | `/admin box quitar_sponsor` | `usuario`, `sponsor_id` | Elimina un sponsor específico de un usuario. |
 | `/admin box reset` | `usuario` | Resetea completamente el progreso Box de un usuario. |
+| `/admin box canticos` | `estado` | Activa, desactiva o consulta el consentimiento del servidor para los cánticos que nombran miembros. |
+| `/admin box cerrar_combate` | Ninguno | Cierra la pelea narrada que está ocupando el canal, sin tocar acciones ni recompensas. |
 
 Ejemplo de formatos para los parámetros:
 
@@ -245,6 +249,7 @@ día perdido (`2026-09-04`) queda con racha 1. Se corrige con
 | `/box saldo` | Ninguno | Muestra la experiencia y el dinero del usuario. |
 | `/box stats` | Ninguno | Muestra tus estadísticas de Box; la respuesta es privada. |
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
+| `/box combate` | Ninguno | Muestra cómo va tu pelea o sparring narrado en vivo. |
 | `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
 | `/box suministro` | `tipo` | Usa suministros de recuperación (vida, cansancio, defensa o lesión). |
@@ -272,6 +277,69 @@ la recompensa de entrenamiento de una hora. El ganador se decide al aceptar medi
 por la experiencia acumulada de ambos usuarios; si uno tiene el doble de
 experiencia, tiene el doble de probabilidad. El ganador recibe como dinero la
 suma de la experiencia acumulada de ambos contrincantes.
+
+### Narración en vivo del combate
+
+Al aceptar un desafío, el combate se resuelve completo y queda guardado como un
+plan en `box_combates`; el bot no simula nada durante la pelea, solamente revela
+ese plan. Cada **asalto es un mensaje del canal** y cada latido de
+`BOX_COMBATE_TICK_SEGUNDOS` (15 segundos por defecto) agrega una línea a ese
+mensaje, que al cerrar el asalto queda con su veredicto. Como todo se recalcula
+desde la semilla del plan, un reinicio del bot no cambia lo ya publicado: el
+asalto se vuelve a renderizar y la pelea sigue siendo la misma.
+
+La cantidad de asaltos depende de la diferencia de experiencia comprimida
+(`log1p` sobre `BOX_COMBATE_SUELO_EXP`, acotada entre `BOX_COMBATE_PROB_PISO` y
+`BOX_COMBATE_PROB_TOPE`): una pelea pareja va a `BOX_COMBATE_ROUNDS_MAXIMO`
+asaltos y una muy desigual se acorta hasta `BOX_COMBATE_ROUNDS_MINIMO`. La
+probabilidad se sortea **una sola vez, a nivel combate**; los asaltos se reparten
+de forma coherente con ese sorteo. Si el resultado emergiera de contar
+intercambios, once asaltos con un 60 % por intercambio serían un 88 % de
+victorias y acortar la pelea la convertiría en una moneda al aire.
+
+El sorteo del **premio** sigue pesando la experiencia cruda de los dos
+perfiles, como siempre: la probabilidad comprimida que muestra el relato
+(`favorito al 62 %`) describe cómo se cuenta la pelea, no cuánto se paga. Así
+una cuenta nueva con equipo Legendario puede darle pelea a un veterano en el
+canal, pero no le copia el bote.
+
+La narración se corta cuando el plan se agota (o antes, si el corner para la
+pelea: `BOX_COMBATE_KO_BASE` y `BOX_COMBATE_KO_POR_BRECHA`), pero la acción
+sigue bloqueada `BOX_DESAFIO_DURACION_HORAS`: la recompensa y el bloqueo no
+dependen del relato, así una victoria rápida no se puede usar para entrenar de
+más. El sparring usa el mismo motor con otras reglas: sin nocaut, sin ganador
+declarado y sin escribir en el historial de desafíos.
+
+Con los valores por defecto un asalto dura `(BOX_COMBATE_DIALOGOS_POR_ROUND + 1)
+× BOX_COMBATE_TICK_SEGUNDOS` = 2 minutos y la velada completa va de 6 a 18
+minutos (`BOX_COMBATE_ROUNDS_MINIMO` a `BOX_COMBATE_ROUNDS_MAXIMO` asaltos).
+
+**Un solo combate a la vez.** Mientras hay una pelea narrándose, el siguiente
+desafío se rechaza con un "hay una pelea en curso" y el desafío queda pendiente
+para cuando la velada termine: el canal de Box es uno y dos relojes de relato
+pisándose no son una velada, son ruido. `BOX_COMBATE_UNICO_GLOBAL=0` cambia el
+candado de "por bot" a "por servidor". Si un canal se borra a mitad de una
+pelea, el narrador cierra la fila pasada la ventana de narración
+(`GRACIA_SIN_CANAL`, 5 minutos) y `/admin box cerrar_combate` hace lo mismo a
+mano cuando haga falta.
+
+**El equipamiento participa.** `box_equipo` guardaba los niveles de casco,
+guantes, bucal, short y botas como una etiqueta de la tienda: ningún desafío los
+leía. Ahora cada nivel suma `BOX_COMBATE_EQUIPO_POR_NIVEL` a la estadística que
+le corresponde (guantes→daño, casco→defensa, bucal→vida, short→defensa,
+botas→menos fatiga acumulada) y el conjunto pesa
+`BOX_COMBATE_EQUIPO_FUERZA` por nivel en la probabilidad de victoria. El bono
+está acotado a `NIVEL_MAXIMO_EQUIPAMIENTO` por pieza y se aplica antes de la
+escala logarítmica de la experiencia: entre rivales parejos el equipo inclina
+unos puntos y define si la pelea es un nocaut o una tarjeta, contra diez veces
+de experiencia no la da vuelta. `BOX_COMBATE_EQUIPO_ACTIVO=0` vuelve al
+comportamiento anterior.
+
+El cántico del público nombra a un miembro real, así que no se decide con una
+variable global: cada servidor lo consiente con `/admin box canticos activar` y
+mientras nadie decida rige `BOX_COMBATE_CANTICOS` (apagado por defecto). Para
+apagar toda la narración se usa `BOX_COMBATE_ACTIVO=0`; los desafíos y sus
+recompensas siguen funcionando igual.
 
 La tienda incluye estas mejoras, con un máximo de `BOX_MEJORA_NIVEL_MAXIMO`
 nivel (10 por defecto). El primer nivel cuesta `BOX_PRECIO_MEJORA_ENTRENAMIENTO`
