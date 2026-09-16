@@ -2041,12 +2041,24 @@ def aceptar_desafio(
             retador_id,
             contrincante_id,
         ):
-            recompensa_usuario = (
-                recompensa
-                + niveles_entrenamiento[user_id]
-                * recompensa_por_mejora
-                * multiplicador_experiencia
-            )
+            if tipo == "SPARRING":
+                # El sparring recompensa a cada participante según el nivel
+                # de su rival, no según su propia experiencia ni la duración
+                # configurada del desafío. Se usa división entera para que
+                # la EXP guardada siga siendo un número entero.
+                otro_id = (
+                    contrincante_id
+                    if user_id == retador_id
+                    else retador_id
+                )
+                recompensa_usuario = experiencias[otro_id] // 10
+            else:
+                recompensa_usuario = (
+                    recompensa
+                    + niveles_entrenamiento[user_id]
+                    * recompensa_por_mejora
+                    * multiplicador_experiencia
+                )
 
             db.execute(
                 """

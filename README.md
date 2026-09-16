@@ -268,9 +268,9 @@ en la base de datos y continúan contando aunque el bot se reinicie.
 
 El contrincante debe aceptar el desafío dentro de `BOX_DESAFIO_DURACION_HORAS`
 (una hora por defecto). Al aceptarlo, ambos usuarios quedan en modo `SPARRING`
-durante ese mismo tiempo y reciben experiencia equivalente a
-`BOX_DESAFIO_EXP_SPARRING` veces (5 por defecto) la recompensa de entrenamiento
-de ese mismo tiempo.
+durante ese mismo tiempo y cada participante recibe como experiencia el 10%
+de la experiencia de su contrincante, redondeado hacia abajo a una unidad
+entera.
 
 `/box desafio` funciona de forma similar, pero inicia el modo `FIGHTING` y
 otorga experiencia equivalente a `BOX_DESAFIO_EXP_PELEA` veces (10 por defecto)
