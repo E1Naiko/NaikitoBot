@@ -83,7 +83,7 @@ def cog(base_datos_limpia, admin_ids):
 
 
 @pytest.fixture
-def cog_en_arbol(base_datos_limpia, admin_ids):
+async def cog_en_arbol(base_datos_limpia, admin_ids):
     """Cog registrado en un árbol real (lo necesita fileexecute)."""
 
     import discord
@@ -97,22 +97,17 @@ def cog_en_arbol(base_datos_limpia, admin_ids):
     async def cargar():
         await bot.load_extension("commands.admin")
 
-    ejecutar(cargar())
+    await cargar()
 
     return bot.get_cog("Admin")
 
 
-def ejecutar(coro):
-    import asyncio
-
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        coro
-    )
 
 
-def llamar(cog, nombre_metodo, interaccion, *args):
+
+async def llamar(cog, nombre_metodo, interaccion, *args):
     metodo = getattr(type(cog), nombre_metodo).callback
-    return ejecutar(metodo(cog, interaccion, *args))
+    return await metodo(cog, interaccion, *args)
 
 
 class AdjuntoFalso:
@@ -140,7 +135,7 @@ def interaccion_admin(en_servidor=True):
 # REGISTRO EN EL ÁRBOL
 # ============================================================
 
-def test_extension_registra_el_arbol_completo(base_datos_limpia):
+async def test_extension_registra_el_arbol_completo(base_datos_limpia):
     import discord
     from discord.ext import commands
 
@@ -152,7 +147,7 @@ def test_extension_registra_el_arbol_completo(base_datos_limpia):
     async def cargar():
         await bot.load_extension("commands.admin")
 
-    ejecutar(cargar())
+    await cargar()
 
     nombres = {
         f"{comando.qualified_name}|{type(comando).__name__}"
@@ -217,10 +212,10 @@ COMANDOS_CON_ARGUMENTO_FALSO = [
     "comando, argumentos",
     COMANDOS_CON_ARGUMENTO_FALSO,
 )
-def test_comandos_rechazan_a_no_administradores(cog, comando, argumentos):
+async def test_comandos_rechazan_a_no_administradores(cog, comando, argumentos):
     interaccion = InteraccionFalsa(GUILD, USUARIO)
 
-    llamar(cog, comando, interaccion, *argumentos)
+    await llamar(cog, comando, interaccion, *argumentos)
 
     assert interaccion.cantidad_respuestas == 1
     assert "No tienes permisos" in interaccion.texto
@@ -240,18 +235,18 @@ def test_comandos_rechazan_a_no_administradores(cog, comando, argumentos):
         ("box_historial", (None,)),
     ],
 )
-def test_comandos_rechazan_mensajes_directos(cog, comando, argumentos):
+async def test_comandos_rechazan_mensajes_directos(cog, comando, argumentos):
     interaccion = interaccion_admin(en_servidor=False)
 
-    llamar(cog, comando, interaccion, *argumentos)
+    await llamar(cog, comando, interaccion, *argumentos)
 
     assert "dentro de un servidor" in interaccion.texto
 
 
-def test_info_funciona_por_mensaje_directo(cog):
+async def test_info_funciona_por_mensaje_directo(cog):
     interaccion = interaccion_admin(en_servidor=False)
 
-    llamar(cog, "info", interaccion)
+    await llamar(cog, "info", interaccion)
 
     assert interaccion.cantidad_respuestas == 1
     assert (
@@ -264,7 +259,7 @@ def test_info_funciona_por_mensaje_directo(cog):
 # /admin box cancelar
 # ============================================================
 
-def test_box_cancelar_con_accion_activa_responde_sin_view_none(cog):
+async def test_box_cancelar_con_accion_activa_responde_sin_view_none(cog):
     """Regresión: la cancelación reventaba en producción.
 
     ``responder_texto`` llegaba a ``send_message`` con ``view=None`` y
@@ -278,7 +273,7 @@ def test_box_cancelar_con_accion_activa_responde_sin_view_none(cog):
     from tests.harness import UsuarioFalso
 
     ahora = datetime.now(timezone.utc)
-    assert iniciar_accion(
+    assert await iniciar_accion(
         GUILD,
         USUARIO,
         "ENTRENANDO",
@@ -290,19 +285,19 @@ def test_box_cancelar_con_accion_activa_responde_sin_view_none(cog):
 
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_cancelar", interaccion, UsuarioFalso(USUARIO, "Peleador"))
+    await llamar(cog, "box_cancelar", interaccion, UsuarioFalso(USUARIO, "Peleador"))
 
     assert "Acción cancelada correctamente" in interaccion.texto
     # Sin vista se debe enviar el centinela MISSING, nunca None.
     assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
 
 
-def test_box_cancelar_sin_accion_activa_informa(cog):
+async def test_box_cancelar_sin_accion_activa_informa(cog):
     from tests.harness import UsuarioFalso
 
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_cancelar", interaccion, UsuarioFalso(USUARIO, "Peleador"))
+    await llamar(cog, "box_cancelar", interaccion, UsuarioFalso(USUARIO, "Peleador"))
 
     assert "no tiene ninguna acción activa" in interaccion.texto
     assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
@@ -312,10 +307,10 @@ def test_box_cancelar_sin_accion_activa_informa(cog):
 # /admin fileexecute
 # ============================================================
 
-def test_fileexecute_rechaza_otras_extensiones(cog):
+async def test_fileexecute_rechaza_otras_extensiones(cog):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "fileexecute",
         interaccion,
@@ -325,21 +320,21 @@ def test_fileexecute_rechaza_otras_extensiones(cog):
     assert "extensión `.txt`" in interaccion.texto
 
 
-def test_fileexecute_rechaza_archivos_grandes(cog):
+async def test_fileexecute_rechaza_archivos_grandes(cog):
     interaccion = interaccion_admin()
     archivo = AdjuntoFalso("stats")
     archivo.size = 2 * 1024 * 1024
 
-    llamar(cog, "fileexecute", interaccion, archivo)
+    await llamar(cog, "fileexecute", interaccion, archivo)
 
     assert "1 MiB" in interaccion.texto
 
 
-def test_fileexecute_rechaza_mas_de_50_lineas(cog):
+async def test_fileexecute_rechaza_mas_de_50_lineas(cog):
     interaccion = interaccion_admin()
     lineas = "\n".join(["stats"] * 51)
 
-    llamar(
+    await llamar(
         cog,
         "fileexecute",
         interaccion,
@@ -349,12 +344,12 @@ def test_fileexecute_rechaza_mas_de_50_lineas(cog):
     assert "50 comandos" in interaccion.texto
 
 
-def test_fileexecute_sin_arbol_informa(cog):
+async def test_fileexecute_sin_arbol_informa(cog):
     """Sin el cog registrado, las líneas fallan con aviso, no revientan."""
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "fileexecute",
         interaccion,
@@ -365,10 +360,10 @@ def test_fileexecute_sin_arbol_informa(cog):
     assert "grupo admin no está disponible" in interaccion.texto
 
 
-def test_fileexecute_con_comando_desconocido(cog_en_arbol):
+async def test_fileexecute_con_comando_desconocido(cog_en_arbol):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_en_arbol,
         "fileexecute",
         interaccion,
@@ -379,10 +374,10 @@ def test_fileexecute_con_comando_desconocido(cog_en_arbol):
     assert "Comando admin desconocido" in interaccion.texto
 
 
-def test_fileexecute_con_miembro_inexistente(cog_en_arbol):
+async def test_fileexecute_con_miembro_inexistente(cog_en_arbol):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_en_arbol,
         "fileexecute",
         interaccion,

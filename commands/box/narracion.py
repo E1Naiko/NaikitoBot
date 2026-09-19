@@ -107,7 +107,7 @@ class NarracionMixin:
     async def narrar_combates(self):
         """Un latido: revelar diálogos, cerrar asaltos y clausurar peleas."""
 
-        vivos = await asyncio.to_thread(obtener_combates_vivos, ahora())
+        vivos = await obtener_combates_vivos(ahora())
 
         if not vivos:
             return
@@ -152,8 +152,7 @@ class NarracionMixin:
             # canal desaparecido sería un candado eterno: pasada la ventana de
             # narración, la fila se cierra y la velada se da por terminada.
             if ahora() > combate["fin_narracion_en"] + GRACIA_SIN_CANAL:
-                await asyncio.to_thread(
-                    cerrar_combate,
+                await cerrar_combate(
                     combate["id"],
                     ESTADO_CANCELADO,
                     ahora(),
@@ -162,17 +161,14 @@ class NarracionMixin:
 
             return 0
 
-        if not await asyncio.to_thread(
-            tiene_accion_activa,
+        if not await tiene_accion_activa(
             combate["guild_id"],
             combate["retador_id"],
-        ) or not await asyncio.to_thread(
-            tiene_accion_activa,
+        ) or not await tiene_accion_activa(
             combate["guild_id"],
             combate["contrincante_id"],
         ):
-            await asyncio.to_thread(
-                cerrar_combate,
+            await cerrar_combate(
                 combate["id"],
                 ESTADO_CANCELADO,
                 ahora(),
@@ -188,7 +184,7 @@ class NarracionMixin:
         asalto_actual, beat = plan.posicion(latido)
         asalto_actual = min(asalto_actual, len(plan.asaltos) - 1)
 
-        publicados = await asyncio.to_thread(asaltos_publicados, combate["id"])
+        publicados = await asaltos_publicados(combate["id"])
 
         # Asaltos que quedaron sin publicar (reinicio del bot, un canal caído):
         # se cierran con su veredicto, en orden y sin inundar el canal.
@@ -221,8 +217,8 @@ class NarracionMixin:
 
         # Asalto en curso: se manda la primera vez y de ahí se edita.
         if asalto_actual not in publicados:
-            if not await asyncio.to_thread(
-                reclamar_asalto, combate["id"], asalto_actual, ahora()
+            if not await reclamar_asalto(
+                combate["id"], asalto_actual, ahora()
             ):
                 return enviados
 
@@ -236,8 +232,8 @@ class NarracionMixin:
             )
             return enviados + 1
 
-        mensaje_id = await asyncio.to_thread(
-            mensaje_de_asalto, combate["id"], asalto_actual
+        mensaje_id = await mensaje_de_asalto(
+            combate["id"], asalto_actual
         )
         mensaje = await self._obtener_mensaje(canal, mensaje_id)
 
@@ -318,7 +314,7 @@ class NarracionMixin:
         cánticos a mitad de pelea tiene que funcionar ya).
         """
 
-        decision = await asyncio.to_thread(obtener_canticos, guild_id)
+        decision = await obtener_canticos(guild_id)
 
         return BOX_COMBATE_CANTICOS if decision is None else decision
 
@@ -486,14 +482,13 @@ class NarracionMixin:
 
         mensaje = await canal.send(embed=embed)
 
-        await asyncio.to_thread(
-            registrar_mensaje_asalto,
+        await registrar_mensaje_asalto(
             combate["id"],
             asalto_index,
             mensaje.id,
             ahora_,
         )
-        await asyncio.to_thread(actualizar_mensaje_combate, combate["id"], mensaje.id)
+        await actualizar_mensaje_combate(combate["id"], mensaje.id)
 
         return mensaje
 
@@ -515,8 +510,7 @@ class NarracionMixin:
 
         await canal.send(embed=embed)
 
-        await asyncio.to_thread(
-            cerrar_combate,
+        await cerrar_combate(
             combate["id"],
             ESTADO_TERMINADO,
             ahora(),
@@ -545,7 +539,7 @@ class NarracionMixin:
         if not await solo_servidor(interaction):
             return
 
-        fila = obtener_combate_en_curso(interaction.guild.id, interaction.user.id)
+        fila = await obtener_combate_en_curso(interaction.guild.id, interaction.user.id)
 
         if fila is None:
             await responder_error(

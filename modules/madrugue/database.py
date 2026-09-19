@@ -1,107 +1,72 @@
-from datetime import date
+"""Capa de datos del módulo Madrugue (SQLAlchemy asíncrono).
 
-from core.database import conectar_db
+Todas las funciones son asíncronas y abren su propia sesión corta.
+Devuelven tuplas con la misma forma que tenía la capa SQLite original,
+para que los servicios y comandos no cambien de contrato.
+"""
+
+from sqlalchemy import Integer, case, delete, func, select
+
+from core.database import crear_sesion, inicializar_db as _inicializar_db_base
+from modules.madrugue.models import RegistroMadrugue
 
 
 # ============================================================
 # INICIALIZACIÓN
 # ============================================================
 
-def inicializar_db():
-    """
-    Verifica que la tabla registros tenga la estructura actual.
+async def inicializar_db():
+    """Crea el esquema de Madrugue (y del resto de los módulos)."""
 
-    La migración de la base existente se realizó mediante
-    migrar.py, por lo que aquí solamente comprobamos que
-    guild_id exista.
-    """
-
-    with conectar_db() as db:
-        columnas = db.execute("""
-            PRAGMA table_info(registros)
-        """).fetchall()
-
-        if not columnas:
-            db.execute("""
-                CREATE TABLE registros (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    guild_id INTEGER NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    username TEXT NOT NULL,
-                    fecha TEXT NOT NULL,
-                    hora TEXT NOT NULL,
-                    puntos_base INTEGER NOT NULL,
-                    multiplicador REAL NOT NULL,
-                    puntos_finales REAL NOT NULL,
-                    UNIQUE(guild_id, user_id, fecha)
-                )
-            """)
-            db.commit()
-            return
-
-        nombres = {
-            columna[1]
-            for columna in columnas
-        }
-
-        if "guild_id" not in nombres:
-            raise RuntimeError(
-                "La base de datos no tiene guild_id. "
-                "Ejecutá migrar.py antes de iniciar el bot."
-            )
+    await _inicializar_db_base()
 
 
 # ============================================================
 # REGISTROS
 # ============================================================
 
-def obtener_registro_del_dia(
+async def obtener_registro_del_dia(
     guild_id,
     user_id,
     fecha,
 ):
     """Obtiene el registro de un usuario para una fecha."""
 
-    with conectar_db() as db:
-        return db.execute("""
-            SELECT
-                hora,
-                puntos_finales
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            user_id,
-            fecha.isoformat(),
-        )).fetchone()
+    async with crear_sesion() as sesion:
+        fila = (await sesion.execute(
+            select(
+                RegistroMadrugue.hora,
+                RegistroMadrugue.puntos_finales,
+            ).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+                RegistroMadrugue.fecha == fecha,
+            )
+        )).first()
+
+    return fila
 
 
-def tiene_registro(
+async def tiene_registro(
     guild_id,
     user_id,
     fecha,
 ):
     """Indica si el usuario tiene un registro para una fecha."""
 
-    with conectar_db() as db:
-        resultado = db.execute("""
-            SELECT 1
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            user_id,
-            fecha.isoformat(),
-        )).fetchone()
+    async with crear_sesion() as sesion:
+        fila = (await sesion.execute(
+            select(1).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+                RegistroMadrugue.fecha == fecha,
+            )
+        )).first()
 
-    return resultado is not None
+    return fila is not None
 
 
-def guardar_registro(
+async def guardar_registro(
     guild_id,
     user_id,
     username,
@@ -113,62 +78,53 @@ def guardar_registro(
 ):
     """Guarda una nueva madrugada."""
 
-    with conectar_db() as db:
-        db.execute("""
-            INSERT INTO registros (
-                guild_id,
-                user_id,
-                username,
-                fecha,
-                hora,
-                puntos_base,
-                multiplicador,
-                puntos_finales
+    async with crear_sesion() as sesion:
+        sesion.add(
+            RegistroMadrugue(
+                guild_id=guild_id,
+                user_id=user_id,
+                username=username,
+                fecha=fecha,
+                hora=hora,
+                puntos_base=puntos_base,
+                multiplicador=multiplicador,
+                puntos_finales=puntos_finales,
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            guild_id,
-            user_id,
-            username,
-            fecha.isoformat(),
-            hora,
-            puntos_base,
-            multiplicador,
-            puntos_finales,
-        ))
-        db.commit()
+        )
+        await sesion.commit()
 
 
 # ============================================================
 # PUNTOS
 # ============================================================
 
-def obtener_total_puntos(
+async def obtener_total_puntos(
     guild_id,
     user_id,
 ):
     """Devuelve el total de puntos de un usuario en un servidor."""
 
-    with conectar_db() as db:
-        return db.execute("""
-            SELECT COALESCE(
-                SUM(puntos_finales),
-                0
+    async with crear_sesion() as sesion:
+        total = (await sesion.execute(
+            select(
+                func.coalesce(
+                    func.sum(RegistroMadrugue.puntos_finales),
+                    0,
+                )
+            ).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
             )
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        )).fetchone()[0]
+        )).scalar_one()
+
+    return total
 
 
 # ============================================================
 # FECHAS
 # ============================================================
 
-def obtener_fechas_registradas(
+async def obtener_fechas_registradas(
     guild_id,
     user_id,
     orden="DESC",
@@ -180,56 +136,57 @@ def obtener_fechas_registradas(
             "El orden debe ser ASC o DESC."
         )
 
-    with conectar_db() as db:
-        filas = db.execute(f"""
-            SELECT fecha
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            ORDER BY fecha {orden}
-        """, (
-            guild_id,
-            user_id,
-        )).fetchall()
+    columna = RegistroMadrugue.fecha.asc() if orden == "ASC" else RegistroMadrugue.fecha.desc()
 
-    return [
-        date.fromisoformat(fila[0])
-        for fila in filas
-    ]
+    async with crear_sesion() as sesion:
+        filas = (await sesion.execute(
+            select(RegistroMadrugue.fecha)
+            .where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+            )
+            .order_by(columna)
+        )).all()
+
+    return [fila[0] for fila in filas]
 
 
 # ============================================================
 # TOP MADRUGADORES
 # ============================================================
 
-def obtener_top_madrugadores(
+async def obtener_top_madrugadores(
     guild_id,
     limite=10,
 ):
     """Devuelve el TOP de un servidor."""
 
-    with conectar_db() as db:
-        return db.execute("""
-            SELECT
-                user_id,
-                username,
-                SUM(puntos_finales) AS puntos
-            FROM registros
-            WHERE guild_id = ?
-            GROUP BY user_id
-            ORDER BY puntos DESC
-            LIMIT ?
-        """, (
-            guild_id,
-            limite,
-        )).fetchall()
+    puntos = func.sum(RegistroMadrugue.puntos_finales).label("puntos")
+
+    async with crear_sesion() as sesion:
+        filas = (await sesion.execute(
+            select(
+                RegistroMadrugue.user_id,
+                RegistroMadrugue.username,
+                puntos,
+            )
+            .where(RegistroMadrugue.guild_id == guild_id)
+            .group_by(
+                RegistroMadrugue.user_id,
+                RegistroMadrugue.username,
+            )
+            .order_by(puntos.desc())
+            .limit(limite)
+        )).all()
+
+    return filas
 
 
 # ============================================================
 # ESTADÍSTICAS
 # ============================================================
 
-def obtener_estadisticas(
+async def obtener_estadisticas(
     guild_id,
     user_id,
 ):
@@ -243,98 +200,78 @@ def obtener_estadisticas(
         puntos_finales
     """
 
-    with conectar_db() as db:
+    donde = (
+        RegistroMadrugue.guild_id == guild_id,
+        RegistroMadrugue.user_id == user_id,
+    )
 
-        datos = db.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(
-                    SUM(puntos_finales),
-                    0
+    async with crear_sesion() as sesion:
+
+        datos = (await sesion.execute(
+            select(
+                func.count(),
+                func.coalesce(
+                    func.sum(RegistroMadrugue.puntos_finales),
+                    0,
                 ),
-
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN puntos_base = 100
-                            THEN 1
-                            ELSE 0
-                        END
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (RegistroMadrugue.puntos_base == 100, 1),
+                            else_=0,
+                        )
                     ),
-                    0
+                    0,
                 ),
-
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN puntos_base = 25
-                            THEN 1
-                            ELSE 0
-                        END
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (RegistroMadrugue.puntos_base == 25, 1),
+                            else_=0,
+                        )
                     ),
-                    0
+                    0,
                 ),
-
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN puntos_base = 5
-                            THEN 1
-                            ELSE 0
-                        END
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (RegistroMadrugue.puntos_base == 5, 1),
+                            else_=0,
+                        )
                     ),
-                    0
-                )
+                    0,
+                ),
+            ).where(*donde)
+        )).one()
 
-            FROM registros
-
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        )).fetchone()
-
-        ultima = db.execute("""
-            SELECT
-                hora,
-                multiplicador,
-                puntos_base,
-                puntos_finales
-
-            FROM registros
-
-            WHERE guild_id = ?
-            AND user_id = ?
-
-            ORDER BY fecha DESC
-            LIMIT 1
-        """, (
-            guild_id,
-            user_id,
-        )).fetchone()
-
-        promedio = db.execute("""
-            SELECT AVG(
-                CAST(
-                    substr(hora, 1, 2)
-                    AS INTEGER
-                ) * 60 +
-
-                CAST(
-                    substr(hora, 4, 2)
-                    AS INTEGER
-                )
+        ultima = (await sesion.execute(
+            select(
+                RegistroMadrugue.hora,
+                RegistroMadrugue.multiplicador,
+                RegistroMadrugue.puntos_base,
+                RegistroMadrugue.puntos_finales,
             )
+            .where(*donde)
+            .order_by(RegistroMadrugue.fecha.desc())
+            .limit(1)
+        )).first()
 
-            FROM registros
-
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        )).fetchone()[0]
+        # La hora se guarda como texto HH:MM: se promedian los minutos
+        # del día, igual que en la versión SQLite.
+        promedio = (await sesion.execute(
+            select(
+                func.avg(
+                    func.cast(
+                        func.substr(RegistroMadrugue.hora, 1, 2),
+                        Integer,
+                    ) * 60
+                    + func.cast(
+                        func.substr(RegistroMadrugue.hora, 4, 2),
+                        Integer,
+                    )
+                )
+            ).where(*donde)
+        )).scalar_one()
 
     return datos, ultima, promedio
 
@@ -343,39 +280,35 @@ def obtener_estadisticas(
 # ADMINISTRACIÓN
 # ============================================================
 
-def obtener_estadisticas_servidor(
+async def obtener_estadisticas_servidor(
     guild_id,
 ):
     """Devuelve estadísticas generales de un servidor."""
 
-    with conectar_db() as db:
+    async with crear_sesion() as sesion:
 
-        madrugadores = db.execute("""
-            SELECT COUNT(DISTINCT user_id)
-            FROM registros
-            WHERE guild_id = ?
-        """, (
-            guild_id,
-        )).fetchone()[0]
+        madrugadores = (await sesion.execute(
+            select(
+                func.count(
+                    func.distinct(RegistroMadrugue.user_id)
+                )
+            ).where(RegistroMadrugue.guild_id == guild_id)
+        )).scalar_one()
 
-        registros = db.execute("""
-            SELECT COUNT(*)
-            FROM registros
-            WHERE guild_id = ?
-        """, (
-            guild_id,
-        )).fetchone()[0]
-
-        puntos = db.execute("""
-            SELECT COALESCE(
-                SUM(puntos_finales),
-                0
+        registros = (await sesion.execute(
+            select(func.count()).where(
+                RegistroMadrugue.guild_id == guild_id
             )
-            FROM registros
-            WHERE guild_id = ?
-        """, (
-            guild_id,
-        )).fetchone()[0]
+        )).scalar_one()
+
+        puntos = (await sesion.execute(
+            select(
+                func.coalesce(
+                    func.sum(RegistroMadrugue.puntos_finales),
+                    0,
+                )
+            ).where(RegistroMadrugue.guild_id == guild_id)
+        )).scalar_one()
 
     return (
         madrugadores,
@@ -384,162 +317,136 @@ def obtener_estadisticas_servidor(
     )
 
 
-def obtener_registros_de_hoy(
+async def obtener_registros_de_hoy(
     guild_id,
     fecha,
 ):
     """Devuelve la cantidad de registros de un día."""
 
-    with conectar_db() as db:
-        return db.execute("""
-            SELECT COUNT(*)
-            FROM registros
-            WHERE guild_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            fecha.isoformat(),
-        )).fetchone()[0]
+    async with crear_sesion() as sesion:
+        cantidad = (await sesion.execute(
+            select(func.count()).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.fecha == fecha,
+            )
+        )).scalar_one()
+
+    return cantidad
 
 
-def eliminar_registro_del_dia(
+async def eliminar_registro_del_dia(
     guild_id,
     user_id,
     fecha,
 ):
     """Elimina el registro de un usuario para una fecha."""
 
-    with conectar_db() as db:
+    async with crear_sesion() as sesion:
+        resultado = await sesion.execute(
+            delete(RegistroMadrugue).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+                RegistroMadrugue.fecha == fecha,
+            )
+        )
+        await sesion.commit()
 
-        cursor = db.execute("""
-            DELETE FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            user_id,
-            fecha.isoformat(),
-        ))
-
-        db.commit()
-
-        return cursor.rowcount
+    return resultado.rowcount
 
 
-def eliminar_registros_usuario(
+async def eliminar_registros_usuario(
     guild_id,
     user_id,
 ):
     """Elimina todos los registros de un usuario."""
 
-    with conectar_db() as db:
+    async with crear_sesion() as sesion:
+        resultado = await sesion.execute(
+            delete(RegistroMadrugue).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+            )
+        )
+        await sesion.commit()
 
-        cursor = db.execute("""
-            DELETE FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        ))
+    return resultado.rowcount
 
-        db.commit()
 
-        return cursor.rowcount
-
-def eliminar_registros_servidor(
+async def eliminar_registros_servidor(
     guild_id,
 ):
     """Elimina todos los registros de Madrugue de un servidor."""
 
-    with conectar_db() as db:
+    async with crear_sesion() as sesion:
+        resultado = await sesion.execute(
+            delete(RegistroMadrugue).where(
+                RegistroMadrugue.guild_id == guild_id
+            )
+        )
+        await sesion.commit()
 
-        cursor = db.execute("""
-            DELETE FROM registros
-            WHERE guild_id = ?
-        """, (
-            guild_id,
-        ))
-
-        db.commit()
-
-        return cursor.rowcount
+    return resultado.rowcount
 
 
-def obtener_resumen_usuario(
+async def obtener_resumen_usuario(
     guild_id,
     user_id,
 ):
     """Obtiene un resumen de los registros de un usuario."""
 
-    with conectar_db() as db:
-
-        resultado = db.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(
-                    SUM(puntos_finales),
-                    0
+    async with crear_sesion() as sesion:
+        resultado = (await sesion.execute(
+            select(
+                func.count(),
+                func.coalesce(
+                    func.sum(RegistroMadrugue.puntos_finales),
+                    0,
                 ),
-                MIN(fecha),
-                MAX(fecha)
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id,
-        )).fetchone()
+                func.min(RegistroMadrugue.fecha),
+                func.max(RegistroMadrugue.fecha),
+            ).where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+            )
+        )).one()
 
     return resultado
 
 
-def obtener_registro_del_dia_admin(
+async def obtener_registro_del_dia_admin(
     guild_id,
     user_id,
     fecha,
 ):
     """Obtiene el registro del usuario para una fecha."""
 
-    with conectar_db() as db:
-
-        return db.execute("""
-            SELECT
-                hora,
-                puntos_finales
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND fecha = ?
-        """, (
-            guild_id,
-            user_id,
-            fecha.isoformat(),
-        )).fetchone()
+    return await obtener_registro_del_dia(
+        guild_id,
+        user_id,
+        fecha,
+    )
 
 
-def obtener_ultimos_registros(
+async def obtener_ultimos_registros(
     guild_id,
     user_id,
     limite=8,
 ):
     """Obtiene los últimos registros de un usuario, del más reciente al más viejo."""
 
-    with conectar_db() as db:
+    async with crear_sesion() as sesion:
+        filas = (await sesion.execute(
+            select(
+                RegistroMadrugue.fecha,
+                RegistroMadrugue.hora,
+                RegistroMadrugue.puntos_finales,
+            )
+            .where(
+                RegistroMadrugue.guild_id == guild_id,
+                RegistroMadrugue.user_id == user_id,
+            )
+            .order_by(RegistroMadrugue.fecha.desc())
+            .limit(limite)
+        )).all()
 
-        return db.execute("""
-            SELECT
-                fecha,
-                hora,
-                puntos_finales
-            FROM registros
-            WHERE guild_id = ?
-            AND user_id = ?
-            ORDER BY fecha DESC
-            LIMIT ?
-        """, (
-            guild_id,
-            user_id,
-            limite,
-        )).fetchall()
+    return filas

@@ -43,8 +43,8 @@ USUARIO = 42
 CANAL = 99
 
 NOMBRE = "SeptiembreSinFAP"
-INICIO = "2026-09-01"
-FIN = "2026-09-30"
+INICIO = date(2026, 9, 1)
+FIN = date(2026, 9, 30)
 
 HOY = date(2026, 9, 5)
 
@@ -54,14 +54,14 @@ RANGO_SARGENTO = "Tercer Sargento 🥉"
 
 
 @pytest.fixture
-def desafio_ssf(base_datos_limpia):
+async def desafio_ssf(base_datos_limpia):
     """Crea el desafío de septiembre sobre una base limpia."""
 
     from modules.ssf.database import inicializar_db
 
-    inicializar_db()
+    await inicializar_db()
 
-    resultado = iniciar_desafio(
+    resultado = await iniciar_desafio(
         GUILD,
         NOMBRE,
         INICIO,
@@ -111,17 +111,12 @@ def hoy_5_sep(monkeypatch):
     )
 
 
-def ejecutar(coro):
-    import asyncio
-
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        coro
-    )
 
 
-def llamar(cog, nombre_metodo, interaccion, *args):
+
+async def llamar(cog, nombre_metodo, interaccion, *args):
     metodo = getattr(type(cog), nombre_metodo).callback
-    return ejecutar(metodo(cog, interaccion, *args))
+    return await metodo(cog, interaccion, *args)
 
 
 def interaccion_admin():
@@ -136,8 +131,8 @@ def mediodia(dia):
     return datetime(2026, 9, dia, 12, 0)
 
 
-def registrar(dia, user_id=USUARIO, nombre="Tester"):
-    return registrar_usuario(
+async def registrar(dia, user_id=USUARIO, nombre="Tester"):
+    return await registrar_usuario(
         GUILD,
         user_id,
         nombre,
@@ -145,9 +140,9 @@ def registrar(dia, user_id=USUARIO, nombre="Tester"):
     )
 
 
-def sobrevivir(dias, user_id=USUARIO):
+async def sobrevivir(dias, user_id=USUARIO):
     for dia in dias:
-        resultado = registrar_sobrevivi(
+        resultado = await registrar_sobrevivi(
             GUILD,
             user_id,
             mediodia(dia),
@@ -159,21 +154,21 @@ def miembro(user_id=USUARIO, nombre="Tester"):
     return UsuarioFalso(user_id, nombre)
 
 
-def desafio_id_activo():
+async def desafio_id_activo():
     from modules.ssf.database import obtener_desafio_activo
 
-    return obtener_desafio_activo(GUILD)[0]
+    return (await obtener_desafio_activo(GUILD))[0]
 
 
 # ============================================================
 # AGREGAR DÍA
 # ============================================================
 
-def test_agregar_dia_suma_el_dia_faltante(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3])
+async def test_agregar_dia_suma_el_dia_faltante(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3])
 
-    resultado = agregar_dia(
+    resultado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 4),
@@ -184,16 +179,16 @@ def test_agregar_dia_suma_el_dia_faltante(desafio_ssf):
     assert resultado["racha"] == 4
     assert resultado["mejor_racha"] == 4
     assert resultado["rango"] == RANGO_CABO
-    assert tiene_registro(desafio_ssf, USUARIO, "2026-09-04")
+    assert await tiene_registro(desafio_ssf, USUARIO, date(2026, 9, 4))
 
 
-def test_agregar_dia_guarda_hora_admin(desafio_ssf):
-    from core.database import conectar_db
+async def test_agregar_dia_guarda_hora_admin(desafio_ssf):
+    from tests.harness import conectar_db
 
-    registrar(1)
-    sobrevivir([2, 3])
+    await registrar(1)
+    await sobrevivir([2, 3])
 
-    agregar_dia(GUILD, USUARIO, date(2026, 9, 4), HOY)
+    await agregar_dia(GUILD, USUARIO, date(2026, 9, 4), HOY)
 
     with conectar_db() as db:
         hora = db.execute("""
@@ -211,14 +206,14 @@ def test_agregar_dia_guarda_hora_admin(desafio_ssf):
     assert hora == "ADMIN"
 
 
-def test_agregar_dia_rellena_un_hueco_intermedio(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3, 5])
+async def test_agregar_dia_rellena_un_hueco_intermedio(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3, 5])
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
     assert estado["racha_actual"] == 1
 
-    resultado = agregar_dia(
+    resultado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 4),
@@ -231,12 +226,12 @@ def test_agregar_dia_rellena_un_hueco_intermedio(desafio_ssf):
     assert resultado["rango"] == RANGO_SARGENTO
 
 
-def test_agregar_dia_rechaza_eliminado(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+async def test_agregar_dia_rechaza_eliminado(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
-    resultado = agregar_dia(
+    resultado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 5),
@@ -249,11 +244,11 @@ def test_agregar_dia_rechaza_eliminado(desafio_ssf):
     }
 
 
-def test_agregar_dia_rechaza_fecha_futura(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3])
+async def test_agregar_dia_rechaza_fecha_futura(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3])
 
-    resultado = agregar_dia(
+    resultado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 6),
@@ -266,11 +261,11 @@ def test_agregar_dia_rechaza_fecha_futura(desafio_ssf):
     }
 
 
-def test_agregar_dia_rechaza_duplicado(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3])
+async def test_agregar_dia_rechaza_duplicado(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3])
 
-    resultado = agregar_dia(
+    resultado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 3),
@@ -283,10 +278,10 @@ def test_agregar_dia_rechaza_duplicado(desafio_ssf):
     }
 
 
-def test_agregar_dia_rechaza_fuera_de_fecha(desafio_ssf):
-    registrar(1)
+async def test_agregar_dia_rechaza_fuera_de_fecha(desafio_ssf):
+    await registrar(1)
 
-    resultado = agregar_dia(
+    resultado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 10, 1),
@@ -299,8 +294,8 @@ def test_agregar_dia_rechaza_fuera_de_fecha(desafio_ssf):
     }
 
 
-def test_agregar_dia_rechaza_no_participante(desafio_ssf):
-    resultado = agregar_dia(
+async def test_agregar_dia_rechaza_no_participante(desafio_ssf):
+    resultado = await agregar_dia(
         GUILD,
         777,
         date(2026, 9, 4),
@@ -313,8 +308,8 @@ def test_agregar_dia_rechaza_no_participante(desafio_ssf):
     }
 
 
-def test_agregar_dia_sin_desafio(desafio_ssf):
-    resultado = agregar_dia(
+async def test_agregar_dia_sin_desafio(desafio_ssf):
+    resultado = await agregar_dia(
         999,
         USUARIO,
         date(2026, 9, 4),
@@ -331,11 +326,11 @@ def test_agregar_dia_sin_desafio(desafio_ssf):
 # QUITAR DÍA
 # ============================================================
 
-def test_quitar_dia_baja_la_racha(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3, 4])
+async def test_quitar_dia_baja_la_racha(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3, 4])
 
-    resultado = quitar_dia(
+    resultado = await quitar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 4),
@@ -346,15 +341,15 @@ def test_quitar_dia_baja_la_racha(desafio_ssf):
     assert resultado["mejor_racha"] == 3
     assert resultado["rango"] == RANGO_CABO
     assert resultado["eliminado"] is False
-    assert not tiene_registro(desafio_ssf, USUARIO, "2026-09-04")
+    assert not await tiene_registro(desafio_ssf, USUARIO, date(2026, 9, 4))
 
 
-def test_quitar_dia_acepta_eliminados_sin_revivir(desafio_ssf):
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+async def test_quitar_dia_acepta_eliminados_sin_revivir(desafio_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
-    resultado = quitar_dia(
+    resultado = await quitar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 3),
@@ -365,14 +360,14 @@ def test_quitar_dia_acepta_eliminados_sin_revivir(desafio_ssf):
     assert resultado["mejor_racha"] == 2
     assert resultado["eliminado"] is True
 
-    participante = obtener_participante(desafio_ssf, USUARIO)
+    participante = await obtener_participante(desafio_ssf, USUARIO)
     assert participante[4] == 1
 
 
-def test_quitar_dia_deja_cero_sin_registros(desafio_ssf):
-    registrar(1)
+async def test_quitar_dia_deja_cero_sin_registros(desafio_ssf):
+    await registrar(1)
 
-    resultado = quitar_dia(
+    resultado = await quitar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 1),
@@ -384,29 +379,29 @@ def test_quitar_dia_deja_cero_sin_registros(desafio_ssf):
     assert resultado["rango"] == RANGO_SOLDADO
 
 
-def test_quitar_dia_borra_registros_fuera_del_desafio(desafio_ssf):
-    registrar(1)
-    guardar_registro(
+async def test_quitar_dia_borra_registros_fuera_del_desafio(desafio_ssf):
+    await registrar(1)
+    await guardar_registro(
         desafio_id=desafio_ssf,
         user_id=USUARIO,
-        fecha="2026-10-05",
+        fecha=date(2026, 10, 5),
         hora="00:00:00",
     )
 
-    resultado = quitar_dia(
+    resultado = await quitar_dia(
         GUILD,
         USUARIO,
         date(2026, 10, 5),
     )
 
     assert resultado["exitoso"]
-    assert not tiene_registro(desafio_ssf, USUARIO, "2026-10-05")
+    assert not await tiene_registro(desafio_ssf, USUARIO, "2026-10-05")
 
 
-def test_quitar_dia_sin_registro_informa(desafio_ssf):
-    registrar(1)
+async def test_quitar_dia_sin_registro_informa(desafio_ssf):
+    await registrar(1)
 
-    resultado = quitar_dia(
+    resultado = await quitar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 4),
@@ -418,8 +413,8 @@ def test_quitar_dia_sin_registro_informa(desafio_ssf):
     }
 
 
-def test_quitar_dia_rechaza_no_participante(desafio_ssf):
-    resultado = quitar_dia(
+async def test_quitar_dia_rechaza_no_participante(desafio_ssf):
+    resultado = await quitar_dia(
         GUILD,
         777,
         date(2026, 9, 4),
@@ -431,8 +426,8 @@ def test_quitar_dia_rechaza_no_participante(desafio_ssf):
     }
 
 
-def test_quitar_dia_sin_desafio(desafio_ssf):
-    resultado = quitar_dia(
+async def test_quitar_dia_sin_desafio(desafio_ssf):
+    resultado = await quitar_dia(
         999,
         USUARIO,
         date(2026, 9, 4),
@@ -448,22 +443,22 @@ def test_quitar_dia_sin_desafio(desafio_ssf):
 # RECALCULAR RACHAS
 # ============================================================
 
-def test_recalcular_repara_eliminado_con_racha_en_cero(desafio_ssf):
+async def test_recalcular_repara_eliminado_con_racha_en_cero(desafio_ssf):
     from modules.ssf.database import actualizar_participante
 
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
     # Simula el código anterior al refactor, que pisaba la racha con 0.
-    actualizar_participante(
+    await actualizar_participante(
         desafio_id=desafio_ssf,
         user_id=USUARIO,
         racha_actual=0,
         mejor_racha=0,
     )
 
-    resultado = recalcular_rachas(GUILD, USUARIO)
+    resultado = await recalcular_rachas(GUILD, USUARIO)
 
     assert resultado["exitoso"]
     assert resultado["racha"] == 3
@@ -471,26 +466,26 @@ def test_recalcular_repara_eliminado_con_racha_en_cero(desafio_ssf):
     assert resultado["rango"] == RANGO_CABO
     assert resultado["eliminado"] is True
 
-    participante = obtener_participante(desafio_ssf, USUARIO)
+    participante = await obtener_participante(desafio_ssf, USUARIO)
     assert participante[4] == 1
     assert participante[6] == 3
     assert participante[7] == 3
 
 
-def test_recalcular_no_cambia_el_estado_activo(desafio_ssf):
+async def test_recalcular_no_cambia_el_estado_activo(desafio_ssf):
     from modules.ssf.database import actualizar_participante
 
-    registrar(1)
-    sobrevivir([2, 3, 4])
+    await registrar(1)
+    await sobrevivir([2, 3, 4])
 
-    actualizar_participante(
+    await actualizar_participante(
         desafio_id=desafio_ssf,
         user_id=USUARIO,
         racha_actual=0,
         mejor_racha=0,
     )
 
-    resultado = recalcular_rachas(GUILD, USUARIO)
+    resultado = await recalcular_rachas(GUILD, USUARIO)
 
     assert resultado["exitoso"]
     assert resultado["racha"] == 4
@@ -498,15 +493,15 @@ def test_recalcular_no_cambia_el_estado_activo(desafio_ssf):
     assert resultado["eliminado"] is False
 
 
-def test_recalcular_sin_registros_da_cero(desafio_ssf):
-    registrar_participante(
+async def test_recalcular_sin_registros_da_cero(desafio_ssf):
+    await registrar_participante(
         desafio_id=desafio_ssf,
         user_id=USUARIO,
         username="Tester",
-        fecha_registro=mediodia(1).isoformat(),
+        fecha_registro=mediodia(1),
     )
 
-    resultado = recalcular_rachas(GUILD, USUARIO)
+    resultado = await recalcular_rachas(GUILD, USUARIO)
 
     assert resultado["exitoso"]
     assert resultado["racha"] == 0
@@ -514,8 +509,8 @@ def test_recalcular_sin_registros_da_cero(desafio_ssf):
     assert resultado["rango"] == RANGO_SOLDADO
 
 
-def test_recalcular_rechaza_no_participante(desafio_ssf):
-    resultado = recalcular_rachas(GUILD, 777)
+async def test_recalcular_rechaza_no_participante(desafio_ssf):
+    resultado = await recalcular_rachas(GUILD, 777)
 
     assert resultado == {
         "exitoso": False,
@@ -523,8 +518,8 @@ def test_recalcular_rechaza_no_participante(desafio_ssf):
     }
 
 
-def test_recalcular_sin_desafio(desafio_ssf):
-    resultado = recalcular_rachas(999, USUARIO)
+async def test_recalcular_sin_desafio(desafio_ssf):
+    resultado = await recalcular_rachas(999, USUARIO)
 
     assert resultado == {
         "exitoso": False,
@@ -536,15 +531,15 @@ def test_recalcular_sin_desafio(desafio_ssf):
 # RECETA DEL INCIDENTE: REVIVE CON FECHA EQUIVOCADA
 # ============================================================
 
-def test_receta_revive_equivocado_se_corrige_quitando_y_agregando(
+async def test_receta_revive_equivocado_se_corrige_quitando_y_agregando(
     desafio_ssf,
 ):
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
     # El admin revive con la fecha de hoy en vez del día perdido.
-    revivido = revivir_participante(
+    revivido = await revivir_participante(
         GUILD,
         USUARIO,
         date(2026, 9, 5),
@@ -553,11 +548,11 @@ def test_receta_revive_equivocado_se_corrige_quitando_y_agregando(
     assert revivido["racha"] == 1
 
     # Se quita el día mal cargado y se agrega el día perdido.
-    quitado = quitar_dia(GUILD, USUARIO, date(2026, 9, 5))
+    quitado = await quitar_dia(GUILD, USUARIO, date(2026, 9, 5))
     assert quitado["exitoso"]
     assert quitado["racha"] == 3
 
-    agregado = agregar_dia(
+    agregado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 4),
@@ -567,7 +562,7 @@ def test_receta_revive_equivocado_se_corrige_quitando_y_agregando(
     assert agregado["racha"] == 4
     assert agregado["mejor_racha"] == 4
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
     assert estado["exitoso"]
     assert estado["eliminado"] is False
     assert estado["racha_actual"] == 4
@@ -575,14 +570,14 @@ def test_receta_revive_equivocado_se_corrige_quitando_y_agregando(
     assert estado["rango"] == RANGO_CABO
 
 
-def test_agregar_sobre_revive_equivocado_perdona_el_dia_de_hoy(
+async def test_agregar_sobre_revive_equivocado_perdona_el_dia_de_hoy(
     desafio_ssf,
 ):
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
-    revivido = revivir_participante(
+    revivido = await revivir_participante(
         GUILD,
         USUARIO,
         date(2026, 9, 5),
@@ -590,7 +585,7 @@ def test_agregar_sobre_revive_equivocado_perdona_el_dia_de_hoy(
     assert revivido["exitoso"]
 
     # Sin quitar el día de hoy, agregarlo directo deja racha 5.
-    agregado = agregar_dia(
+    agregado = await agregar_dia(
         GUILD,
         USUARIO,
         date(2026, 9, 4),
@@ -606,13 +601,13 @@ def test_agregar_sobre_revive_equivocado_perdona_el_dia_de_hoy(
 # COMANDOS /admin ssf
 # ============================================================
 
-def test_comando_agregar_responde_exito(cog_admin, hoy_5_sep):
-    registrar(1)
-    sobrevivir([2, 3])
+async def test_comando_agregar_responde_exito(cog_admin, hoy_5_sep):
+    await registrar(1)
+    await sobrevivir([2, 3])
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_agregar",
         interaccion,
@@ -626,15 +621,15 @@ def test_comando_agregar_responde_exito(cog_admin, hoy_5_sep):
     assert interaccion.respuestas[-1].efimero
 
 
-def test_comando_agregar_con_fecha_invalida_informa(
+async def test_comando_agregar_con_fecha_invalida_informa(
     cog_admin,
     hoy_5_sep,
 ):
-    registrar(1)
+    await registrar(1)
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_agregar",
         interaccion,
@@ -645,17 +640,17 @@ def test_comando_agregar_con_fecha_invalida_informa(
     assert "no es válida" in interaccion.texto
 
 
-def test_comando_agregar_a_eliminado_sugiere_revivir(
+async def test_comando_agregar_a_eliminado_sugiere_revivir(
     cog_admin,
     hoy_5_sep,
 ):
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_agregar",
         interaccion,
@@ -666,13 +661,13 @@ def test_comando_agregar_a_eliminado_sugiere_revivir(
     assert "revivir" in interaccion.texto
 
 
-def test_comando_quitar_responde_exito(cog_admin):
-    registrar(1)
-    sobrevivir([2, 3, 4])
+async def test_comando_quitar_responde_exito(cog_admin):
+    await registrar(1)
+    await sobrevivir([2, 3, 4])
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_quitar",
         interaccion,
@@ -685,16 +680,16 @@ def test_comando_quitar_responde_exito(cog_admin):
     assert interaccion.respuestas[-1].efimero
 
 
-def test_comando_quitar_a_eliminado_aclara_que_sigue_eliminado(
+async def test_comando_quitar_a_eliminado_aclara_que_sigue_eliminado(
     cog_admin,
 ):
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_quitar",
         interaccion,
@@ -706,15 +701,15 @@ def test_comando_quitar_a_eliminado_aclara_que_sigue_eliminado(
     assert "sigue eliminado" in interaccion.texto
 
 
-def test_comando_recalcular_responde_exito(cog_admin):
+async def test_comando_recalcular_responde_exito(cog_admin):
     from modules.ssf.database import actualizar_participante
 
-    registrar(1)
-    sobrevivir([2, 3])
-    assert eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
 
-    actualizar_participante(
-        desafio_id=desafio_id_activo(),
+    await actualizar_participante(
+        desafio_id=await desafio_id_activo(),
         user_id=USUARIO,
         racha_actual=0,
         mejor_racha=0,
@@ -722,7 +717,7 @@ def test_comando_recalcular_responde_exito(cog_admin):
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_recalcular",
         interaccion,
@@ -735,10 +730,10 @@ def test_comando_recalcular_responde_exito(cog_admin):
     assert "Eliminado" in interaccion.texto
 
 
-def test_comando_recalcular_a_no_participante_informa(cog_admin):
+async def test_comando_recalcular_a_no_participante_informa(cog_admin):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_recalcular",
         interaccion,
@@ -765,7 +760,7 @@ class AdjuntoFalso:
 
 
 @pytest.fixture
-def cog_en_arbol_ssf(desafio_ssf, admin_ids):
+async def cog_en_arbol_ssf(desafio_ssf, admin_ids):
     """Cog /admin registrado en un árbol real, con desafío SSF creado."""
 
     import discord
@@ -776,10 +771,7 @@ def cog_en_arbol_ssf(desafio_ssf, admin_ids):
         intents=discord.Intents.default(),
     )
 
-    async def cargar():
-        await bot.load_extension("commands.admin")
-
-    ejecutar(cargar())
+    await bot.load_extension("commands.admin")
 
     return bot.get_cog("Admin")
 
@@ -793,16 +785,16 @@ def interaccion_admin_con_miembro():
     return interaccion
 
 
-def test_fileexecute_ejecuta_ssf_agregar_y_recalcular(
+async def test_fileexecute_ejecuta_ssf_agregar_y_recalcular(
     cog_en_arbol_ssf,
     hoy_5_sep,
 ):
-    registrar(1)
-    sobrevivir([2, 3])
+    await registrar(1)
+    await sobrevivir([2, 3])
 
     interaccion = interaccion_admin_con_miembro()
 
-    llamar(
+    await llamar(
         cog_en_arbol_ssf,
         "fileexecute",
         interaccion,
@@ -816,17 +808,17 @@ def test_fileexecute_ejecuta_ssf_agregar_y_recalcular(
     assert "✅ Línea 1" in interaccion.texto
     assert "✅ Línea 2" in interaccion.texto
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
     assert estado["racha_actual"] == 4
 
 
-def test_fileexecute_ejecuta_ssf_quitar(cog_en_arbol_ssf):
-    registrar(1)
-    sobrevivir([2, 3, 4])
+async def test_fileexecute_ejecuta_ssf_quitar(cog_en_arbol_ssf):
+    await registrar(1)
+    await sobrevivir([2, 3, 4])
 
     interaccion = interaccion_admin_con_miembro()
 
-    llamar(
+    await llamar(
         cog_en_arbol_ssf,
         "fileexecute",
         interaccion,
@@ -835,16 +827,16 @@ def test_fileexecute_ejecuta_ssf_quitar(cog_en_arbol_ssf):
 
     assert "✅ Línea 1" in interaccion.texto
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
     assert estado["racha_actual"] == 3
 
 
-def test_fileexecute_rechaza_ssf_quitar_sin_fecha(cog_en_arbol_ssf):
-    registrar(1)
+async def test_fileexecute_rechaza_ssf_quitar_sin_fecha(cog_en_arbol_ssf):
+    await registrar(1)
 
     interaccion = interaccion_admin_con_miembro()
 
-    llamar(
+    await llamar(
         cog_en_arbol_ssf,
         "fileexecute",
         interaccion,
@@ -854,12 +846,12 @@ def test_fileexecute_rechaza_ssf_quitar_sin_fecha(cog_en_arbol_ssf):
     assert "requiere miembro y fecha" in interaccion.texto
 
 
-def test_fileexecute_rechaza_ssf_recalcular_sin_miembro(
+async def test_fileexecute_rechaza_ssf_recalcular_sin_miembro(
     cog_en_arbol_ssf,
 ):
     interaccion = interaccion_admin_con_miembro()
 
-    llamar(
+    await llamar(
         cog_en_arbol_ssf,
         "fileexecute",
         interaccion,

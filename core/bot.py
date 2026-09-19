@@ -188,10 +188,10 @@ class NaikitoBot(commands.Bot):
         # BASE DE DATOS SSF
         # ====================================================
 
-        inicializar_db_madrugue()
+        await inicializar_db_madrugue()
         print("Base de datos Madrugue inicializada.")
 
-        inicializar_db_ssf()
+        await inicializar_db_ssf()
         print("Base de datos SSF inicializada.")
         
         # ====================================================

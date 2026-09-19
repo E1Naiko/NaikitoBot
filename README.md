@@ -25,6 +25,37 @@ trae la base de datos de zonas horarias de IANA y `config/settings.py` construye
 ese paquete el bot falla al arrancar con
 `ZoneInfoNotFoundError: 'No time zone found with key America/Argentina/Buenos_Aires'`.
 
+## Base de datos
+
+La capa de datos usa SQLAlchemy asíncrono con modelos ORM declarativos
+(`modules/*/models.py`): el esquema lo crea el bot al arrancar con
+`Base.metadata.create_all`, sin migraciones manuales.
+
+- **Producción**: PostgreSQL vía `asyncpg`. Se configura con `DATABASE_URL`
+  en el `.env`:
+
+  ```dotenv
+  DATABASE_URL=postgresql+asyncpg://usuario:clave@host:5432/naikito
+  ```
+
+- **Desarrollo y pruebas**: sin `DATABASE_URL` el bot cae a SQLite
+  (`sqlite+aiosqlite:///{DATABASE}`), que es lo que usan las pruebas.
+
+Para pasar una instalación vieja (el archivo `naikito.db` de SQLite) a la
+base nueva:
+
+```text
+# 1. Simular para ver qué se copiaría
+python -m scripts.migrar_sqlite_a_postgres naikito.db --solo-ver
+
+# 2. Migrar (DATABASE_URL apunta a la base nueva)
+python -m scripts.migrar_sqlite_a_postgres naikito.db
+```
+
+El script copia tabla por tabla en orden de dependencias, convierte las
+fechas guardadas como texto a tipos nativos, aplica los defaults del modelo a
+columnas que la base vieja no tenía, y verifica las cuentas al terminar.
+
 ## Pruebas
 
 Las pruebas no necesitan token de Discord ni conexión: usan dobles de

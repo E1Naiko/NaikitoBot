@@ -87,7 +87,7 @@ class AccionesMixin:
             se_lesiona,
             _probabilidad_sponsor,
             sponsor,
-        ) in completar_acciones_vencidas(ahora()):
+        ) in await completar_acciones_vencidas(ahora()):
             if canal is None:
                 continue
 
@@ -138,7 +138,7 @@ class AccionesMixin:
         reducen su probabilidad en 0.01 puntos porcentuales, sin pasar de 0.
         """
 
-        cantidad = reducir_probabilidad_lesion_inactivos()
+        cantidad = await reducir_probabilidad_lesion_inactivos()
 
         if cantidad:
             print(
@@ -200,7 +200,7 @@ class AccionesMixin:
         if not await solo_servidor(interaction):
             return
 
-        _, lesionado_hasta = obtener_estado_box(
+        _, lesionado_hasta = await obtener_estado_box(
             interaction.guild.id,
             interaction.user.id,
         )
@@ -208,9 +208,9 @@ class AccionesMixin:
         if (
             not permitir_lesionado
             and lesionado_hasta
-            and datetime.fromisoformat(lesionado_hasta) > ahora()
+            and lesionado_hasta > ahora()
         ):
-            final = datetime.fromisoformat(lesionado_hasta)
+            final = lesionado_hasta
             await responder_error(
                 interaction,
                 "🚑 Lesión activa",
@@ -228,13 +228,13 @@ class AccionesMixin:
             )
             return
 
-        accion = obtener_accion_activa(
+        accion = await obtener_accion_activa(
             interaction.guild.id,
             interaction.user.id,
         )
         if accion is not None:
             tipo_actual, finaliza_en, _ = accion
-            timestamp = int(datetime.fromisoformat(finaliza_en).timestamp())
+            timestamp = int(finaliza_en.timestamp())
             await responder_error(
                 interaction,
                 "⚠️ Acción activa",
@@ -245,7 +245,7 @@ class AccionesMixin:
 
         recompensa = duracion.minutos * recompensa_por_minuto
 
-        if not iniciar_accion(
+        if not await iniciar_accion(
             interaction.guild.id,
             interaction.user.id,
             tipo,
@@ -308,7 +308,7 @@ class AccionesMixin:
         hasta: str | None = None,
     ):
         nivel = (
-            obtener_nivel_mejora(
+            await obtener_nivel_mejora(
                 interaction.guild.id,
                 interaction.user.id,
                 "entrenamiento",
@@ -341,7 +341,7 @@ class AccionesMixin:
         hasta: str | None = None,
     ):
         nivel = (
-            obtener_nivel_mejora(
+            await obtener_nivel_mejora(
                 interaction.guild.id,
                 interaction.user.id,
                 "trabajo",

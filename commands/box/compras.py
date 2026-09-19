@@ -55,9 +55,9 @@ def opciones_validas(categoria: str) -> str:
     return ", ".join(f"`{clave}`" for clave in catalogo)
 
 
-def _comprar_mejora(guild_id: int, user_id: int, clave: str) -> Resultado:
+async def _comprar_mejora(guild_id: int, user_id: int, clave: str) -> Resultado:
     configuracion = MEJORAS[clave]
-    estado, saldo, nivel = comprar_mejora(
+    estado, saldo, nivel = await comprar_mejora(
         guild_id=guild_id,
         user_id=user_id,
         mejora=clave,
@@ -89,9 +89,9 @@ def _comprar_mejora(guild_id: int, user_id: int, clave: str) -> Resultado:
     )
 
 
-def _comprar_equipamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
+async def _comprar_equipamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
     configuracion = EQUIPAMIENTO[clave]
-    estado, saldo, nivel = comprar_equipamiento_progresivo(
+    estado, saldo, nivel = await comprar_equipamiento_progresivo(
         guild_id=guild_id,
         user_id=user_id,
         tipo_equipo=clave,
@@ -127,9 +127,9 @@ def _comprar_equipamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
     )
 
 
-def _comprar_tratamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
+async def _comprar_tratamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
     configuracion = TRATAMIENTOS[clave]
-    estado, saldo = comprar_tratamiento(
+    estado, saldo = await comprar_tratamiento(
         guild_id=guild_id,
         user_id=user_id,
         precio=configuracion["precio"],
@@ -155,7 +155,7 @@ def _comprar_tratamiento(guild_id: int, user_id: int, clave: str) -> Resultado:
     )
 
 
-def _comprar_suministro(
+async def _comprar_suministro(
     guild_id: int,
     user_id: int,
     clave: str,
@@ -200,7 +200,7 @@ def texto_tipos_suministro() -> str:
     )
 
 
-def usar_suministro_resultado(
+async def usar_suministro_resultado(
     guild_id: int,
     user_id: int,
     tipo: str,
@@ -216,7 +216,7 @@ def usar_suministro_resultado(
             f"⚠️ Suministro no válido. Opciones: {texto_tipos_suministro()}",
         )
 
-    estado, saldo = usar_suministro(
+    estado, saldo = await usar_suministro(
         guild_id=guild_id,
         user_id=user_id,
         objetivo=configuracion["objetivo"],
@@ -261,7 +261,7 @@ def usar_suministro_resultado(
     if objetivo == "lesion":
         detalle = "🩹 Lesión curada y probabilidad en **0%**."
     else:
-        equipo = obtener_equipo(guild_id, user_id)
+        equipo = await obtener_equipo(guild_id, user_id)
         if objetivo == "vida":
             detalle = f"❤️ Vida: **{equipo['vida']}/{equipo['vida_maxima']}**."
         elif objetivo == "cansancio":
@@ -286,7 +286,7 @@ MANEJADORES = {
 }
 
 
-def ejecutar_compra(
+async def ejecutar_compra(
     guild_id: int,
     user_id: int,
     categoria: str,
@@ -317,7 +317,7 @@ def ejecutar_compra(
             f"Opciones: {opciones_validas(categoria)}",
         )
 
-    return manejador(guild_id, user_id, clave)
+    return await manejador(guild_id, user_id, clave)
 
 
 def siguiente_nivel_disponible(categoria: str, clave: str, nivel: int) -> bool:

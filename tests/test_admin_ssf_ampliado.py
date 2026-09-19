@@ -4,8 +4,7 @@ Cubren ``/admin ssf estado``, ``desafio``, ``participantes``, ``eliminar``,
 ``cerrar`` y ``ranking``, además del inicio con fechas configurables.
 """
 
-import asyncio
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
@@ -23,8 +22,8 @@ USUARIO_2 = 43
 CANAL = 99
 
 NOMBRE = "SeptSinFP 2026"
-INICIO = "2026-09-01"
-FIN = "2026-09-30"
+INICIO = date(2026, 9, 1)
+FIN = date(2026, 9, 30)
 
 
 class CanalFalso:
@@ -36,22 +35,22 @@ class CanalFalso:
 
 
 @pytest.fixture
-def ssf_db(base_datos_limpia):
+async def ssf_db(base_datos_limpia):
     """Deja la base de SSF creada y limpia."""
 
     from modules.ssf.database import inicializar_db
 
-    inicializar_db()
+    await inicializar_db()
     return True
 
 
 @pytest.fixture
-def desafio_ssf(ssf_db):
+async def desafio_ssf(ssf_db):
     """Crea el desafío de septiembre."""
 
     from modules.ssf.services import iniciar_desafio
 
-    resultado = iniciar_desafio(
+    resultado = await iniciar_desafio(
         GUILD,
         NOMBRE,
         INICIO,
@@ -92,15 +91,11 @@ def hoy_5_sep(monkeypatch):
     )
 
 
-def ejecutar(coro):
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        coro
-    )
 
 
-def llamar(cog, nombre_metodo, interaccion, *args):
+async def llamar(cog, nombre_metodo, interaccion, *args):
     metodo = getattr(type(cog), nombre_metodo).callback
-    return ejecutar(metodo(cog, interaccion, *args))
+    return await metodo(cog, interaccion, *args)
 
 
 def interaccion_admin():
@@ -115,10 +110,10 @@ def mediodia(dia):
     return datetime(2026, 9, dia, 12, 0)
 
 
-def registrar(user_id=USUARIO, nombre="Tester", dia=1):
+async def registrar(user_id=USUARIO, nombre="Tester", dia=1):
     from modules.ssf.services import registrar_usuario
 
-    resultado = registrar_usuario(
+    resultado = await registrar_usuario(
         GUILD,
         user_id,
         nombre,
@@ -128,11 +123,11 @@ def registrar(user_id=USUARIO, nombre="Tester", dia=1):
     return resultado
 
 
-def sobrevivir(dias, user_id=USUARIO):
+async def sobrevivir(dias, user_id=USUARIO):
     from modules.ssf.services import registrar_sobrevivi
 
     for dia in dias:
-        resultado = registrar_sobrevivi(
+        resultado = await registrar_sobrevivi(
             GUILD,
             user_id,
             mediodia(dia),
@@ -140,13 +135,13 @@ def sobrevivir(dias, user_id=USUARIO):
         assert resultado["exitoso"], f"día {dia}: {resultado!r}"
 
 
-def marcar_eliminado(user_id=USUARIO, fecha="2026-09-03"):
+async def marcar_eliminado(user_id=USUARIO, fecha=date(2026, 9, 3)):
     """Marca eliminado directo en la base (para poblar el listado)."""
 
     from modules.ssf.database import eliminar_participante, obtener_desafio_activo
 
-    desafio_id = obtener_desafio_activo(GUILD)[0]
-    eliminar_participante(
+    desafio_id = (await obtener_desafio_activo(GUILD))[0]
+    await eliminar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
         fecha_eliminacion=fecha,
@@ -157,13 +152,13 @@ def marcar_eliminado(user_id=USUARIO, fecha="2026-09-03"):
 # SSF - ESTADO
 # ============================================================
 
-def test_estado_muestra_detalle_de_otro_usuario(cog_admin):
-    registrar()
-    sobrevivir([2, 3])
+async def test_estado_muestra_detalle_de_otro_usuario(cog_admin):
+    await registrar()
+    await sobrevivir([2, 3])
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_estado",
         interaccion,
@@ -176,10 +171,10 @@ def test_estado_muestra_detalle_de_otro_usuario(cog_admin):
     assert "Mejor racha" in interaccion.texto
 
 
-def test_estado_a_no_participante_informa(cog_admin):
+async def test_estado_a_no_participante_informa(cog_admin):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_estado",
         interaccion,
@@ -189,14 +184,14 @@ def test_estado_a_no_participante_informa(cog_admin):
     assert "no está registrado" in interaccion.texto
 
 
-def test_estado_sin_desafio_informa(ssf_db, admin_ids):
+async def test_estado_sin_desafio_informa(ssf_db, admin_ids):
     from commands.admin.cog import Admin
 
     cog = construir_cog(Admin)
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "ssf_estado",
         interaccion,
@@ -210,14 +205,14 @@ def test_estado_sin_desafio_informa(ssf_db, admin_ids):
 # SSF - DESAFIO
 # ============================================================
 
-def test_desafio_muestra_el_estado_global(cog_admin):
-    registrar()
-    sobrevivir([2, 3])
-    registrar(USUARIO_2, "Rival", dia=1)
+async def test_desafio_muestra_el_estado_global(cog_admin):
+    await registrar()
+    await sobrevivir([2, 3])
+    await registrar(USUARIO_2, "Rival", dia=1)
 
     interaccion = interaccion_admin()
 
-    llamar(cog_admin, "ssf_desafio", interaccion)
+    await llamar(cog_admin, "ssf_desafio", interaccion)
 
     texto = interaccion.texto
     assert NOMBRE in texto
@@ -227,13 +222,13 @@ def test_desafio_muestra_el_estado_global(cog_admin):
     assert "Eliminados" in texto
 
 
-def test_desafio_sin_activo_informa(ssf_db, admin_ids):
+async def test_desafio_sin_activo_informa(ssf_db, admin_ids):
     from commands.admin.cog import Admin
 
     cog = construir_cog(Admin)
     interaccion = interaccion_admin()
 
-    llamar(cog, "ssf_desafio", interaccion)
+    await llamar(cog, "ssf_desafio", interaccion)
 
     assert "No hay un desafío" in interaccion.texto
 
@@ -242,15 +237,15 @@ def test_desafio_sin_activo_informa(ssf_db, admin_ids):
 # SSF - PARTICIPANTES
 # ========================================================
 
-def test_participantes_lista_activos_y_eliminados(cog_admin):
-    registrar()
-    sobrevivir([2, 3])
-    registrar(USUARIO_2, "Rival", dia=1)
-    marcar_eliminado(USUARIO_2, "2026-09-02")
+async def test_participantes_lista_activos_y_eliminados(cog_admin):
+    await registrar()
+    await sobrevivir([2, 3])
+    await registrar(USUARIO_2, "Rival", dia=1)
+    await marcar_eliminado(USUARIO_2, date(2026, 9, 2))
 
     interaccion = interaccion_admin()
 
-    llamar(cog_admin, "ssf_participantes", interaccion)
+    await llamar(cog_admin, "ssf_participantes", interaccion)
 
     texto = interaccion.texto
     assert "**Tester**" in texto
@@ -263,16 +258,16 @@ def test_participantes_lista_activos_y_eliminados(cog_admin):
 # SSF - ELIMINAR
 # ========================================================
 
-def test_eliminar_marca_eliminado_por_dia_faltado(
+async def test_eliminar_marca_eliminado_por_dia_faltado(
     cog_admin,
     hoy_5_sep,
 ):
-    registrar()
-    sobrevivir([2, 3])
+    await registrar()
+    await sobrevivir([2, 3])
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_eliminar",
         interaccion,
@@ -284,21 +279,21 @@ def test_eliminar_marca_eliminado_por_dia_faltado(
 
     from modules.ssf.database import obtener_participante, obtener_desafio_activo
 
-    participante = obtener_participante(
-        obtener_desafio_activo(GUILD)[0],
+    participante = await obtener_participante(
+        (await obtener_desafio_activo(GUILD))[0],
         USUARIO,
     )
     assert participante[4] == 1
-    assert participante[5] == "2026-09-04"
+    assert participante[5] == date(2026, 9, 4)
 
 
-def test_eliminar_con_registro_ese_dia_informa(cog_admin, hoy_5_sep):
-    registrar()
-    sobrevivir([2, 3])
+async def test_eliminar_con_registro_ese_dia_informa(cog_admin, hoy_5_sep):
+    await registrar()
+    await sobrevivir([2, 3])
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_eliminar",
         interaccion,
@@ -310,12 +305,12 @@ def test_eliminar_con_registro_ese_dia_informa(cog_admin, hoy_5_sep):
     assert "ssf quitar" in interaccion.texto
 
 
-def test_eliminar_fecha_futura_rechaza(cog_admin, hoy_5_sep):
-    registrar()
+async def test_eliminar_fecha_futura_rechaza(cog_admin, hoy_5_sep):
+    await registrar()
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_eliminar",
         interaccion,
@@ -330,10 +325,10 @@ def test_eliminar_fecha_futura_rechaza(cog_admin, hoy_5_sep):
 # SSF - CERRAR
 # ========================================================
 
-def test_cerrar_sin_confirmacion_cancela(cog_admin):
+async def test_cerrar_sin_confirmacion_cancela(cog_admin):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_cerrar",
         interaccion,
@@ -344,16 +339,16 @@ def test_cerrar_sin_confirmacion_cancela(cog_admin):
 
     from modules.ssf.database import obtener_desafio_activo
 
-    assert obtener_desafio_activo(GUILD) is not None
+    assert await obtener_desafio_activo(GUILD) is not None
 
 
-def test_cerrar_confirma_y_deja_de_haber_activo(cog_admin):
-    registrar()
-    sobrevivir([2, 3])
+async def test_cerrar_confirma_y_deja_de_haber_activo(cog_admin):
+    await registrar()
+    await sobrevivir([2, 3])
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog_admin,
         "ssf_cerrar",
         interaccion,
@@ -364,22 +359,22 @@ def test_cerrar_confirma_y_deja_de_haber_activo(cog_admin):
 
     from modules.ssf.database import obtener_desafio_activo
 
-    assert obtener_desafio_activo(GUILD) is None
+    assert await obtener_desafio_activo(GUILD) is None
 
 
 # ========================================================
 # SSF - RANKING
 # ========================================================
 
-def test_ranking_muestra_al_mejor_participante(cog_admin):
-    registrar()
-    sobrevivir([2, 3, 4, 5])
-    registrar(USUARIO_2, "Rival", dia=1)
-    sobrevivir([2, 3], user_id=USUARIO_2)
+async def test_ranking_muestra_al_mejor_participante(cog_admin):
+    await registrar()
+    await sobrevivir([2, 3, 4, 5])
+    await registrar(USUARIO_2, "Rival", dia=1)
+    await sobrevivir([2, 3], user_id=USUARIO_2)
 
     interaccion = interaccion_admin()
 
-    llamar(cog_admin, "ssf_ranking", interaccion)
+    await llamar(cog_admin, "ssf_ranking", interaccion)
 
     texto = interaccion.texto
     assert "Ranking de" in texto
@@ -388,13 +383,13 @@ def test_ranking_muestra_al_mejor_participante(cog_admin):
     assert "**Rival**" in texto
 
 
-def test_ranking_sin_desafios_informa(ssf_db, admin_ids):
+async def test_ranking_sin_desafios_informa(ssf_db, admin_ids):
     from commands.admin.cog import Admin
 
     cog = construir_cog(Admin)
     interaccion = interaccion_admin()
 
-    llamar(cog, "ssf_ranking", interaccion)
+    await llamar(cog, "ssf_ranking", interaccion)
 
     assert "Todavía no hay desafíos" in interaccion.texto
 
@@ -403,13 +398,13 @@ def test_ranking_sin_desafios_informa(ssf_db, admin_ids):
 # SSF - INICIAR CON FECHAS
 # ========================================================
 
-def test_iniciar_acepta_fechas_y_nombre_propios(ssf_db, admin_ids):
+async def test_iniciar_acepta_fechas_y_nombre_propios(ssf_db, admin_ids):
     from commands.admin.cog import Admin
 
     cog = construir_cog(Admin)
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "ssf_iniciar",
         interaccion,
@@ -424,13 +419,13 @@ def test_iniciar_acepta_fechas_y_nombre_propios(ssf_db, admin_ids):
     assert "**2026-10-31**" in interaccion.texto
 
 
-def test_iniciar_fechas_invalidas_rechaza(ssf_db, admin_ids):
+async def test_iniciar_fechas_invalidas_rechaza(ssf_db, admin_ids):
     from commands.admin.cog import Admin
 
     cog = construir_cog(Admin)
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "ssf_iniciar",
         interaccion,
@@ -442,13 +437,13 @@ def test_iniciar_fechas_invalidas_rechaza(ssf_db, admin_ids):
     assert "Las fechas no son válidas" in interaccion.texto
 
 
-def test_iniciar_con_inicio_posterior_al_fin_rechaza(ssf_db, admin_ids):
+async def test_iniciar_con_inicio_posterior_al_fin_rechaza(ssf_db, admin_ids):
     from commands.admin.cog import Admin
 
     cog = construir_cog(Admin)
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "ssf_iniciar",
         interaccion,

@@ -13,6 +13,6 @@ from modules.ssf.database import inicializar_db
 async def setup(bot: commands.Bot):
     """Crea el esquema de SeptSinFP y registra sus comandos."""
 
-    inicializar_db()
+    await inicializar_db()
 
     await bot.add_cog(Ssf(bot))

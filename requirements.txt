@@ -5,3 +5,10 @@ python-dotenv==1.2.3
 # importar el modulo. Sin este paquete el bot no arranca en Windows.
 # En Linux/macOS se usa la base del sistema y este paquete queda de respaldo.
 tzdata>=2024.1
+
+# Capa de datos: SQLAlchemy asíncrono. En producción se usa PostgreSQL
+# (asyncpg) configurando DATABASE_URL en el .env; sin DATABASE_URL el bot
+# cae a SQLite (aiosqlite), útil para desarrollo local y pruebas.
+sqlalchemy[asyncio]>=2.0
+asyncpg>=0.29
+aiosqlite>=0.20

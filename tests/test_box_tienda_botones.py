@@ -13,7 +13,7 @@ from commands.box.tienda import (
     custom_id_de,
     iterar_articulos,
 )
-from core.database import conectar_db
+from tests.harness import conectar_db
 from core.utils import ahora
 from modules.box.database import obtener_equipo, obtener_estado_box, obtener_saldo
 from modules.box.services import admin_modificar_dinero, admin_modificar_probabilidad_lesion
@@ -40,8 +40,8 @@ def cog(base_datos_limpia):
     return construir_cog(Box)
 
 
-def dar_dinero(user_id, cantidad):
-    admin_modificar_dinero(GUILD, user_id, cantidad)
+async def dar_dinero(user_id, cantidad):
+    await admin_modificar_dinero(GUILD, user_id, cantidad)
 
 
 def lesionar(user_id=DUEÑO):
@@ -59,11 +59,9 @@ def lesionar(user_id=DUEÑO):
         db.commit()
 
 
-def clic(boton, user_id=DUEÑO, en_servidor=True):
-    import asyncio
-
+async def clic(boton, user_id=DUEÑO, en_servidor=True):
     interaccion = InteraccionFalsa(GUILD, user_id, en_servidor=en_servidor)
-    asyncio.new_event_loop().run_until_complete(boton.callback(interaccion))
+    await boton.callback(interaccion)
     return interaccion
 
 
@@ -130,10 +128,8 @@ def test_custom_id_dentro_del_limite_de_discord():
     "categoria, clave",
     list(iterar_articulos()),
 )
-def test_custom_id_ida_y_vuelta(categoria, clave):
+async def test_custom_id_ida_y_vuelta(categoria, clave):
     """El custom_id debe poder reconstruir exactamente el artículo."""
-
-    import asyncio
 
     cid = custom_id_de(DUEÑO, categoria, clave)
     match = PLANTILLA_CUSTOM_ID.fullmatch(cid)
@@ -141,9 +137,7 @@ def test_custom_id_ida_y_vuelta(categoria, clave):
     assert match is not None, f"el custom_id {cid} no matchea la plantilla"
     assert int(match["owner_id"]) == DUEÑO
 
-    boton = asyncio.new_event_loop().run_until_complete(
-        BotonCompra.from_custom_id(None, None, match)
-    )
+    boton =         await BotonCompra.from_custom_id(None, None, match)
     assert boton.owner_id == DUEÑO
     assert boton.categoria == categoria
     assert boton.clave == clave
@@ -171,10 +165,8 @@ def test_los_nueve_custom_id_matchean_con_una_sola_plantilla():
         assert PLANTILLA_CUSTOM_ID.fullmatch(cid) is not None, cid
 
 
-def test_setup_registra_el_boton_para_escucha_persistente(base_datos_limpia):
+async def test_setup_registra_el_boton_para_escucha_persistente(base_datos_limpia):
     """El registro tiene que hacerlo setup, no el que construye el bot."""
-
-    import asyncio
 
     import discord
     from discord.ext import commands as dcommands
@@ -188,7 +180,7 @@ def test_setup_registra_el_boton_para_escucha_persistente(base_datos_limpia):
         "el patrón no debería estar registrado antes de setup"
     )
 
-    asyncio.new_event_loop().run_until_complete(extension.setup(bot))
+    await extension.setup(bot)
 
     assert PLANTILLA_CUSTOM_ID in store._dynamic_items, (
         "setup() no registró BotonCompra: los botones de una tienda anterior "
@@ -203,88 +195,84 @@ def test_setup_registra_el_boton_para_escucha_persistente(base_datos_limpia):
 # COMPRAR TOCANDO EL BOTÓN
 # ============================================================
 
-def test_boton_mejora_compra_para_el_dueño(cog):
-    dar_dinero(DUEÑO, 5000)
+async def test_boton_mejora_compra_para_el_dueño(cog):
+    await dar_dinero(DUEÑO, 5000)
     boton = BotonCompra(DUEÑO, "mejora", "entrenamiento")
 
-    interaccion = clic(boton)
+    interaccion = await clic(boton)
 
     assert "Compraste un nivel" in interaccion.texto
-    assert obtener_saldo(GUILD, DUEÑO)[1] == 4000
+    assert (await obtener_saldo(GUILD, DUEÑO))[1] == 4000
 
 
-def test_boton_equipamiento_compra_para_el_dueño(cog):
-    dar_dinero(DUEÑO, 5000)
+async def test_boton_equipamiento_compra_para_el_dueño(cog):
+    await dar_dinero(DUEÑO, 5000)
     boton = BotonCompra(DUEÑO, "equipamiento", "casco")
 
-    interaccion = clic(boton)
+    interaccion = await clic(boton)
 
     assert "Compraste una mejora de equipamiento" in interaccion.texto
-    assert obtener_equipo(GUILD, DUEÑO)["casco"] == 1
+    assert (await obtener_equipo(GUILD, DUEÑO))["casco"] == 1
 
 
-def test_boton_tratamiento_compra_para_el_dueño(cog):
-    dar_dinero(DUEÑO, 100000)
+async def test_boton_tratamiento_compra_para_el_dueño(cog):
+    await dar_dinero(DUEÑO, 100000)
     lesionar()
     boton = BotonCompra(DUEÑO, "tratamiento", "fisioterapeutico")
 
-    interaccion = clic(boton)
+    interaccion = await clic(boton)
 
     assert "Compraste" in interaccion.texto
-    assert obtener_estado_box(GUILD, DUEÑO)[1] is None
+    assert (await obtener_estado_box(GUILD, DUEÑO))[1] is None
 
 
-def test_boton_sin_dinero_informa(cog):
+async def test_boton_sin_dinero_informa(cog):
     boton = BotonCompra(DUEÑO, "mejora", "trabajo")
 
-    interaccion = clic(boton)
+    interaccion = await clic(boton)
 
     assert "Necesitas" in interaccion.texto
     assert interaccion.respuestas[-1].efimero
 
 
-def test_boton_rechaza_a_quien_no_abrio_la_tienda(cog):
-    dar_dinero(OTRO, 5000)
+async def test_boton_rechaza_a_quien_no_abrio_la_tienda(cog):
+    await dar_dinero(OTRO, 5000)
     boton = BotonCompra(DUEÑO, "mejora", "entrenamiento")
 
-    interaccion = clic(boton, user_id=OTRO)
+    interaccion = await clic(boton, user_id=OTRO)
 
     assert "no es tuya" in interaccion.texto
     # El otro usuario no debe haber gastado nada.
-    assert obtener_saldo(GUILD, OTRO)[1] == 5000
+    assert (await obtener_saldo(GUILD, OTRO))[1] == 5000
 
 
-def test_boton_fuera_de_servidor_se_rechaza(cog):
+async def test_boton_fuera_de_servidor_se_rechaza(cog):
     boton = BotonCompra(DUEÑO, "mejora", "entrenamiento")
 
-    interaccion = clic(boton, en_servidor=False)
+    interaccion = await clic(boton, en_servidor=False)
 
     assert "dentro de un servidor" in interaccion.texto
 
 
-def test_boton_cinco_estrellas_reinicia_probabilidad(cog):
-    dar_dinero(DUEÑO, 100000)
+async def test_boton_cinco_estrellas_reinicia_probabilidad(cog):
+    await dar_dinero(DUEÑO, 100000)
     lesionar()
-    admin_modificar_probabilidad_lesion(GUILD, DUEÑO, 42.5)
+    await admin_modificar_probabilidad_lesion(GUILD, DUEÑO, 42.5)
     boton = BotonCompra(DUEÑO, "tratamiento", "cinco_estrellas")
 
-    interaccion = clic(boton)
+    interaccion = await clic(boton)
 
     assert "Compraste" in interaccion.texto
-    assert obtener_estado_box(GUILD, DUEÑO)[0] == 0
+    assert (await obtener_estado_box(GUILD, DUEÑO))[0] == 0
 
 
 # ============================================================
 # /box tienda ahora adjunta la vista
 # ============================================================
 
-def test_tienda_adjunta_la_vista_del_usuario(cog):
-    import asyncio
-
+async def test_tienda_adjunta_la_vista_del_usuario(cog):
     interaccion = InteraccionFalsa(GUILD, DUEÑO)
-    asyncio.new_event_loop().run_until_complete(
-        type(cog).tienda.callback(cog, interaccion)
-    )
+    await type(cog).tienda.callback(cog, interaccion)
 
     vista = interaccion.respuestas[-1].kwargs.get("view")
     assert isinstance(vista, TiendaView)
@@ -292,23 +280,19 @@ def test_tienda_adjunta_la_vista_del_usuario(cog):
     assert len(vista.children) == len(list(iterar_articulos()))
 
 
-def test_tienda_invita_a_usar_los_botones(cog):
-    import asyncio
-
+async def test_tienda_invita_a_usar_los_botones(cog):
     interaccion = InteraccionFalsa(GUILD, DUEÑO)
-    asyncio.new_event_loop().run_until_complete(
-        type(cog).tienda.callback(cog, interaccion)
-    )
+    await type(cog).tienda.callback(cog, interaccion)
 
     assert "botón" in interaccion.texto
 
 
-def test_catalogo_muestra_los_niveles_del_usuario(cog):
-    dar_dinero(DUEÑO, 5000)
-    ejecutar_compra(GUILD, DUEÑO, "mejora", "entrenamiento")
+async def test_catalogo_muestra_los_niveles_del_usuario(cog):
+    await dar_dinero(DUEÑO, 5000)
+    await ejecutar_compra(GUILD, DUEÑO, "mejora", "entrenamiento")
 
     interaccion = InteraccionFalsa(GUILD, DUEÑO)
-    texto = construir_catalogo(interaccion)
+    texto = await construir_catalogo(interaccion)
 
     assert "Nivel **1/10**" in texto
 
@@ -317,13 +301,9 @@ def test_catalogo_muestra_los_niveles_del_usuario(cog):
 # /box comprar y /box tratamiento siguen funcionando
 # ============================================================
 
-def test_comprar_por_comando_sigue_funcionando(cog):
-    import asyncio
-
-    dar_dinero(DUEÑO, 5000)
+async def test_comprar_por_comando_sigue_funcionando(cog):
+    await dar_dinero(DUEÑO, 5000)
     interaccion = InteraccionFalsa(GUILD, DUEÑO)
-    asyncio.new_event_loop().run_until_complete(
-        type(cog).comprar.callback(cog, interaccion, Choice("mejora"), "entrenamiento")
-    )
+    await type(cog).comprar.callback(cog, interaccion, Choice("mejora"), "entrenamiento")
 
     assert "Compraste un nivel" in interaccion.texto

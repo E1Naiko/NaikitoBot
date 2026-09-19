@@ -60,7 +60,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        experiencia, dinero = obtener_saldo(
+        experiencia, dinero = await obtener_saldo(
             interaction.guild.id,
             interaction.user.id,
         )
@@ -82,18 +82,18 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        estadisticas = obtener_estadisticas_box(
+        estadisticas = await obtener_estadisticas_box(
             interaction.guild.id,
             interaction.user.id,
         )
-        accion = obtener_accion_activa(
+        accion = await obtener_accion_activa(
             interaction.guild.id,
             interaction.user.id,
         )
 
         accion_texto = "Ninguna"
         if accion is not None:
-            final = int(datetime.fromisoformat(accion[1]).timestamp())
+            final = int(accion[1].timestamp())
             accion_texto = f"{accion[0].lower()} hasta <t:{final}:R>"
 
         await responder(
@@ -142,7 +142,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        equipo_datos = obtener_equipo(
+        equipo_datos = await obtener_equipo(
             interaction.guild.id,
             interaction.user.id,
         )
@@ -195,7 +195,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        if obtener_accion_activa(interaction.guild.id, interaction.user.id):
+        if await obtener_accion_activa(interaction.guild.id, interaction.user.id):
             await responder_error(
                 interaction,
                 "⚠️ Acción activa",
@@ -204,7 +204,7 @@ class InfoMixin:
             return
 
         # Descansar está permitido incluso estando lesionado.
-        descansar(interaction.guild.id, interaction.user.id)
+        await descansar(interaction.guild.id, interaction.user.id)
         await responder_ok(
             interaction,
             "🛌 Descanso",
@@ -219,7 +219,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        ranking = obtener_top_desafios(interaction.guild.id)
+        ranking = await obtener_top_desafios(interaction.guild.id)
         if not ranking:
             await responder(
                 interaction,

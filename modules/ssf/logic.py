@@ -80,17 +80,11 @@ def fecha_dentro_del_desafio(
     """
     Comprueba si una fecha está dentro del período
     del desafío, incluyendo ambos extremos.
+
+    Recibe objetos ``date`` (la capa de datos ya no entrega texto ISO).
     """
 
-    inicio = date.fromisoformat(
-        fecha_inicio
-    )
-
-    fin = date.fromisoformat(
-        fecha_fin
-    )
-
-    return inicio <= fecha <= fin
+    return fecha_inicio <= fecha <= fecha_fin
 
 
 def fecha_anterior(

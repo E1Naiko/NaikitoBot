@@ -23,7 +23,7 @@ class RegistroMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = registrar_usuario(
+        resultado = await registrar_usuario(
             guild_id=interaction.guild.id,
             user_id=interaction.user.id,
             username=interaction.user.display_name,
@@ -85,7 +85,7 @@ class RegistroMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = registrar_sobrevivi(
+        resultado = await registrar_sobrevivi(
             guild_id=interaction.guild.id,
             user_id=interaction.user.id,
             ahora=ahora(),

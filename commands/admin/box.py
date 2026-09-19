@@ -59,7 +59,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        info = admin_obtener_info_usuario(
+        info = await admin_obtener_info_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -244,7 +244,7 @@ class BoxAdminMixin:
             )
             return
 
-        exitoso, saldo = admin_modificar_dinero(
+        exitoso, saldo = await admin_modificar_dinero(
             interaction.guild.id,
             usuario.id,
             cantidad,
@@ -289,7 +289,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        info = admin_obtener_info_usuario(
+        info = await admin_obtener_info_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -389,7 +389,7 @@ class BoxAdminMixin:
             )
             return
 
-        exitoso, experiencia = admin_modificar_experiencia(
+        exitoso, experiencia = await admin_modificar_experiencia(
             interaction.guild.id,
             usuario.id,
             cantidad,
@@ -435,7 +435,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        curado, lesionado_hasta = admin_curar_usuario(
+        curado, lesionado_hasta = await admin_curar_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -476,7 +476,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        exitoso, nuevo_valor = admin_modificar_probabilidad_lesion(
+        exitoso, nuevo_valor = await admin_modificar_probabilidad_lesion(
             interaction.guild.id,
             usuario.id,
             probabilidad,
@@ -512,7 +512,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        accion = admin_cancelar_accion(
+        accion = await admin_cancelar_accion(
             interaction.guild.id,
             usuario.id,
         )
@@ -589,7 +589,7 @@ class BoxAdminMixin:
 
         ahora_actual = ahora()
 
-        creado, motivo = admin_dar_sponsor(
+        creado, motivo = await admin_dar_sponsor(
             interaction.guild.id,
             usuario.id,
             tipo.value,
@@ -656,7 +656,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        sponsor = admin_quitar_sponsor(
+        sponsor = await admin_quitar_sponsor(
             interaction.guild.id,
             usuario.id,
             sponsor_id,
@@ -708,7 +708,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        eliminados = admin_reset_usuario(
+        eliminados = await admin_reset_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -768,7 +768,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        filas = admin_obtener_top_box(
+        filas = await admin_obtener_top_box(
             interaction.guild.id,
             limite=10,
         )
@@ -836,7 +836,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        datos = admin_obtener_estadisticas_box(
+        datos = await admin_obtener_estadisticas_box(
             interaction.guild.id,
         )
 
@@ -880,7 +880,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        filas = admin_obtener_historial_desafios(
+        filas = await admin_obtener_historial_desafios(
             interaction.guild.id,
             usuario.id,
             limite=10,
@@ -910,7 +910,7 @@ class BoxAdminMixin:
             gano = ganador_id == usuario.id
             resultado = "✅ Victoria" if gano else "❌ Derrota"
 
-            fecha_corta = creado_en[:10]
+            fecha_corta = creado_en.date().isoformat()
 
             lineas.append(
                 f"• `{fecha_corta}` vs **{rival}** — {resultado}"
@@ -946,7 +946,7 @@ class BoxAdminMixin:
 
         ahora_actual = ahora()
 
-        filas = admin_obtener_lesionados(
+        filas = await admin_obtener_lesionados(
             interaction.guild.id,
             ahora_actual,
         )
@@ -970,8 +970,8 @@ class BoxAdminMixin:
                 user_id,
             )
 
-            if lesionado_hasta and lesionado_hasta > ahora_actual.isoformat():
-                estado = f"🚑 hasta `{lesionado_hasta}`"
+            if lesionado_hasta and lesionado_hasta > ahora_actual:
+                estado = f"🚑 hasta `{lesionado_hasta.isoformat()}`"
             else:
                 estado = "🟢 sin lesión activa"
 
@@ -1016,7 +1016,7 @@ class BoxAdminMixin:
 
         ahora_actual = ahora()
 
-        accion = obtener_accion_activa(
+        accion = await obtener_accion_activa(
             interaction.guild.id,
             usuario.id,
         )
@@ -1030,7 +1030,7 @@ class BoxAdminMixin:
 
         tipo, finaliza_en, _recompensa = accion
 
-        if finaliza_en > ahora_actual.isoformat():
+        if finaliza_en > ahora_actual:
             nombre_accion = NOMBRES_ACCIONES.get(
                 tipo,
                 tipo.lower(),
@@ -1047,7 +1047,7 @@ class BoxAdminMixin:
             )
             return
 
-        completada = admin_finalizar_accion(
+        completada = await admin_finalizar_accion(
             interaction.guild.id,
             usuario.id,
             ahora_actual,
@@ -1123,7 +1123,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        completadas = admin_completar_acciones_vencidas(
+        completadas = await admin_completar_acciones_vencidas(
             interaction.guild.id,
             ahora(),
         )
@@ -1229,7 +1229,7 @@ class BoxAdminMixin:
             return
 
         guild_id = interaction.guild.id
-        actual = obtener_canticos(guild_id)
+        actual = await obtener_canticos(guild_id)
 
         if estado.value == "consultar":
             await responder_texto(
@@ -1247,7 +1247,7 @@ class BoxAdminMixin:
             return
 
         activado = estado.value == "activar"
-        fijar_canticos(guild_id, activado, interaction.user.id, ahora())
+        await fijar_canticos(guild_id, activado, interaction.user.id, ahora())
 
         await responder_texto(
             interaction,
@@ -1280,7 +1280,7 @@ class BoxAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        en_curso = combate_en_curso(interaction.guild.id)
+        en_curso = await combate_en_curso(interaction.guild.id)
 
         if en_curso is None:
             await responder_texto(
@@ -1290,7 +1290,7 @@ class BoxAdminMixin:
             )
             return
 
-        cerrar_combate(
+        await cerrar_combate(
             en_curso["id"],
             ESTADO_CANCELADO,
             ahora(),

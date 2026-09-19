@@ -14,6 +14,7 @@ from tests.harness import (
     GuildFalso,
     InteraccionFalsa,
     UsuarioFalso,
+    conectar_db,
     construir_cog,
 )
 
@@ -38,11 +39,9 @@ def cog(base_datos_limpia, admin_ids):
     return construir_cog(Admin)
 
 
-def llamar(cog, nombre_metodo, interaccion, *args):
+async def llamar(cog, nombre_metodo, interaccion, *args):
     metodo = getattr(type(cog), nombre_metodo).callback
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        metodo(cog, interaccion, *args)
-    )
+    return await metodo(cog, interaccion, *args)
 
 
 def interaccion_admin(miembros=None):
@@ -64,18 +63,18 @@ def miembro(user_id, nombre):
     return UsuarioFalso(user_id, nombre)
 
 
-def crear_usuario(user_id=USUARIO, exp=0, dinero=0):
+async def crear_usuario(user_id=USUARIO, exp=0, dinero=0):
     from modules.box.services import (
         admin_modificar_dinero,
         admin_modificar_experiencia,
     )
 
-    admin_modificar_experiencia(GUILD, user_id, exp)
-    admin_modificar_dinero(GUILD, user_id, dinero)
+    await admin_modificar_experiencia(GUILD, user_id, exp)
+    await admin_modificar_dinero(GUILD, user_id, dinero)
 
 
-def insertar_combate(retador=USUARIO, contrincante=USUARIO_2, ganador=USUARIO):
-    from core.database import conectar_db
+async def insertar_combate(retador=USUARIO, contrincante=USUARIO_2, ganador=USUARIO):
+    from tests.harness import conectar_db
 
     with conectar_db() as db:
         db.execute(
@@ -100,12 +99,12 @@ def insertar_combate(retador=USUARIO, contrincante=USUARIO_2, ganador=USUARIO):
         db.commit()
 
 
-def iniciar_accion_expirada(user_id=USUARIO, hace_horas=2, recompensa=1000):
+async def iniciar_accion_expirada(user_id=USUARIO, hace_horas=2, recompensa=1000):
     from modules.box.services import iniciar_accion
 
     ahora_actual = ahora()
 
-    return iniciar_accion(
+    return await iniciar_accion(
         GUILD,
         user_id,
         "ENTRENANDO",
@@ -119,9 +118,9 @@ def iniciar_accion_expirada(user_id=USUARIO, hace_horas=2, recompensa=1000):
 # TOP
 # ========================================================
 
-def test_top_ordena_por_experiencia(cog):
-    crear_usuario(USUARIO_2, exp=3000, dinero=100)
-    crear_usuario(USUARIO, exp=5000, dinero=900)
+async def test_top_ordena_por_experiencia(cog):
+    await crear_usuario(USUARIO_2, exp=3000, dinero=100)
+    await crear_usuario(USUARIO, exp=5000, dinero=900)
 
     interaccion = interaccion_admin(
         miembros={
@@ -130,7 +129,7 @@ def test_top_ordena_por_experiencia(cog):
         }
     )
 
-    llamar(cog, "box_top", interaccion)
+    await llamar(cog, "box_top", interaccion)
 
     texto = interaccion.texto
     assert "TOP Box" in texto
@@ -140,10 +139,10 @@ def test_top_ordena_por_experiencia(cog):
     assert texto.index("Pepe") < texto.index("Rival")
 
 
-def test_top_sin_jugadores_informa(cog):
+async def test_top_sin_jugadores_informa(cog):
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_top", interaccion)
+    await llamar(cog, "box_top", interaccion)
 
     assert "Todavía no hay usuarios" in interaccion.texto
 
@@ -152,13 +151,13 @@ def test_top_sin_jugadores_informa(cog):
 # STATS
 # ========================================================
 
-def test_stats_muestra_totales_del_servidor(cog):
-    crear_usuario(USUARIO, exp=5000, dinero=900)
-    crear_usuario(USUARIO_2, exp=3000, dinero=100)
-    insertar_combate()
+async def test_stats_muestra_totales_del_servidor(cog):
+    await crear_usuario(USUARIO, exp=5000, dinero=900)
+    await crear_usuario(USUARIO_2, exp=3000, dinero=100)
+    await insertar_combate()
 
     interaccion = interaccion_admin()
-    llamar(cog, "box_stats", interaccion)
+    await llamar(cog, "box_stats", interaccion)
 
     texto = interaccion.texto
     assert "Estadísticas de Box" in texto
@@ -173,10 +172,10 @@ def test_stats_muestra_totales_del_servidor(cog):
 # HISTORIAL
 # ========================================================
 
-def test_historial_muestra_victoria_y_derrota(cog):
-    crear_usuario(USUARIO)
-    crear_usuario(USUARIO_2)
-    insertar_combate(ganador=USUARIO)
+async def test_historial_muestra_victoria_y_derrota(cog):
+    await crear_usuario(USUARIO)
+    await crear_usuario(USUARIO_2)
+    await insertar_combate(ganador=USUARIO)
 
     interaccion = interaccion_admin(
         miembros={
@@ -185,7 +184,7 @@ def test_historial_muestra_victoria_y_derrota(cog):
         }
     )
 
-    llamar(
+    await llamar(
         cog,
         "box_historial",
         interaccion,
@@ -204,7 +203,7 @@ def test_historial_muestra_victoria_y_derrota(cog):
         }
     )
 
-    llamar(
+    await llamar(
         cog,
         "box_historial",
         interaccion_2,
@@ -214,10 +213,10 @@ def test_historial_muestra_victoria_y_derrota(cog):
     assert "❌ Derrota" in interaccion_2.texto
 
 
-def test_historial_sin_combates_informa(cog):
+async def test_historial_sin_combates_informa(cog):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "box_historial",
         interaccion,
@@ -231,15 +230,15 @@ def test_historial_sin_combates_informa(cog):
 # LESIONADOS
 # ========================================================
 
-def test_lesionados_lista_probabilidad_y_lesiones(cog):
+async def test_lesionados_lista_probabilidad_y_lesiones(cog):
     from modules.box.services import admin_modificar_probabilidad_lesion
 
-    crear_usuario(USUARIO)
-    crear_usuario(USUARIO_2)
+    await crear_usuario(USUARIO)
+    await crear_usuario(USUARIO_2)
 
-    admin_modificar_probabilidad_lesion(GUILD, USUARIO, 25.0)
+    await admin_modificar_probabilidad_lesion(GUILD, USUARIO, 25.0)
 
-    from core.database import conectar_db
+    from tests.harness import conectar_db
 
     hasta = (ahora() + timedelta(hours=3)).isoformat()
 
@@ -261,7 +260,7 @@ def test_lesionados_lista_probabilidad_y_lesiones(cog):
         }
     )
 
-    llamar(cog, "box_lesionados", interaccion)
+    await llamar(cog, "box_lesionados", interaccion)
 
     texto = interaccion.texto
     assert "**Pepe**" in texto
@@ -270,10 +269,10 @@ def test_lesionados_lista_probabilidad_y_lesiones(cog):
     assert "🚑" in texto
 
 
-def test_lesionados_vacio_informa(cog):
+async def test_lesionados_vacio_informa(cog):
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_lesionados", interaccion)
+    await llamar(cog, "box_lesionados", interaccion)
 
     assert "No hay usuarios" in interaccion.texto
 
@@ -282,17 +281,17 @@ def test_lesionados_vacio_informa(cog):
 # FINALIZAR
 # ========================================================
 
-def test_finalizar_liquida_accion_vencida(cog):
-    crear_usuario(USUARIO)
-    iniciar_accion_expirada(USUARIO, hace_horas=2, recompensa=1000)
+async def test_finalizar_liquida_accion_vencida(cog):
+    await crear_usuario(USUARIO)
+    await iniciar_accion_expirada(USUARIO, hace_horas=2, recompensa=1000)
 
     from modules.box.services import obtener_saldo
 
-    assert obtener_saldo(GUILD, USUARIO) == (0, 0)
+    assert await obtener_saldo(GUILD, USUARIO) == (0, 0)
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "box_finalizar",
         interaccion,
@@ -303,21 +302,21 @@ def test_finalizar_liquida_accion_vencida(cog):
     assert "entrenar" in interaccion.texto
     assert "**1000 EXP**" in interaccion.texto
 
-    saldo = obtener_saldo(GUILD, USUARIO)
+    saldo = await obtener_saldo(GUILD, USUARIO)
     assert saldo[0] == 1000
 
     from modules.box.services import obtener_accion_activa
 
-    assert obtener_accion_activa(GUILD, USUARIO) is None
+    assert await obtener_accion_activa(GUILD, USUARIO) is None
 
 
-def test_finalizar_accion_no_vencida_informa(cog):
-    crear_usuario(USUARIO)
+async def test_finalizar_accion_no_vencida_informa(cog):
+    await crear_usuario(USUARIO)
 
     from modules.box.services import iniciar_accion
 
     ahora_actual = ahora()
-    iniciar_accion(
+    await iniciar_accion(
         GUILD,
         USUARIO,
         "ENTRENANDO",
@@ -328,7 +327,7 @@ def test_finalizar_accion_no_vencida_informa(cog):
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "box_finalizar",
         interaccion,
@@ -339,10 +338,10 @@ def test_finalizar_accion_no_vencida_informa(cog):
     assert "box cancelar" in interaccion.texto
 
 
-def test_finalizar_sin_accion_informa(cog):
+async def test_finalizar_sin_accion_informa(cog):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "box_finalizar",
         interaccion,
@@ -356,29 +355,29 @@ def test_finalizar_sin_accion_informa(cog):
 # PROCESAR
 # ========================================================
 
-def test_procesar_liquida_las_acciones_vencidas(cog):
-    crear_usuario(USUARIO)
-    crear_usuario(USUARIO_2)
-    iniciar_accion_expirada(USUARIO, hace_horas=2, recompensa=1000)
-    iniciar_accion_expirada(USUARIO_2, hace_horas=3, recompensa=2000)
+async def test_procesar_liquida_las_acciones_vencidas(cog):
+    await crear_usuario(USUARIO)
+    await crear_usuario(USUARIO_2)
+    await iniciar_accion_expirada(USUARIO, hace_horas=2, recompensa=1000)
+    await iniciar_accion_expirada(USUARIO_2, hace_horas=3, recompensa=2000)
 
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_procesar", interaccion)
+    await llamar(cog, "box_procesar", interaccion)
 
     assert "**Acciones procesadas: 2**" in interaccion.texto
     assert "entrenar" in interaccion.texto
 
     from modules.box.services import obtener_saldo
 
-    assert obtener_saldo(GUILD, USUARIO)[0] == 1000
-    assert obtener_saldo(GUILD, USUARIO_2)[0] == 2000
+    assert (await obtener_saldo(GUILD, USUARIO))[0] == 1000
+    assert (await obtener_saldo(GUILD, USUARIO_2))[0] == 2000
 
 
-def test_procesar_sin_vencidas_informa(cog):
+async def test_procesar_sin_vencidas_informa(cog):
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_procesar", interaccion)
+    await llamar(cog, "box_procesar", interaccion)
 
     assert "No había acciones vencidas" in interaccion.texto
 
@@ -388,32 +387,32 @@ def test_procesar_sin_vencidas_informa(cog):
 # ============================================================
 
 
-def test_admin_box_canticos_consultar_sin_decision(cog):
+async def test_admin_box_canticos_consultar_sin_decision(cog):
     from tests.harness import Choice
 
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_canticos", interaccion, Choice("consultar"))
+    await llamar(cog, "box_canticos", interaccion, Choice("consultar"))
 
     assert "Nadie decidió" in interaccion.texto
 
 
-def test_admin_box_canticos_activar_y_desactivar(cog):
+async def test_admin_box_canticos_activar_y_desactivar(cog):
     from modules.box.database import obtener_canticos
     from tests.harness import Choice
 
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_canticos", interaccion, Choice("activar"))
+    await llamar(cog, "box_canticos", interaccion, Choice("activar"))
 
-    assert obtener_canticos(GUILD) is True
+    assert await obtener_canticos(GUILD) is True
     assert "activados" in interaccion.texto
 
-    llamar(cog, "box_canticos", interaccion, Choice("desactivar"))
+    await llamar(cog, "box_canticos", interaccion, Choice("desactivar"))
 
-    assert obtener_canticos(GUILD) is False
+    assert await obtener_canticos(GUILD) is False
 
-    llamar(cog, "box_canticos", interaccion, Choice("consultar"))
+    await llamar(cog, "box_canticos", interaccion, Choice("consultar"))
 
     assert "desactivados" in interaccion.texto
     # La respuesta es privada: el aviso de que "se activaron los cánticos" no
@@ -426,8 +425,8 @@ def test_admin_box_canticos_activar_y_desactivar(cog):
 # ============================================================
 
 
-def _combate_vivo_de_broma(guild_id=GUILD):
-    from core.database import conectar_db
+async def _combate_vivo_de_broma(guild_id=GUILD):
+    from tests.harness import conectar_db
 
     with conectar_db() as db:
         fila = db.execute(
@@ -461,23 +460,23 @@ def _combate_vivo_de_broma(guild_id=GUILD):
         return fila.lastrowid
 
 
-def test_admin_box_cerrar_combate_suelta_el_candado(cog):
+async def test_admin_box_cerrar_combate_suelta_el_candado(cog):
     from modules.box.database import combate_en_curso, obtener_combates_vivos
 
-    combate_id = _combate_vivo_de_broma()
+    combate_id = await _combate_vivo_de_broma()
 
-    assert combate_en_curso(GUILD) is not None
-    assert len(obtener_combates_vivos(ahora())) == 1
+    assert await combate_en_curso(GUILD) is not None
+    assert len(await obtener_combates_vivos(ahora())) == 1
 
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_cerrar_combate", interaccion)
+    await llamar(cog, "box_cerrar_combate", interaccion)
 
     assert "Cerrada la pelea" in interaccion.texto
-    assert combate_en_curso(GUILD) is None
-    assert obtener_combates_vivos(ahora()) == []
+    assert await combate_en_curso(GUILD) is None
+    assert await obtener_combates_vivos(ahora()) == []
 
-    with __import__("core.database", fromlist=["conectar_db"]).conectar_db() as db:
+    with conectar_db() as db:
         estado, resumen = db.execute(
             "SELECT estado, resumen FROM box_combates WHERE id = ?",
             (combate_id,),
@@ -487,9 +486,9 @@ def test_admin_box_cerrar_combate_suelta_el_candado(cog):
     assert "cerrado a mano" in resumen
 
 
-def test_admin_box_cerrar_combate_sin_pelea_avisa(cog):
+async def test_admin_box_cerrar_combate_sin_pelea_avisa(cog):
     interaccion = interaccion_admin()
 
-    llamar(cog, "box_cerrar_combate", interaccion)
+    await llamar(cog, "box_cerrar_combate", interaccion)
 
     assert "No hay ninguna pelea" in interaccion.texto

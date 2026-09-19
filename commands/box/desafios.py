@@ -245,7 +245,7 @@ class ChallengeView(discord.ui.View):
         # tarjeta. Si la solicitud ya se canceló (``/box cancelar``) o se
         # aceptó por otro camino, el canal está mostrando otra cosa y el
         # timeout no tiene que pisarla con un "expirado" mentiroso.
-        if not desafio_registrado(self.desafio_id):
+        if not await desafio_registrado(self.desafio_id):
             return
 
         embed = crear_embed(
@@ -291,7 +291,7 @@ class DesafiosMixin:
         if interaction.guild is None:
             return {"estado": "invalido"}
 
-        return aceptar_desafio(
+        return await aceptar_desafio(
             desafio_id=desafio_id,
             guild_id=interaction.guild.id,
             contrincante_id=contrincante_id,
@@ -382,7 +382,7 @@ class DesafiosMixin:
             )
             return
 
-        if obtener_accion_activa(interaction.guild.id, interaction.user.id):
+        if await obtener_accion_activa(interaction.guild.id, interaction.user.id):
             await responder_error(
                 interaction,
                 "⚠️ Acción activa",
@@ -390,11 +390,11 @@ class DesafiosMixin:
             )
             return
 
-        _, lesionado_hasta = obtener_estado_box(
+        _, lesionado_hasta = await obtener_estado_box(
             interaction.guild.id,
             interaction.user.id,
         )
-        if lesionado_hasta and datetime.fromisoformat(lesionado_hasta) > ahora():
+        if lesionado_hasta and lesionado_hasta > ahora():
             await responder_error(
                 interaction,
                 "🚑 Lesión activa",
@@ -405,7 +405,7 @@ class DesafiosMixin:
         # Un solo combate a la vez: se avisa acá, antes de mandar el botón,
         # para no dejar a nadie con un desafío que no se puede aceptar. El
         # control duro está en ``aceptar_desafio``, dentro de la transacción.
-        en_curso = combate_en_curso(interaction.guild.id)
+        en_curso = await combate_en_curso(interaction.guild.id)
 
         if en_curso is not None:
             await responder_error(
@@ -430,7 +430,7 @@ class DesafiosMixin:
 
             # Randomiza stats del bot entre los extremos del servidor
             # (min por stat = jugador más bajo, max = jugador más alto)
-            info_bot = preparar_bot_para_desafio(
+            info_bot = await preparar_bot_para_desafio(
                 interaction.guild.id,
                 contrincante.id,
             )
@@ -438,27 +438,24 @@ class DesafiosMixin:
             # Asegurar que no quede un desafío pendiente duplicado previo
             # (preparar_bot ya limpia, pero reforzamos para el par exacto)
             try:
-                from core.database import conectar_db
+                from sqlalchemy import delete
 
-                with conectar_db() as _db:
-                    _db.execute(
-                        """
-                        DELETE FROM box_desafios
-                        WHERE guild_id = ?
-                        AND retador_id = ?
-                        AND contrincante_id = ?
-                        """,
-                        (
-                            interaction.guild.id,
-                            interaction.user.id,
-                            contrincante.id,
-                        ),
+                from core.database import crear_sesion
+                from modules.box.models import BoxDesafio
+
+                async with crear_sesion() as _sesion:
+                    await _sesion.execute(
+                        delete(BoxDesafio).where(
+                            BoxDesafio.guild_id == interaction.guild.id,
+                            BoxDesafio.retador_id == interaction.user.id,
+                            BoxDesafio.contrincante_id == contrincante.id,
+                        )
                     )
-                    _db.commit()
+                    await _sesion.commit()
             except Exception:
                 pass
 
-            desafio_id = crear_desafio(
+            desafio_id = await crear_desafio(
                 guild_id=interaction.guild.id,
                 retador_id=interaction.user.id,
                 contrincante_id=contrincante.id,
@@ -567,7 +564,7 @@ class DesafiosMixin:
             )
             return
 
-        desafio_id = crear_desafio(
+        desafio_id = await crear_desafio(
             guild_id=interaction.guild.id,
             retador_id=interaction.user.id,
             contrincante_id=contrincante.id,
@@ -632,7 +629,7 @@ class DesafiosMixin:
                 f"{type(error).__name__}: {error}",
                 flush=True,
             )
-            cancelar_desafio(
+            await cancelar_desafio(
                 desafio_id,
                 interaction.guild.id,
                 interaction.user.id,
@@ -652,7 +649,7 @@ class DesafiosMixin:
         # La tarjeta queda anotada en la fila para que ``/box cancelar`` la
         # pueda retirar del canal, incluso después de un reinicio del bot.
         try:
-            registrar_mensaje_desafio(desafio_id, mensaje.id)
+            await registrar_mensaje_desafio(desafio_id, mensaje.id)
         except Exception as error:
             print(
                 f"[BOX] no se anotó la tarjeta del desafío {desafio_id}: "
@@ -734,7 +731,7 @@ class DesafiosMixin:
         user_id = interaction.user.id
         momento = ahora()
 
-        pendientes = desafios_pendientes(guild_id, user_id, momento)
+        pendientes = await desafios_pendientes(guild_id, user_id, momento)
 
         if contrincante is not None:
             pendientes = [
@@ -785,7 +782,7 @@ class DesafiosMixin:
             )
             return
 
-        cancelado = cancelar_desafio(
+        cancelado = await cancelar_desafio(
             pendientes[0]["id"],
             guild_id,
             user_id,

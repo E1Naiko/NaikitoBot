@@ -129,7 +129,7 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
             )
             return
 
-        resultado = ejecutar_compra(
+        resultado = await ejecutar_compra(
             interaction.guild.id,
             interaction.user.id,
             self.categoria,
@@ -187,7 +187,7 @@ class SelectorSuministro(discord.ui.Select):
             return
 
         tipo = self.values[0]
-        resultado = usar_suministro_resultado(
+        resultado = await usar_suministro_resultado(
             interaction.guild.id,
             interaction.user.id,
             tipo,
@@ -259,7 +259,7 @@ class TiendaMixin:
         await responder(
             interaction,
             "🛒 Tienda de Box",
-            construir_catalogo(interaction),
+            await construir_catalogo(interaction),
             color_area="box",
             view=TiendaView(interaction.user.id),
         )
@@ -288,7 +288,7 @@ class TiendaMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = ejecutar_compra(
+        resultado = await ejecutar_compra(
             interaction.guild.id,
             interaction.user.id,
             tipo.value,
@@ -333,7 +333,7 @@ class TiendaMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = ejecutar_compra(
+        resultado = await ejecutar_compra(
             interaction.guild.id,
             interaction.user.id,
             "tratamiento",
@@ -370,7 +370,7 @@ class TiendaMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = usar_suministro_resultado(
+        resultado = await usar_suministro_resultado(
             interaction.guild.id,
             interaction.user.id,
             tipo.value,
@@ -387,7 +387,7 @@ class TiendaMixin:
         )
 
 
-def construir_catalogo(interaction) -> str:
+async def construir_catalogo(interaction) -> str:
     """Arma el texto del catálogo con los niveles actuales del usuario."""
 
     guild_id = interaction.guild.id
@@ -396,7 +396,7 @@ def construir_catalogo(interaction) -> str:
     lineas = ["🛒 **Tienda de Box**", "\n**Mejoras**"]
 
     for clave, mejora in MEJORAS.items():
-        nivel = obtener_nivel_mejora(guild_id, user_id, clave)
+        nivel = await obtener_nivel_mejora(guild_id, user_id, clave)
         lineas.append(
             f"{mejora['emoji']} **{mejora['nombre']}** — "
             f"{mejora['descripcion']} | "
@@ -405,7 +405,7 @@ def construir_catalogo(interaction) -> str:
         )
 
     lineas.append("\n**Equipamiento**")
-    equipo = obtener_equipo(guild_id, user_id)
+    equipo = await obtener_equipo(guild_id, user_id)
     for clave, pieza in EQUIPAMIENTO.items():
         nivel_actual = equipo[clave] if equipo else 0
         calidad_actual = calidad_equipamiento(clave, nivel_actual)
