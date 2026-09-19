@@ -8,7 +8,6 @@ demora (lock, disco, antivirus), el comando debe tardar —no reviente con
 responde con followups.
 """
 
-import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -17,7 +16,7 @@ from discord.utils import MISSING
 
 from commands.box.cog import Box
 from commands.box.desafios import ChallengeView
-from core.database import conectar_db
+from tests.harness import conectar_db
 from core.utils import ahora
 from modules.box.database import ESTADO_VIVO, crear_desafio
 
@@ -30,13 +29,7 @@ BOT_ID = 99
 CANAL = 77
 
 
-def correr(coro):
-    loop = asyncio.new_event_loop()
 
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 def plano(embed) -> str:
@@ -74,7 +67,7 @@ def base(base_datos_limpia):
 # ============================================================
 
 
-def test_desafio_defiere_y_publica_la_tarjeta_en_el_canal(base):
+async def test_desafio_defiere_y_publica_la_tarjeta_en_el_canal(base):
     """La tarjeta con el botón la tiene que ver el desafiado.
 
     El comando difiere la interacción como efímera para que la base no gaste
@@ -88,7 +81,7 @@ def test_desafio_defiere_y_publica_la_tarjeta_en_el_canal(base):
     interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
     rival = UsuarioFalso(CONTRINCANTE, "Rival")
 
-    correr(cog._crear_desafio(interaccion, rival, "FIGHTING"))
+    await cog._crear_desafio(interaccion, rival, "FIGHTING")
 
     respuestas = interaccion.respuestas
 
@@ -140,14 +133,14 @@ def test_desafio_defiere_y_publica_la_tarjeta_en_el_canal(base):
     assert fila == ("FIGHTING", CANAL, tarjeta.id)
 
 
-def test_el_sparring_tambien_se_publica_en_el_canal(base):
+async def test_el_sparring_tambien_se_publica_en_el_canal(base):
     """La modalidad cambia el rótulo, no la visibilidad de la tarjeta."""
 
     cog = construir_cog(Box)
     interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
     rival = UsuarioFalso(CONTRINCANTE, "Rival")
 
-    correr(cog._crear_desafio(interaccion, rival, "SPARRING"))
+    await cog._crear_desafio(interaccion, rival, "SPARRING")
 
     [tarjeta] = interaccion.channel.mensajes
 
@@ -162,7 +155,7 @@ def test_el_sparring_tambien_se_publica_en_el_canal(base):
     assert tipo == "SPARRING"
 
 
-def test_sin_canal_no_queda_una_solicitud_invisible(base, monkeypatch):
+async def test_sin_canal_no_queda_una_solicitud_invisible(base, monkeypatch):
     """Si no se puede publicar la tarjeta, no se deja nada pendiente.
 
     Una solicitud que nadie ve es una trampa: bloquea el par
@@ -180,7 +173,7 @@ def test_sin_canal_no_queda_una_solicitud_invisible(base, monkeypatch):
     interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR, canal=CANAL)
     rival = UsuarioFalso(CONTRINCANTE, "Rival")
 
-    correr(cog._crear_desafio(interaccion, rival, "FIGHTING"))
+    await cog._crear_desafio(interaccion, rival, "FIGHTING")
 
     assert "No se pudo publicar el desafío" in interaccion.texto
 
@@ -190,7 +183,7 @@ def test_sin_canal_no_queda_una_solicitud_invisible(base, monkeypatch):
     assert pendientes == 0
 
 
-def test_un_canal_sin_permisos_tampoco_deja_solicitud(base):
+async def test_un_canal_sin_permisos_tampoco_deja_solicitud(base):
     """Lo mismo cuando el canal existe pero el bot no puede escribir ahí."""
 
     from tests.harness import prohibido
@@ -203,7 +196,7 @@ def test_un_canal_sin_permisos_tampoco_deja_solicitud(base):
 
     interaccion.channel.send = sin_permiso
 
-    correr(cog._crear_desafio(interaccion, UsuarioFalso(CONTRINCANTE, "Rival"), "SPARRING"))
+    await cog._crear_desafio(interaccion, UsuarioFalso(CONTRINCANTE, "Rival"), "SPARRING")
 
     assert "No se pudo publicar el desafío" in interaccion.texto
 
@@ -213,7 +206,7 @@ def test_un_canal_sin_permisos_tampoco_deja_solicitud(base):
     assert pendientes == 0
 
 
-def test_error_despues_de_defer_ir_por_followup(base):
+async def test_error_despues_de_defer_ir_por_followup(base):
     """Con acción activa el rechazo es un followup efímero, no un response.
 
     ``response.send_message`` sobre una interacción ya atendida revienta con
@@ -239,7 +232,7 @@ def test_error_despues_de_defer_ir_por_followup(base):
     interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR)
     rival = UsuarioFalso(CONTRINCANTE, "Rival")
 
-    correr(cog._crear_desafio(interaccion, rival, "FIGHTING"))
+    await cog._crear_desafio(interaccion, rival, "FIGHTING")
 
     assert len(interaccion.respuestas) == 2
 
@@ -259,13 +252,13 @@ def test_error_despues_de_defer_ir_por_followup(base):
 # ============================================================
 
 
-def test_desafiar_al_bot_defiere_y_acepta_inmediato(base):
+async def test_desafiar_al_bot_defiere_y_acepta_inmediato(base):
     cog = construir_cog(Box)
     interaccion = InteraccionFalsa(guild_id=GUILD, user_id=RETADOR)
     bot = UsuarioFalso(BOT_ID, "NaikitoBot")
     bot.bot = True
 
-    correr(cog._crear_desafio(interaccion, bot, "FIGHTING"))
+    await cog._crear_desafio(interaccion, bot, "FIGHTING")
 
     respuestas = interaccion.respuestas
 
@@ -316,13 +309,13 @@ class MensajeDelDesafio:
         return self
 
 
-def test_aceptar_defiere_y_edita_el_mensaje_del_boton(base, monkeypatch):
+async def test_aceptar_defiere_y_edita_el_mensaje_del_boton(base, monkeypatch):
     import commands.box.desafios as desafios_mod
 
     monkeypatch.setattr(desafios_mod, "BOX_CHANNEL_IDS", (CANAL,))
 
     inicio = ahora().replace(microsecond=0)
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
@@ -334,7 +327,7 @@ def test_aceptar_defiere_y_edita_el_mensaje_del_boton(base, monkeypatch):
     interaccion.message = mensaje_desafio
 
     # La misma llamada que hace el framework: (view, interaccion, botón)
-    correr(view.aceptar.callback(interaccion))
+    await view.aceptar.callback(interaccion)
 
     # 1. Se defirió antes de resolver el plan
     assert interaccion.response.is_done()

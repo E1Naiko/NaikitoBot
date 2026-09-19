@@ -11,6 +11,7 @@ __all__ = [
     "PREFIX",
     "TIMEZONE",
     "DATABASE",
+    "DATABASE_URL",
     "MADRUGUE_INICIO_100",
     "MADRUGUE_INICIO_25",
     "MADRUGUE_INICIO_5",
@@ -304,7 +305,44 @@ TIMEZONE = ZoneInfo(
 # BASE DE DATOS
 # ============================================================
 
+# La base de datos se maneja con SQLAlchemy asíncrono. En producción se
+# usa PostgreSQL (driver asyncpg) configurando DATABASE_URL en el .env:
+#
+#   DATABASE_URL=postgresql+asyncpg://usuario:clave@host:5432/naikito
+#
+# Si no hay DATABASE_URL se cae al archivo SQLite de DATABASE, que sigue
+# sirviendo para desarrollo local y para las pruebas automatizadas
+# (driver aiosqlite).
+
 DATABASE = os.getenv("DATABASE", "naikito.db")
+
+
+def _database_url(defecto: str) -> str:
+    """Arma la URL de SQLAlchemy a partir del .env."""
+
+    url = os.getenv("DATABASE_URL", "").strip()
+
+    if url:
+        return url
+
+    return f"sqlite+aiosqlite:///{defecto}"
+
+
+DATABASE_URL = _database_url(DATABASE)
+
+_comprobar(
+    DATABASE_URL.startswith(
+        (
+            "postgresql+asyncpg://",
+            "postgresql://",
+            "sqlite+aiosqlite://",
+            "sqlite://",
+        )
+    ),
+    "DATABASE_URL debe ser una URL de SQLAlchemy con driver asíncrono, "
+    "por ejemplo postgresql+asyncpg://usuario:clave@host:5432/naikito o "
+    f"sqlite+aiosqlite:///naikito.db, pero se recibió '{DATABASE_URL}'.",
+)
 
 
 # ============================================================

@@ -73,7 +73,7 @@ class SsfAdminMixin:
             )
             return
 
-        resultado = revivir_participante(
+        resultado = await revivir_participante(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
             fecha=fecha_obj,
@@ -180,12 +180,12 @@ class SsfAdminMixin:
             )
             return
 
-        fecha_inicio = inicio_obj.isoformat()
-        fecha_fin = fin_obj.isoformat()
+        fecha_inicio = inicio_obj
+        fecha_fin = fin_obj
 
         nombre = nombre.strip() or f"SeptSinFP {inicio_obj.year}"
 
-        resultado = iniciar_desafio(
+        resultado = await iniciar_desafio(
             guild_id=interaction.guild.id,
             nombre=nombre,
             fecha_inicio=fecha_inicio,
@@ -259,7 +259,7 @@ class SsfAdminMixin:
             )
             return
 
-        resultado = agregar_dia(
+        resultado = await agregar_dia(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
             fecha=fecha_obj,
@@ -354,7 +354,7 @@ class SsfAdminMixin:
             )
             return
 
-        resultado = quitar_dia(
+        resultado = await quitar_dia(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
             fecha=fecha_obj,
@@ -431,7 +431,7 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = recalcular_rachas(
+        resultado = await recalcular_rachas(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
         )
@@ -498,7 +498,7 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = obtener_estado_usuario(
+        resultado = await obtener_estado_usuario(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
         )
@@ -567,7 +567,7 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        estado = obtener_estado_desafio(
+        estado = await obtener_estado_desafio(
             interaction.guild.id,
         )
 
@@ -621,7 +621,7 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        estado = obtener_estado_desafio(
+        estado = await obtener_estado_desafio(
             interaction.guild.id,
         )
 
@@ -632,7 +632,7 @@ class SsfAdminMixin:
             )
             return
 
-        lista = obtener_lista_participantes(
+        lista = await obtener_lista_participantes(
             interaction.guild.id,
         )
 
@@ -719,7 +719,7 @@ class SsfAdminMixin:
             )
             return
 
-        resultado = eliminar_participante_admin(
+        resultado = await eliminar_participante_admin(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
             fecha=fecha_obj,
@@ -815,7 +815,7 @@ class SsfAdminMixin:
             )
             return
 
-        resultado = cerrar_desafio_activo(
+        resultado = await cerrar_desafio_activo(
             interaction.guild.id,
         )
 
@@ -860,7 +860,7 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = obtener_desafio_para_ranking(
+        resultado = await obtener_desafio_para_ranking(
             interaction.guild.id,
         )
 

@@ -14,7 +14,7 @@ from modules.box.database import inicializar_db
 async def setup(bot: commands.Bot):
     """Crea el esquema de Box y registra sus comandos."""
 
-    inicializar_db()
+    await inicializar_db()
 
     # Los botones de la tienda guardan su estado en el custom_id, así que se
     # registran por patrón: siguen funcionando en mensajes anteriores al

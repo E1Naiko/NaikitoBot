@@ -8,14 +8,19 @@ from tests.harness import InteraccionFalsa, construir_cog
 
 
 def ejecutar(coro):
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        coro
-    )
+    """Ejecuta un coroutine en un loop descartable (estas pruebas no tocan la base)."""
+
+    loop = asyncio.new_event_loop()
+
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
-def llamar(cog, nombre_metodo, interaccion, *args):
+async def llamar(cog, nombre_metodo, interaccion, *args):
     metodo = getattr(type(cog), nombre_metodo).callback
-    return ejecutar(metodo(cog, interaccion, *args))
+    return await metodo(cog, interaccion, *args)
 
 
 def embed_ultimo(interaccion):
@@ -87,13 +92,13 @@ def test_responder_con_vista_la_reenvia():
     assert interaccion.respuestas[-1].kwargs.get("view") is vista
 
 
-def test_box_saldo_usa_embed_con_secciones(base_datos_limpia):
+async def test_box_saldo_usa_embed_con_secciones(base_datos_limpia):
     from commands.box.cog import Box
 
     cog = construir_cog(Box)
     interaccion = InteraccionFalsa(1, 42)
 
-    llamar(cog, "saldo", interaccion)
+    await llamar(cog, "saldo", interaccion)
 
     embed = embed_ultimo(interaccion)
     assert "Saldo" in embed.title
@@ -102,13 +107,13 @@ def test_box_saldo_usa_embed_con_secciones(base_datos_limpia):
     assert any("Dinero" in nombre for nombre in secciones)
 
 
-def test_box_stats_usa_embed_con_secciones(base_datos_limpia):
+async def test_box_stats_usa_embed_con_secciones(base_datos_limpia):
     from commands.box.cog import Box
 
     cog = construir_cog(Box)
     interaccion = InteraccionFalsa(1, 42)
 
-    llamar(cog, "stats", interaccion)
+    await llamar(cog, "stats", interaccion)
 
     embed = embed_ultimo(interaccion)
     assert "Stats" in embed.title
@@ -118,16 +123,16 @@ def test_box_stats_usa_embed_con_secciones(base_datos_limpia):
     assert any("Acción actual" in nombre for nombre in secciones)
 
 
-def test_madrugue_stats_usa_embed_con_secciones(base_datos_limpia):
+async def test_madrugue_stats_usa_embed_con_secciones(base_datos_limpia):
     from commands.madrugue.cog import Madrugue
     from modules.madrugue.database import inicializar_db
 
-    inicializar_db()
+    await inicializar_db()
 
     cog = construir_cog(Madrugue)
     interaccion = InteraccionFalsa(1, 42)
 
-    llamar(cog, "stats", interaccion)
+    await llamar(cog, "stats", interaccion)
 
     embed = embed_ultimo(interaccion)
     assert "Estadísticas" in embed.title
@@ -136,13 +141,13 @@ def test_madrugue_stats_usa_embed_con_secciones(base_datos_limpia):
     assert any("Mejor racha" in nombre for nombre in secciones)
 
 
-def test_ayuda_box_se_envia_como_embed(base_datos_limpia):
+async def test_ayuda_box_se_envia_como_embed(base_datos_limpia):
     from commands.box.cog import Box
 
     cog = construir_cog(Box)
     interaccion = InteraccionFalsa(1, 42)
 
-    llamar(cog, "ayuda", interaccion)
+    await llamar(cog, "ayuda", interaccion)
 
     assert interaccion.user.mensajes_directos
     assert "Ayuda de Box" in interaccion.user.mensajes_directos[0]

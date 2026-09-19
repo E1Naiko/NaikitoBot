@@ -28,7 +28,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        stats = obtener_stats_madrugue(
+        stats = await obtener_stats_madrugue(
             guild_id=interaction.guild.id,
             user_id=interaction.user.id,
         )
@@ -56,7 +56,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultados = obtener_top_madrugue(
+        resultados = await obtener_top_madrugue(
             interaction.guild.id,
             limite=10,
         )

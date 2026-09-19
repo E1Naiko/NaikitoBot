@@ -4,8 +4,6 @@ Los cogs importan desde acá y no directamente de ``database`` ni ``logic``,
 igual que en los módulos Madrugue y Box.
 """
 
-from datetime import date
-
 from modules.ssf.constants import (
     TEXTO_AYUDA,
 )
@@ -25,6 +23,7 @@ from modules.ssf.database import (
     tiene_registro,
     actualizar_participante,
     reactivar_participante,
+    obtener_desafios_activos,
     obtener_ultima_revision_ssf,
     guardar_ultima_revision_ssf,
     obtener_ranking_final,
@@ -38,7 +37,6 @@ from modules.ssf.logic import (
     fecha_dentro_del_desafio,
 )
 
-from core.database import conectar_db
 
 
 __all__ = [
@@ -69,7 +67,7 @@ __all__ = [
 ]
 
 
-def iniciar_desafio(
+async def iniciar_desafio(
     guild_id,
     nombre,
     fecha_inicio,
@@ -82,7 +80,7 @@ def iniciar_desafio(
     No permite crear otro desafío activo en el mismo servidor.
     """
 
-    existente = obtener_desafio_activo(
+    existente = await obtener_desafio_activo(
         guild_id
     )
 
@@ -92,7 +90,7 @@ def iniciar_desafio(
             "motivo": "ya_existe",
         }
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         guild_id=guild_id,
         nombre=nombre,
         fecha_inicio=fecha_inicio,
@@ -106,7 +104,7 @@ def iniciar_desafio(
     }
 
 
-def registrar_usuario(
+async def registrar_usuario(
     guild_id,
     user_id,
     username,
@@ -116,7 +114,7 @@ def registrar_usuario(
     Registra un usuario en el desafío activo.
     """
 
-    desafio = obtener_desafio_activo(
+    desafio = await obtener_desafio_activo(
         guild_id
     )
 
@@ -149,7 +147,7 @@ def registrar_usuario(
             "nombre": nombre,
         }
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -167,28 +165,26 @@ def registrar_usuario(
             "motivo": "ya_registrado",
         }
 
-    registrar_participante(
+    await registrar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
         username=username,
-        fecha_registro=ahora.isoformat(),
+        fecha_registro=ahora,
     )
 
     # Registrarse cuenta como haber sobrevivido el día. Sin esto, quien se
     # registra el 1/9 y cumple del 2 al 6 quedaba con racha 5 en lugar de 6,
     # porque sólo /ssf sobrevivi creaba entradas en ssf_registros.
-    guardar_registro(
+    await guardar_registro(
         desafio_id=desafio_id,
         user_id=user_id,
-        fecha=fecha.isoformat(),
+        fecha=fecha,
         hora=ahora.strftime("%H:%M:%S"),
     )
 
     fechas = [
-        date.fromisoformat(
-            registro[0]
-        )
-        for registro in obtener_registros_usuario(
+        registro[0]
+        for registro in await obtener_registros_usuario(
             desafio_id,
             user_id,
         )
@@ -203,7 +199,7 @@ def registrar_usuario(
         fechas
     )
 
-    actualizar_participante(
+    await actualizar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
         racha_actual=racha,
@@ -222,7 +218,7 @@ def registrar_usuario(
     }
 
 
-def registrar_sobrevivi(
+async def registrar_sobrevivi(
     guild_id,
     user_id,
     ahora,
@@ -231,7 +227,7 @@ def registrar_sobrevivi(
     Registra la supervivencia diaria de un participante.
     """
 
-    desafio = obtener_desafio_activo(
+    desafio = await obtener_desafio_activo(
         guild_id
     )
 
@@ -263,7 +259,7 @@ def registrar_sobrevivi(
             "motivo": "fuera_de_fecha",
         }
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -280,32 +276,30 @@ def registrar_sobrevivi(
             "motivo": "eliminado",
         }
 
-    if tiene_registro(
+    if await tiene_registro(
         desafio_id,
         user_id,
-        fecha.isoformat(),
+        fecha,
     ):
         return {
             "exitoso": False,
             "motivo": "ya_registrado",
         }
 
-    guardar_registro(
+    await guardar_registro(
         desafio_id=desafio_id,
         user_id=user_id,
-        fecha=fecha.isoformat(),
+        fecha=fecha,
         hora=ahora.strftime("%H:%M:%S"),
     )
 
-    registros = obtener_registros_usuario(
+    registros = await obtener_registros_usuario(
         desafio_id,
         user_id,
     )
 
     fechas = [
-        date.fromisoformat(
-            registro[0]
-        )
+        registro[0]
         for registro in registros
     ]
 
@@ -318,7 +312,7 @@ def registrar_sobrevivi(
         fechas
     )
 
-    actualizar_participante(
+    await actualizar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
         racha_actual=racha,
@@ -337,13 +331,13 @@ def registrar_sobrevivi(
     }
 
 
-def obtener_estado_usuario(
+async def obtener_estado_usuario(
     guild_id,
     user_id,
 ):
     """Obtiene el estado actual de un participante."""
 
-    desafio = obtener_desafio_activo(
+    desafio = await obtener_desafio_activo(
         guild_id
     )
 
@@ -353,7 +347,7 @@ def obtener_estado_usuario(
             "motivo": "sin_desafio",
         }
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio[0],
         user_id,
     )
@@ -375,7 +369,7 @@ def obtener_estado_usuario(
     }
 
 
-def eliminar_faltantes(
+async def eliminar_faltantes(
     guild_id,
     fecha,
 ):
@@ -384,7 +378,7 @@ def eliminar_faltantes(
     registraron /SSF sobrevivi durante la fecha indicada.
     """
 
-    desafio = obtener_desafio_activo(
+    desafio = await obtener_desafio_activo(
         guild_id
     )
 
@@ -393,7 +387,7 @@ def eliminar_faltantes(
 
     desafio_id = desafio[0]
 
-    participantes = obtener_participantes(
+    participantes = await obtener_participantes(
         desafio_id
     )
 
@@ -407,15 +401,15 @@ def eliminar_faltantes(
         if eliminado:
             continue
 
-        if not tiene_registro(
+        if not await tiene_registro(
             desafio_id,
             user_id,
-            fecha.isoformat(),
+            fecha,
         ):
-            eliminar_participante(
+            await eliminar_participante(
                 desafio_id=desafio_id,
                 user_id=user_id,
-                fecha_eliminacion=fecha.isoformat(),
+                fecha_eliminacion=fecha,
             )
 
             eliminados += 1
@@ -423,12 +417,12 @@ def eliminar_faltantes(
     return eliminados
 
 
-def obtener_estado_desafio(
+async def obtener_estado_desafio(
     guild_id,
 ):
     """Obtiene las estadísticas del desafío activo."""
 
-    desafio = obtener_desafio_activo(
+    desafio = await obtener_desafio_activo(
         guild_id
     )
 
@@ -436,7 +430,7 @@ def obtener_estado_desafio(
         return None
 
     total, activos, eliminados = (
-        obtener_estadisticas_desafio(
+        await obtener_estadisticas_desafio(
             desafio[0]
         )
     )
@@ -453,23 +447,23 @@ def obtener_estado_desafio(
     }
 
 
-def obtener_lista_participantes(
+async def obtener_lista_participantes(
     guild_id,
 ):
     """Obtiene los participantes del desafío activo."""
 
-    desafio = obtener_desafio_activo(
+    desafio = await obtener_desafio_activo(
         guild_id
     )
 
     if desafio is None:
         return None
 
-    return obtener_participantes(
+    return await obtener_participantes(
         desafio[0]
     )
 
-def revivir_participante(
+async def revivir_participante(
     guild_id,
     user_id,
     fecha,
@@ -484,7 +478,7 @@ def revivir_participante(
     La fecha indicada debe ser un día dentro del desafío.
     """
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     if desafio is None:
         return {
@@ -512,7 +506,7 @@ def revivir_participante(
             "motivo": "fuera_de_fecha",
         }
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -529,10 +523,10 @@ def revivir_participante(
             "motivo": "no_eliminado",
         }
 
-    if tiene_registro(
+    if await tiene_registro(
         desafio_id,
         user_id,
-        fecha.isoformat(),
+        fecha,
     ):
         return {
             "exitoso": False,
@@ -540,23 +534,21 @@ def revivir_participante(
         }
 
     # Registrar retroactivamente el día perdido.
-    guardar_registro(
+    await guardar_registro(
         desafio_id=desafio_id,
         user_id=user_id,
-        fecha=fecha.isoformat(),
+        fecha=fecha,
         hora="ADMIN",
     )
 
     # Recuperar todas las fechas después del registro.
-    registros = obtener_registros_usuario(
+    registros = await obtener_registros_usuario(
         desafio_id,
         user_id,
     )
 
     fechas = [
-        date.fromisoformat(
-            registro[0]
-        )
+        registro[0]
         for registro in registros
     ]
 
@@ -570,7 +562,7 @@ def revivir_participante(
     )
 
     # El participante vuelve a estar activo.
-    actualizar_participante(
+    await actualizar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
         racha_actual=racha,
@@ -578,7 +570,7 @@ def revivir_participante(
     )
 
     # Quitar estado de eliminado.
-    reactivar_participante(
+    await reactivar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
     )
@@ -597,7 +589,7 @@ def revivir_participante(
 # REPARACIÓN MANUAL (SOLO ADMINISTRADORES)
 # ============================================================
 
-def _actualizar_rachas_desde_registros(
+async def _actualizar_rachas_desde_registros(
     desafio_id,
     user_id,
 ):
@@ -611,15 +603,13 @@ def _actualizar_rachas_desde_registros(
     No toca el estado de eliminado del participante.
     """
 
-    registros = obtener_registros_usuario(
+    registros = await obtener_registros_usuario(
         desafio_id,
         user_id,
     )
 
     fechas = [
-        date.fromisoformat(
-            registro[0]
-        )
+        registro[0]
         for registro in registros
     ]
 
@@ -635,7 +625,7 @@ def _actualizar_rachas_desde_registros(
         fechas
     )
 
-    actualizar_participante(
+    await actualizar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
         racha_actual=racha,
@@ -648,7 +638,7 @@ def _actualizar_rachas_desde_registros(
     )
 
 
-def agregar_dia(
+async def agregar_dia(
     guild_id,
     user_id,
     fecha,
@@ -662,7 +652,7 @@ def agregar_dia(
     ``revivir_participante``). No acepta fechas futuras.
     """
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     if desafio is None:
         return {
@@ -690,7 +680,7 @@ def agregar_dia(
             "motivo": "fuera_de_fecha",
         }
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -713,25 +703,25 @@ def agregar_dia(
             "motivo": "futura",
         }
 
-    if tiene_registro(
+    if await tiene_registro(
         desafio_id,
         user_id,
-        fecha.isoformat(),
+        fecha,
     ):
         return {
             "exitoso": False,
             "motivo": "ya_registrado",
         }
 
-    guardar_registro(
+    await guardar_registro(
         desafio_id=desafio_id,
         user_id=user_id,
-        fecha=fecha.isoformat(),
+        fecha=fecha,
         hora="ADMIN",
     )
 
     racha, mejor_racha = (
-        _actualizar_rachas_desde_registros(
+        await _actualizar_rachas_desde_registros(
             desafio_id,
             user_id,
         )
@@ -748,7 +738,7 @@ def agregar_dia(
     }
 
 
-def quitar_dia(
+async def quitar_dia(
     guild_id,
     user_id,
     fecha,
@@ -765,7 +755,7 @@ def quitar_dia(
     borrarlo sea cual sea su fecha.
     """
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     if desafio is None:
         return {
@@ -776,7 +766,7 @@ def quitar_dia(
     desafio_id = desafio[0]
     nombre = desafio[2]
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -787,24 +777,24 @@ def quitar_dia(
             "motivo": "no_participante",
         }
 
-    if not tiene_registro(
+    if not await tiene_registro(
         desafio_id,
         user_id,
-        fecha.isoformat(),
+        fecha,
     ):
         return {
             "exitoso": False,
             "motivo": "sin_registro",
         }
 
-    eliminar_registro(
+    await eliminar_registro(
         desafio_id=desafio_id,
         user_id=user_id,
-        fecha=fecha.isoformat(),
+        fecha=fecha,
     )
 
     racha, mejor_racha = (
-        _actualizar_rachas_desde_registros(
+        await _actualizar_rachas_desde_registros(
             desafio_id,
             user_id,
         )
@@ -822,7 +812,7 @@ def quitar_dia(
     }
 
 
-def recalcular_rachas(
+async def recalcular_rachas(
     guild_id,
     user_id,
 ):
@@ -835,7 +825,7 @@ def recalcular_rachas(
     a la corrección, que pisaba la racha con 0).
     """
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     if desafio is None:
         return {
@@ -846,7 +836,7 @@ def recalcular_rachas(
     desafio_id = desafio[0]
     nombre = desafio[2]
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -858,7 +848,7 @@ def recalcular_rachas(
         }
 
     racha, mejor_racha = (
-        _actualizar_rachas_desde_registros(
+        await _actualizar_rachas_desde_registros(
             desafio_id,
             user_id,
         )
@@ -878,7 +868,7 @@ def recalcular_rachas(
 # ELIMINACIÓN AUTOMÁTICA
 # ============================================================
 
-def procesar_eliminaciones_diarias(fecha):
+async def procesar_eliminaciones_diarias(fecha):
     """
     Procesa la eliminación automática de todos los desafíos
     SSF activos.
@@ -888,20 +878,7 @@ def procesar_eliminaciones_diarias(fecha):
 
     resultados = []
 
-    with conectar_db() as db:
-
-        desafios = db.execute("""
-            SELECT
-                id,
-                guild_id,
-                nombre,
-                fecha_inicio,
-                fecha_fin,
-                canal_id,
-                activo
-            FROM ssf_desafios
-            WHERE activo = 1
-        """).fetchall()
+    desafios = await obtener_desafios_activos()
 
     for desafio in desafios:
 
@@ -931,25 +908,21 @@ def procesar_eliminaciones_diarias(fecha):
         # ----------------------------------------------------
 
         ultima_revision = (
-            obtener_ultima_revision_ssf(
+            await obtener_ultima_revision_ssf(
                 desafio_id
             )
         )
 
         if ultima_revision is not None:
 
-            ultima_revision_obj = date.fromisoformat(
-                ultima_revision
-            )
-
-            if fecha <= ultima_revision_obj:
+            if fecha <= ultima_revision:
                 continue
 
         # ----------------------------------------------------
         # OBTENER PARTICIPANTES
         # ----------------------------------------------------
 
-        participantes = obtener_participantes(
+        participantes = await obtener_participantes(
             desafio_id
         )
 
@@ -972,18 +945,18 @@ def procesar_eliminaciones_diarias(fecha):
                 continue
 
             # Tiene supervivencia → continúa.
-            if tiene_registro(
+            if await tiene_registro(
                 desafio_id,
                 user_id,
-                fecha.isoformat(),
+                fecha,
             ):
                 continue
 
             # No registró → eliminar.
-            eliminar_participante(
+            await eliminar_participante(
                 desafio_id=desafio_id,
                 user_id=user_id,
-                fecha_eliminacion=fecha.isoformat(),
+                fecha_eliminacion=fecha,
             )
 
             eliminados.append({
@@ -995,9 +968,9 @@ def procesar_eliminaciones_diarias(fecha):
         # GUARDAR FECHA PROCESADA
         # ----------------------------------------------------
 
-        guardar_ultima_revision_ssf(
+        await guardar_ultima_revision_ssf(
             desafio_id=desafio_id,
-            fecha=fecha.isoformat(),
+            fecha=fecha,
         )
 
         resultados.append({
@@ -1015,7 +988,7 @@ def procesar_eliminaciones_diarias(fecha):
 # CIERRE AUTOMÁTICO
 # ============================================================
 
-def cerrar_desafios_finalizados(fecha):
+async def cerrar_desafios_finalizados(fecha):
     """
     Cierra automáticamente los desafíos cuya fecha de fin
     ya fue procesada.
@@ -1026,20 +999,7 @@ def cerrar_desafios_finalizados(fecha):
 
     resultados = []
 
-    with conectar_db() as db:
-
-        desafios = db.execute("""
-            SELECT
-                id,
-                guild_id,
-                nombre,
-                fecha_inicio,
-                fecha_fin,
-                canal_id,
-                activo
-            FROM ssf_desafios
-            WHERE activo = 1
-        """).fetchall()
+    desafios = await obtener_desafios_activos()
 
     for desafio in desafios:
 
@@ -1053,15 +1013,11 @@ def cerrar_desafios_finalizados(fecha):
             activo,
         ) = desafio
 
-        fecha_fin_obj = date.fromisoformat(
-            fecha_fin
-        )
-
         # ----------------------------------------------------
         # TODAVÍA NO TERMINÓ
         # ----------------------------------------------------
 
-        if fecha <= fecha_fin_obj:
+        if fecha <= fecha_fin:
             continue
 
         # ----------------------------------------------------
@@ -1069,7 +1025,7 @@ def cerrar_desafios_finalizados(fecha):
         # ----------------------------------------------------
 
         ultima_revision = (
-            obtener_ultima_revision_ssf(
+            await obtener_ultima_revision_ssf(
                 desafio_id
             )
         )
@@ -1077,18 +1033,14 @@ def cerrar_desafios_finalizados(fecha):
         if ultima_revision is None:
             continue
 
-        ultima_revision_obj = date.fromisoformat(
-            ultima_revision
-        )
-
-        if ultima_revision_obj < fecha_fin_obj:
+        if ultima_revision < fecha_fin_obj:
             continue
 
         # ----------------------------------------------------
         # OBTENER RANKING FINAL
         # ----------------------------------------------------
 
-        ranking = obtener_ranking_final(
+        ranking = await obtener_ranking_final(
             desafio_id
         )
 
@@ -1110,7 +1062,7 @@ def cerrar_desafios_finalizados(fecha):
         # CERRAR DESAFÍO
         # ----------------------------------------------------
 
-        cerrado = marcar_desafio_cerrado(
+        cerrado = await marcar_desafio_cerrado(
             desafio_id
         )
 
@@ -1140,7 +1092,7 @@ def cerrar_desafios_finalizados(fecha):
 # ADMINISTRACIÓN MANUAL (SOLO ADMINISTRADORES)
 # ============================================================
 
-def eliminar_participante_admin(
+async def eliminar_participante_admin(
     guild_id,
     user_id,
     fecha,
@@ -1152,7 +1104,7 @@ def eliminar_participante_admin(
     habría hecho el proceso automático diario si se hubiera ejecutado.
     """
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     if desafio is None:
         return {
@@ -1186,7 +1138,7 @@ def eliminar_participante_admin(
             "motivo": "futura",
         }
 
-    participante = obtener_participante(
+    participante = await obtener_participante(
         desafio_id,
         user_id,
     )
@@ -1203,35 +1155,35 @@ def eliminar_participante_admin(
             "motivo": "ya_eliminado",
         }
 
-    if tiene_registro(
+    if await tiene_registro(
         desafio_id,
         user_id,
-        fecha.isoformat(),
+        fecha,
     ):
         return {
             "exitoso": False,
             "motivo": "con_registro",
         }
 
-    eliminar_participante(
+    await eliminar_participante(
         desafio_id=desafio_id,
         user_id=user_id,
-        fecha_eliminacion=fecha.isoformat(),
+        fecha_eliminacion=fecha,
     )
 
     return {
         "exitoso": True,
         "nombre": nombre,
-        "fecha": fecha.isoformat(),
+        "fecha": fecha,
         "racha_actual": participante[6],
         "mejor_racha": participante[7],
     }
 
 
-def cerrar_desafio_activo(guild_id):
+async def cerrar_desafio_activo(guild_id):
     """Cierra el desafío activo y devuelve su resultado final."""
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     if desafio is None:
         return {
@@ -1249,9 +1201,9 @@ def cerrar_desafio_activo(guild_id):
         _activo,
     ) = desafio
 
-    ranking = obtener_ranking_final(desafio_id)
+    ranking = await obtener_ranking_final(desafio_id)
 
-    marcar_desafio_cerrado(desafio_id)
+    await marcar_desafio_cerrado(desafio_id)
 
     sobrevivientes = [
         fila
@@ -1279,15 +1231,15 @@ def cerrar_desafio_activo(guild_id):
     }
 
 
-def obtener_desafio_para_ranking(guild_id):
+async def obtener_desafio_para_ranking(guild_id):
     """Devuelve el desafío a rankear: el activo o el más reciente."""
 
-    desafio = obtener_desafio_activo(guild_id)
+    desafio = await obtener_desafio_activo(guild_id)
 
     activo = True
 
     if desafio is None:
-        desafio = obtener_ultimo_desafio(guild_id)
+        desafio = await obtener_ultimo_desafio(guild_id)
         activo = False
 
     if desafio is None:
@@ -1310,5 +1262,5 @@ def obtener_desafio_para_ranking(guild_id):
         "fecha_fin": fecha_fin,
         "canal_id": canal_id,
         "activo": activo,
-        "ranking": obtener_ranking_final(desafio_id),
+        "ranking": await obtener_ranking_final(desafio_id),
     }

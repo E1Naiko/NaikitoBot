@@ -344,3 +344,27 @@ def construir_cog(clase, bot=None):
     cog = clase.__new__(clase)
     cog.bot = bot
     return cog
+
+
+def conectar_db():
+    """Conexión SQLite sincrónica al mismo archivo que usa la capa async.
+
+    Solo para pruebas y scripts: permite que los helpers de las pruebas
+    sigan usando SQL directo contra la misma base que los modelos ORM
+    (que en las pruebas corren sobre aiosqlite contra este archivo).
+    """
+
+    import sqlite3
+    from contextlib import contextmanager
+
+    from config import DATABASE
+
+    @contextmanager
+    def _conexion():
+        db = sqlite3.connect(DATABASE, timeout=30)
+        try:
+            yield db
+        finally:
+            db.close()
+
+    return _conexion()

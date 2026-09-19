@@ -9,7 +9,6 @@ Discord se simula con dobles locales: al narrador solo le interesan ``send``,
 ``edit`` y ``fetch_message``.
 """
 
-import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -21,6 +20,7 @@ from commands.box.narracion import NarracionMixin
 
 from core.utils import ahora
 from modules.box.combate import Plan
+from tests.harness import conectar_db
 from modules.box.database import (
     ESTADO_CANCELADO,
     ESTADO_TERMINADO,
@@ -34,7 +34,6 @@ from modules.box.database import (
     obtener_canticos,
     latido_de,
     obtener_combates_vivos,
-    conectar_db,
     ultimos_combates,
     reclamar_asalto,
     tiene_accion_activa,
@@ -171,13 +170,7 @@ class Narrador(NarracionMixin):
         return self._canal
 
 
-def correr(coro):
-    loop = asyncio.new_event_loop()
 
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 # ============================================================
@@ -191,11 +184,11 @@ def inicio():
 
 
 @pytest.fixture
-def combate(base_datos_limpia, inicio):
+async def combate(base_datos_limpia, inicio):
     """Acepta un desafío de verdad y devuelve el combate que dejó registrado."""
 
     for user_id in (RETADOR, CONTRINCANTE):
-        with __import__("core.database", fromlist=["conectar_db"]).conectar_db() as db:
+        with conectar_db() as db:
             db.execute(
                 """
                 INSERT INTO box_usuarios (guild_id, user_id, experiencia)
@@ -208,10 +201,10 @@ def combate(base_datos_limpia, inicio):
 
     # Ventana de aceptación abierta: si expirara justo en "ahora",
     # ``aceptar_desafio`` respondería "expirado" por la comparación <=.
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
-    resultado = aceptar_desafio(
+    resultado = await aceptar_desafio(
         desafio_id,
         GUILD,
         CONTRINCANTE,
@@ -223,7 +216,7 @@ def combate(base_datos_limpia, inicio):
 
     assert resultado["estado"] == "aceptado"
 
-    vivos = obtener_combates_vivos(inicio)
+    vivos = await obtener_combates_vivos(inicio)
 
     assert len(vivos) == 1
 
@@ -272,12 +265,12 @@ def test_aceptar_un_desafio_deja_un_combate_planificado(combate, inicio):
     assert combate["canal_id"] == CANAL
 
 
-def test_el_sparring_tambien_deja_su_combate(base_datos_limpia, inicio):
-    desafio_id = crear_desafio(
+async def test_el_sparring_tambien_deja_su_combate(base_datos_limpia, inicio):
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
-    aceptar_desafio(
+    await aceptar_desafio(
         desafio_id,
         GUILD,
         CONTRINCANTE,
@@ -287,36 +280,36 @@ def test_el_sparring_tambien_deja_su_combate(base_datos_limpia, inicio):
         canal_id=CANAL,
     )
 
-    plan = Plan.de_json(obtener_combates_vivos(inicio)[0]["plan"])
+    plan = Plan.de_json(((await obtener_combates_vivos(inicio))[0])["plan"])
 
     assert plan.modo == "SPARRING"
     assert plan.ganador == -1
     assert plan.metodo == "ENTRENAMIENTO"
 
 
-def test_sin_ganador_forzado_el_sparring_no_escribe_historial(base_datos_limpia, inicio):
-    from core.database import conectar_db
+async def test_sin_ganador_forzado_el_sparring_no_escribe_historial(base_datos_limpia, inicio):
+    from tests.harness import conectar_db
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
-    aceptar_desafio(desafio_id, GUILD, CONTRINCANTE, inicio, 100, tipo="SPARRING")
+    await aceptar_desafio(desafio_id, GUILD, CONTRINCANTE, inicio, 100, tipo="SPARRING")
 
     with conectar_db() as db:
         assert db.execute("SELECT COUNT(*) FROM box_desafios_historial").fetchone()[0] == 0
 
 
-def test_el_desafio_normal_no_se_rompe_por_la_narracion(base_datos_limpia, inicio):
+async def test_el_desafio_normal_no_se_rompe_por_la_narracion(base_datos_limpia, inicio):
     """Las acciones y la recompensa siguen siendo responsabilidad del desafío."""
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
-    resultado = aceptar_desafio(desafio_id, GUILD, CONTRINCANTE, inicio, 1000, tipo="FIGHTING")
+    resultado = await aceptar_desafio(desafio_id, GUILD, CONTRINCANTE, inicio, 1000, tipo="FIGHTING")
 
-    from core.database import conectar_db
+    from tests.harness import conectar_db
 
     with conectar_db() as db:
         acciones = db.execute(
@@ -363,7 +356,7 @@ def _dinero_de_accion(user_id):
     return fila[0] if fila is not None else None
 
 
-def test_pelear_contra_el_bot_paga_un_cuarto_del_premio(
+async def test_pelear_contra_el_bot_paga_un_cuarto_del_premio(
     base_datos_limpia, inicio
 ):
     """La pelea contra el bot reduce el premio a BOX_DESAFIO_PREMIO_VS_BOT.
@@ -376,11 +369,11 @@ def test_pelear_contra_el_bot_paga_un_cuarto_del_premio(
     _dar_experiencia(RETADOR, 1000)
     _dar_experiencia(CONTRINCANTE, 3000)
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
-    resultado = aceptar_desafio(
+    resultado = await aceptar_desafio(
         desafio_id,
         GUILD,
         CONTRINCANTE,
@@ -402,7 +395,7 @@ def test_pelear_contra_el_bot_paga_un_cuarto_del_premio(
     assert _dinero_de_accion(perdedor_id) == 0
 
 
-def test_pelear_contra_otro_jugador_mantiene_el_premio_completo(
+async def test_pelear_contra_otro_jugador_mantiene_el_premio_completo(
     base_datos_limpia, inicio
 ):
     """Sin marca de bot, el premio sigue siendo la suma de experiencias."""
@@ -410,11 +403,11 @@ def test_pelear_contra_otro_jugador_mantiene_el_premio_completo(
     _dar_experiencia(RETADOR, 1000)
     _dar_experiencia(CONTRINCANTE, 3000)
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
-    resultado = aceptar_desafio(
+    resultado = await aceptar_desafio(
         desafio_id,
         GUILD,
         CONTRINCANTE,
@@ -427,16 +420,16 @@ def test_pelear_contra_otro_jugador_mantiene_el_premio_completo(
     assert _dinero_de_accion(resultado["ganador_id"]) == 4000
 
 
-def test_pelear_contra_el_bot_sin_experiencia_no_inventa_premio(
+async def test_pelear_contra_el_bot_sin_experiencia_no_inventa_premio(
     base_datos_limpia, inicio
 ):
     """Con premio 0 la fracción del bot no fabrica dinero de la nada."""
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
 
-    resultado = aceptar_desafio(
+    resultado = await aceptar_desafio(
         desafio_id,
         GUILD,
         CONTRINCANTE,
@@ -450,7 +443,7 @@ def test_pelear_contra_el_bot_sin_experiencia_no_inventa_premio(
     assert _dinero_de_accion(resultado["ganador_id"]) == 0
 
 
-def test_la_tarjeta_del_asalto_no_revela_el_tono(narrador, combate):
+async def test_la_tarjeta_del_asalto_no_revela_el_tono(narrador, combate):
     """La sección "Pelea pactada" ya no anuncia el tono: era un spoiler.
 
     Un "tono remontada" del primer asalto le contaba al canal cómo iba a
@@ -461,7 +454,7 @@ def test_la_tarjeta_del_asalto_no_revela_el_tono(narrador, combate):
     plan = Plan.de_json(combate["plan"])
 
     adelantar(0)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     embed = canal.mensajes[0].embed
     pactada = next(
@@ -471,19 +464,19 @@ def test_la_tarjeta_del_asalto_no_revela_el_tono(narrador, combate):
     assert pactada.value == f"{plan.asaltos_pactados} asaltos"
 
 
-def test_reclamar_un_asalto_dos_veces_no_duplica_el_mensaje(combate):
-    primera = reclamar_asalto(combate["id"], 0, ahora())
-    segunda = reclamar_asalto(combate["id"], 0, ahora())
+async def test_reclamar_un_asalto_dos_veces_no_duplica_el_mensaje(combate):
+    primera = await reclamar_asalto(combate["id"], 0, ahora())
+    segunda = await reclamar_asalto(combate["id"], 0, ahora())
 
     assert primera is True
     assert segunda is False
-    assert asaltos_publicados(combate["id"]) == {0}
+    assert await asaltos_publicados(combate["id"]) == {0}
 
 
-def test_cerrar_un_combate_lo_saca_de_los_vivos(combate):
-    cerrar_combate(combate["id"], ESTADO_TERMINADO, ahora(), "terminado por prueba")
+async def test_cerrar_un_combate_lo_saca_de_los_vivos(combate):
+    await cerrar_combate(combate["id"], ESTADO_TERMINADO, ahora(), "terminado por prueba")
 
-    assert obtener_combates_vivos(ahora()) == []
+    assert await obtener_combates_vivos(ahora()) == []
 
 
 def test_latido_de_avanza_con_el_reloj(combate):
@@ -500,30 +493,30 @@ def test_latido_de_avanza_con_el_reloj(combate):
 # ============================================================
 
 
-def test_un_latido_revela_un_dialogo_y_no_manda_un_mensaje_nuevo(narrador, combate):
+async def test_un_latido_revela_un_dialogo_y_no_manda_un_mensaje_nuevo(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
 
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 1, "el primer latido abre el mensaje del asalto"
     assert "Asalto 1 de" in canal.textos[0]
     assert f"1/{plan.dialogos_por_round} diálogos" in canal.textos[0]
 
     adelantar(1)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 1, "un asalto es un solo mensaje"
     assert canal.mensajes[0].ediciones == 1
 
 
-def test_el_asalto_se_edita_hasta_el_veredicto(narrador, combate):
+async def test_el_asalto_se_edita_hasta_el_veredicto(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
 
     for latido in range(1, plan.dialogos_por_round + 1):
         adelantar(latido)
-        correr(narrador._narrar_combate(combate))
+        await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 1
     assert "Asalto 1 para" in canal.textos[0] or "el corner corrige" in canal.textos[0]
@@ -535,7 +528,7 @@ def _favorito(plan) -> str:
     return f"favorito al {max(plan.probabilidad, 1 - plan.probabilidad):.0%}"
 
 
-def test_la_apertura_sobrevive_a_las_ediciones_del_primer_asalto(narrador, combate):
+async def test_la_apertura_sobrevive_a_las_ediciones_del_primer_asalto(narrador, combate):
     """El favoritismo se anuncia una vez y se queda en el mensaje.
 
     Un asalto es un mensaje que se edita en cada latido: si la cabecera se
@@ -549,7 +542,7 @@ def test_la_apertura_sobrevive_a_las_ediciones_del_primer_asalto(narrador, comba
 
     for latido in range(0, plan.ciclo):
         adelantar(latido)
-        correr(narrador._narrar_combate(combate))
+        await narrador._narrar_combate(combate)
 
         descripcion = canal.mensajes[0].embed.description
 
@@ -563,7 +556,7 @@ def test_la_apertura_sobrevive_a_las_ediciones_del_primer_asalto(narrador, comba
     assert "salto 1" in descripcion.split("\n")[-1]
 
 
-def test_un_primer_asalto_asentado_de_una_sola_vez_trae_la_apertura(
+async def test_un_primer_asalto_asentado_de_una_sola_vez_trae_la_apertura(
     narrador, combate
 ):
     """Catch-up: publicado ya cerrado, el primer asalto tampoco pierde la cabecera.
@@ -578,12 +571,12 @@ def test_un_primer_asalto_asentado_de_una_sola_vez_trae_la_apertura(
 
     # Un solo latido, ya metido en el segundo asalto: el primero se asienta.
     adelantar(plan.ciclo + 1)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert _favorito(plan) in canal.mensajes[0].embed.description
 
 
-def test_la_apertura_no_se_repite_en_los_asaltos_siguientes(narrador, combate):
+async def test_la_apertura_no_se_repite_en_los_asaltos_siguientes(narrador, combate):
     """La cabecera es del primer mensaje: reanunciarla por asalto es ruido."""
 
     narrador, canal, reloj, adelantar = narrador
@@ -591,14 +584,14 @@ def test_la_apertura_no_se_repite_en_los_asaltos_siguientes(narrador, combate):
 
     for latido in range(0, plan.ciclo * 2):
         adelantar(latido)
-        correr(narrador._narrar_combate(combate))
+        await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 2
     assert _favorito(plan) in canal.mensajes[0].embed.description
     assert _favorito(plan) not in canal.mensajes[1].embed.description
 
 
-def test_el_recorte_suelta_relato_y_no_la_apertura(narrador, combate, monkeypatch):
+async def test_el_recorte_suelta_relato_y_no_la_apertura(narrador, combate, monkeypatch):
     """Si el asalto se estira, la cabecera tiene el lugar reservado.
 
     ``recortar`` suelta líneas desde arriba para conservar lo último que se
@@ -609,7 +602,7 @@ def test_el_recorte_suelta_relato_y_no_la_apertura(narrador, combate, monkeypatc
     import commands.box.narracion as modulo
 
     narrador, canal, reloj, adelantar = narrador
-    plan = correr(narrador._plan_con_nombres(combate))
+    plan = await narrador._plan_con_nombres(combate)
 
     monkeypatch.setattr(modulo, "LIMITE_DESCRIPCION", 220)
 
@@ -625,14 +618,14 @@ def test_el_recorte_suelta_relato_y_no_la_apertura(narrador, combate, monkeypatc
     assert _favorito(plan) in texto
 
 
-def test_cada_asalto_tiene_su_mensaje(narrador, combate):
+async def test_cada_asalto_tiene_su_mensaje(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
 
     # Hasta el último latido del segundo asalto: todavía no empezó el tercero.
     for latido in range(0, plan.ciclo * 2):
         adelantar(latido)
-        correr(narrador._narrar_combate(combate))
+        await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 2, "un asalto, un mensaje"
     assert [m.id for m in canal.mensajes] == [1, 2]
@@ -640,45 +633,45 @@ def test_cada_asalto_tiene_su_mensaje(narrador, combate):
     assert canal.mensajes[1].ediciones > 0
 
 
-def test_los_nombres_reales_reemplazan_los_del_plan(narrador, combate):
+async def test_los_nombres_reales_reemplazan_los_del_plan(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
 
     adelantar(0)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert "Retador" not in canal.textos[0]
     assert "Rojo" in canal.textos[0] or "Azul" in canal.textos[0]
 
 
-def test_el_combate_se_cierra_al_terminar_el_plan(narrador, combate):
+async def test_el_combate_se_cierra_al_terminar_el_plan(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
 
     adelantar(plan.latidos)
-    enviados = correr(narrador._narrar_combate(combate))
+    enviados = await narrador._narrar_combate(combate)
 
     assert enviados >= 1
-    assert obtener_combates_vivos(reloj["ahora"]) == []
+    assert await obtener_combates_vivos(reloj["ahora"]) == []
     assert "🏁" in canal.textos[-1]
 
 
-def test_un_asalto_ya_publicado_no_se_vuelve_a_mandar(narrador, combate):
+async def test_un_asalto_ya_publicado_no_se_vuelve_a_mandar(narrador, combate):
     """El catch-up no repite un asalto que el canal ya tiene."""
 
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
 
     # El asalto 0 ya está publicado (con un mensaje inventado del canal).
-    reclamar_asalto(combate["id"], 0, reloj["ahora"])
+    await reclamar_asalto(combate["id"], 0, reloj["ahora"])
 
     adelantar(plan.ciclo)  # arranca el asalto 1
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 1, "solo se abre el asalto nuevo"
 
 
-def test_la_accion_cancelada_clausura_el_combate(narrador, combate):
-    from core.database import conectar_db
+async def test_la_accion_cancelada_clausura_el_combate(narrador, combate):
+    from tests.harness import conectar_db
 
     narrador, canal, reloj, adelantar = narrador
 
@@ -686,12 +679,12 @@ def test_la_accion_cancelada_clausura_el_combate(narrador, combate):
         db.execute("DELETE FROM box_acciones WHERE guild_id = ?", (GUILD,))
         db.commit()
 
-    assert tiene_accion_activa(GUILD, RETADOR) is False
+    assert await tiene_accion_activa(GUILD, RETADOR) is False
 
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert canal.mensajes == [], "una pelea cancelada no se narra"
-    assert obtener_combates_vivos(reloj["ahora"]) == []
+    assert await obtener_combates_vivos(reloj["ahora"]) == []
 
     with conectar_db() as db:
         estado = db.execute(
@@ -699,26 +692,26 @@ def test_la_accion_cancelada_clausura_el_combate(narrador, combate):
         ).fetchone()[0]
 
     assert estado == ESTADO_CANCELADO
-    assert ultimos_combates(GUILD)[0]["resumen"] == (
+    assert ((await ultimos_combates(GUILD))[0])["resumen"] == (
         "el combate se canceló antes del campanazo final"
     )
 
 
-def test_un_mensaje_borrado_se_vuelve_a_publicar(narrador, combate):
+async def test_un_mensaje_borrado_se_vuelve_a_publicar(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
 
     adelantar(0)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     canal.mensajes[0].borrado = True
 
     adelantar(2)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     assert len(canal.mensajes) == 2, "si alguien borró el asalto, se reenvía"
 
 
-def test_terminar_la_narracion_no_libera_la_accion(narrador, combate):
+async def test_terminar_la_narracion_no_libera_la_accion(narrador, combate):
     """La pelea puede terminar en 12 minutos; la acción sigue bloqueando 24 h.
 
     Si liberar la acción dependiera del relato, ganarle al bot en el primer
@@ -729,10 +722,10 @@ def test_terminar_la_narracion_no_libera_la_accion(narrador, combate):
     plan = Plan.de_json(combate["plan"])
 
     adelantar(plan.latidos)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
-    assert obtener_combates_vivos(reloj["ahora"]) == []
-    assert tiene_accion_activa(GUILD, RETADOR) is True
+    assert await obtener_combates_vivos(reloj["ahora"]) == []
+    assert await tiene_accion_activa(GUILD, RETADOR) is True
 
 
 # ============================================================
@@ -747,29 +740,28 @@ def _cog_box(bot=None):
     return construir_cog(Box, bot=bot)
 
 
-def _llamar(cog, nombre, interaccion, *args):
-    metodo = getattr(type(cog), nombre).callback
+async def _llamar(cog, nombre_metodo, interaccion, *args):
+    metodo = getattr(type(cog), nombre_metodo).callback
+    return await metodo(cog, interaccion, *args)
 
-    return correr(metodo(cog, interaccion, *args))
 
-
-def test_combate_sin_pelea_avisa(base_datos_limpia):
+async def test_combate_sin_pelea_avisa(base_datos_limpia):
     from tests.harness import InteraccionFalsa
 
     interaccion = InteraccionFalsa(GUILD, RETADOR)
 
-    _llamar(_cog_box(), "combate", interaccion)
+    await _llamar(_cog_box(), "combate", interaccion)
 
     assert "Sin combate en vivo" in interaccion.texto
 
 
-def test_combate_muestra_la_tarjeta_del_asalto(base_datos_limpia, inicio):
+async def test_combate_muestra_la_tarjeta_del_asalto(base_datos_limpia, inicio):
     from tests.harness import InteraccionFalsa
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, inicio, inicio + timedelta(hours=1)
     )
-    aceptar_desafio(
+    await aceptar_desafio(
         desafio_id,
         GUILD,
         CONTRINCANTE,
@@ -781,7 +773,7 @@ def test_combate_muestra_la_tarjeta_del_asalto(base_datos_limpia, inicio):
 
     interaccion = InteraccionFalsa(GUILD, RETADOR)
 
-    _llamar(_cog_box(), "combate", interaccion)
+    await _llamar(_cog_box(), "combate", interaccion)
 
     texto = interaccion.texto
 
@@ -791,7 +783,7 @@ def test_combate_muestra_la_tarjeta_del_asalto(base_datos_limpia, inicio):
     assert "próxima línea en" in texto
 
 
-def test_box_combate_se_lee_igual_que_el_mensaje_del_canal(narrador, combate):
+async def test_box_combate_se_lee_igual_que_el_mensaje_del_canal(narrador, combate):
     """El comando y el narrador comparten el render: no hay dos versiones.
 
     Si /box combate armara su propio texto, cualquier diferencia de formato
@@ -804,7 +796,7 @@ def test_box_combate_se_lee_igual_que_el_mensaje_del_canal(narrador, combate):
     narrador, canal, reloj, adelantar = narrador
 
     adelantar(3)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
     descripcion = canal.mensajes[0].embed.description
 
@@ -819,22 +811,22 @@ def test_box_combate_se_lee_igual_que_el_mensaje_del_canal(narrador, combate):
 
     # Los nombres los resuelve el bot, no la interacción: es lo que hace el
     # narrador con el canal, y el comando tiene que coincidir con él.
-    _llamar(_cog_box(BotFalso(guild=guild)), "combate", interaccion)
+    await _llamar(_cog_box(BotFalso(guild=guild)), "combate", interaccion)
 
     for linea in [l for l in descripcion.split("\n") if l.strip()]:
         assert linea in interaccion.texto, f"falta en /box combate: {linea}"
 
 
-def test_el_historial_guarda_la_tarjeta_del_combate(narrador, combate):
+async def test_el_historial_guarda_la_tarjeta_del_combate(narrador, combate):
     """``cerrar_combate`` persiste el resumen: es lo único que queda en claro."""
 
     narrador, canal, reloj, adelantar = narrador
     plan = Plan.de_json(combate["plan"])
 
     adelantar(plan.latidos)
-    correr(narrador._narrar_combate(combate))
+    await narrador._narrar_combate(combate)
 
-    [ultimo] = ultimos_combates(GUILD)
+    [ultimo] = await ultimos_combates(GUILD)
 
     assert ultimo["estado"] == ESTADO_TERMINADO
     assert ultimo["modo"] == "FIGHTING"
@@ -863,7 +855,7 @@ def test_el_historial_guarda_la_tarjeta_del_combate(narrador, combate):
 # ============================================================
 
 
-def _desafiar(inicio, retador, contrincante, guild=GUILD, tipo="FIGHTING"):
+async def _desafiar(inicio, retador, contrincante, guild=GUILD, tipo="FIGHTING"):
     """Crea y acepta un desafío, sin pasar por Discord."""
 
     for user_id in (retador, contrincante):
@@ -878,11 +870,11 @@ def _desafiar(inicio, retador, contrincante, guild=GUILD, tipo="FIGHTING"):
             )
             db.commit()
 
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         guild, retador, contrincante, inicio, inicio + timedelta(hours=1)
     )
 
-    return desafio_id, aceptar_desafio(
+    return desafio_id, await aceptar_desafio(
         desafio_id,
         guild,
         contrincante,
@@ -893,24 +885,24 @@ def _desafiar(inicio, retador, contrincante, guild=GUILD, tipo="FIGHTING"):
     )
 
 
-def test_una_pelea_en_curso_bloquea_la_siguiente(combate, inicio):
-    _, resultado = _desafiar(inicio, 33, 44)
+async def test_una_pelea_en_curso_bloquea_la_siguiente(combate, inicio):
+    _, resultado = await _desafiar(inicio, 33, 44)
 
     assert resultado["estado"] == "combate_en_curso"
     assert resultado["combate"]["retador_id"] == RETADOR
     assert resultado["combate"]["contrincante_id"] == CONTRINCANTE
     assert resultado["combate"]["modo"] == "FIGHTING"
 
-    en_curso = combate_en_curso(GUILD)
+    en_curso = await combate_en_curso(GUILD)
 
     assert en_curso is not None
     assert en_curso["id"] == combate["id"]
 
 
-def test_el_desafio_bloqueado_sigue_pendiente(combate, inicio):
+async def test_el_desafio_bloqueado_sigue_pendiente(combate, inicio):
     """Rechazar por velada ocupada no quema el desafío: se puede aceptar después."""
 
-    desafio_id, resultado = _desafiar(inicio, 33, 44)
+    desafio_id, resultado = await _desafiar(inicio, 33, 44)
 
     assert resultado["estado"] == "combate_en_curso"
 
@@ -922,8 +914,8 @@ def test_el_desafio_bloqueado_sigue_pendiente(combate, inicio):
     assert pendiente == 1
 
     # Y al cerrar la pelea que estorbaba, entra solo.
-    cerrar_combate(combate["id"], ESTADO_TERMINADO, ahora(), "cierre de prueba")
-    segundo = aceptar_desafio(
+    await cerrar_combate(combate["id"], ESTADO_TERMINADO, ahora(), "cierre de prueba")
+    segundo = await aceptar_desafio(
         desafio_id,
         GUILD,
         44,
@@ -936,44 +928,44 @@ def test_el_desafio_bloqueado_sigue_pendiente(combate, inicio):
     assert segundo["estado"] == "aceptado"
 
 
-def test_sin_pelea_en_curso_no_hay_candado(base_datos_limpia, inicio):
-    assert combate_en_curso(GUILD) is None
+async def test_sin_pelea_en_curso_no_hay_candado(base_datos_limpia, inicio):
+    assert await combate_en_curso(GUILD) is None
 
-    _, resultado = _desafiar(inicio, 11, 22)
+    _, resultado = await _desafiar(inicio, 11, 22)
 
     assert resultado["estado"] == "aceptado"
 
 
-def test_el_candado_global_mira_todos_los_servidores(combate, inicio):
+async def test_el_candado_global_mira_todos_los_servidores(combate, inicio):
     """Con el default (bot de servidores privados) otro guild tampoco entra."""
 
-    _, resultado = _desafiar(inicio, 33, 44, guild=OTRO_GUILD)
+    _, resultado = await _desafiar(inicio, 33, 44, guild=OTRO_GUILD)
 
     assert resultado["estado"] == "combate_en_curso"
 
     # El candado global responde por cualquiera: preguntes por el guild que
     # preguntes, te dice cuál es la pelea que está ocupando el bot.
-    assert combate_en_curso(OTRO_GUILD)["guild_id"] == GUILD
-    assert combate_en_curso() is not None
+    assert (await combate_en_curso(OTRO_GUILD))["guild_id"] == GUILD
+    assert await combate_en_curso() is not None
 
 
-def test_el_candado_por_servidor_deja_pelear_al_resto(combate, inicio, monkeypatch):
+async def test_el_candado_por_servidor_deja_pelear_al_resto(combate, inicio, monkeypatch):
     monkeypatch.setattr(
         "modules.box.database.BOX_COMBATE_UNICO_GLOBAL", False
     )
 
-    _, resultado = _desafiar(inicio, 33, 44, guild=OTRO_GUILD)
+    _, resultado = await _desafiar(inicio, 33, 44, guild=OTRO_GUILD)
 
     assert resultado["estado"] == "aceptado"
-    assert combate_en_curso(OTRO_GUILD) is not None
+    assert await combate_en_curso(OTRO_GUILD) is not None
 
     # Y en su propio servidor, el segundo todavía choca contra el primero.
-    _, otro = _desafiar(inicio, 55, 66)
+    _, otro = await _desafiar(inicio, 55, 66)
 
     assert otro["estado"] == "combate_en_curso"
 
 
-def test_un_canal_perdido_no_deja_el_candado_colgado(combate, narrador, inicio):
+async def test_un_canal_perdido_no_deja_el_candado_colgado(combate, narrador, inicio):
     """Sin canal no se narra, pero la fila tampoco puede quedar viva para siempre.
 
     El candado de "una pelea a la vez" convierte un canal borrado en un bot
@@ -987,16 +979,16 @@ def test_un_canal_perdido_no_deja_el_candado_colgado(combate, narrador, inicio):
     sin_canal = Narrador(None, {})
 
     adelantar(plan.latidos + 40)
-    correr(sin_canal._narrar_combate(combate))
+    await sin_canal._narrar_combate(combate)
 
-    assert combate_en_curso(GUILD) is None
+    assert await combate_en_curso(GUILD) is None
     assert canal.mensajes == []
-    assert ultimos_combates(GUILD)[0]["resumen"] == (
+    assert ((await ultimos_combates(GUILD))[0])["resumen"] == (
         "el canal de narración no volvió a estar disponible"
     )
 
 
-def test_un_canal_incontactable_a_mitad_de_la_pelea_espera(base_datos_limpia, narrador, combate):
+async def test_un_canal_incontactable_a_mitad_de_la_pelea_espera(base_datos_limpia, narrador, combate):
     """Lo mismo, pero todavía dentro de la ventana: no se cierra nada.
 
     Un ``get_channel`` que devuelve ``None`` porque el guild todavía no está
@@ -1012,10 +1004,10 @@ def test_un_canal_incontactable_a_mitad_de_la_pelea_espera(base_datos_limpia, na
     sin_canal = Narrador(None, {})
 
     adelantar(2)
-    correr(sin_canal._narrar_combate(combate))
+    await sin_canal._narrar_combate(combate)
 
-    assert combate_en_curso(GUILD) is not None
-    assert obtener_combates_vivos(reloj["ahora"])[0]["estado"] == ESTADO_VIVO
+    assert await combate_en_curso(GUILD) is not None
+    assert ((await obtener_combates_vivos(reloj['ahora']))[0])["estado"] == ESTADO_VIVO
     assert canal.mensajes == []
 
 
@@ -1024,7 +1016,7 @@ def test_un_canal_incontactable_a_mitad_de_la_pelea_espera(base_datos_limpia, na
 # ============================================================
 
 
-def test_el_equipamiento_de_la_tienda_llega_al_plan(base_datos_limpia, inicio):
+async def test_el_equipamiento_de_la_tienda_llega_al_plan(base_datos_limpia, inicio):
     with conectar_db() as db:
         db.execute(
             """
@@ -1037,8 +1029,8 @@ def test_el_equipamiento_de_la_tienda_llega_al_plan(base_datos_limpia, inicio):
         )
         db.commit()
 
-    _desafiar(inicio, 11, 22)
-    plan = Plan.de_json(obtener_combates_vivos(inicio)[0]["plan"])
+    await _desafiar(inicio, 11, 22)
+    plan = Plan.de_json(((await obtener_combates_vivos(inicio))[0])["plan"])
 
     # El retador viene mejor preparado: más vida pactada y no es el vencido
     # en la comparación de fuerza.
@@ -1046,9 +1038,9 @@ def test_el_equipamiento_de_la_tienda_llega_al_plan(base_datos_limpia, inicio):
     assert plan.probabilidad > 0.5
 
 
-def test_sin_equipar_las_vidas_son_las_de_configuracion(base_datos_limpia, inicio):
-    _, resultado = _desafiar(inicio, 11, 22)
-    plan = Plan.de_json(obtener_combates_vivos(inicio)[0]["plan"])
+async def test_sin_equipar_las_vidas_son_las_de_configuracion(base_datos_limpia, inicio):
+    _, resultado = await _desafiar(inicio, 11, 22)
+    plan = Plan.de_json(((await obtener_combates_vivos(inicio))[0])["plan"])
 
     assert plan.vida_maxima == (BOX_VIDA_INICIAL, BOX_VIDA_INICIAL)
     assert resultado["estado"] == "aceptado"
@@ -1059,21 +1051,21 @@ def test_sin_equipar_las_vidas_son_las_de_configuracion(base_datos_limpia, inici
 # ============================================================
 
 
-def test_mientras_nadie_decide_rige_la_configuracion(base_datos_limpia):
-    assert obtener_canticos(GUILD) is None
+async def test_mientras_nadie_decide_rige_la_configuracion(base_datos_limpia):
+    assert await obtener_canticos(GUILD) is None
 
 
-def test_la_decision_del_servidor_se_guarda_y_se_lee(base_datos_limpia):
-    fijar_canticos(GUILD, True, 999, ahora())
+async def test_la_decision_del_servidor_se_guarda_y_se_lee(base_datos_limpia):
+    await fijar_canticos(GUILD, True, 999, ahora())
 
-    assert obtener_canticos(GUILD) is True
+    assert await obtener_canticos(GUILD) is True
 
-    fijar_canticos(GUILD, False, 999, ahora())
+    await fijar_canticos(GUILD, False, 999, ahora())
 
-    assert obtener_canticos(GUILD) is False
+    assert await obtener_canticos(GUILD) is False
 
 
-def test_el_narrador_respeta_la_decision_del_servidor(narrador):
+async def test_el_narrador_respeta_la_decision_del_servidor(narrador):
     """El flag que usa el latido sale de la base de datos, no del entorno.
 
     Es el conducto del consentimiento: si el narrador leyera la constante de
@@ -1083,13 +1075,13 @@ def test_el_narrador_respeta_la_decision_del_servidor(narrador):
 
     narrador, canal, reloj, adelantar = narrador
 
-    fijar_canticos(GUILD, True, 999, ahora())
+    await fijar_canticos(GUILD, True, 999, ahora())
 
-    assert correr(narrador._cantos_del_servidor(GUILD)) is True
+    assert await narrador._cantos_del_servidor(GUILD) is True
 
-    fijar_canticos(GUILD, False, 999, ahora())
+    await fijar_canticos(GUILD, False, 999, ahora())
 
-    assert correr(narrador._cantos_del_servidor(GUILD)) is False
+    assert await narrador._cantos_del_servidor(GUILD) is False
 
     # Sin decisión del servidor se cae al default del entorno, que en el repo
     # está apagado.
@@ -1097,4 +1089,4 @@ def test_el_narrador_respeta_la_decision_del_servidor(narrador):
         db.execute("DELETE FROM box_config_guild")
         db.commit()
 
-    assert correr(narrador._cantos_del_servidor(GUILD)) == BOX_COMBATE_CANTICOS
+    assert await narrador._cantos_del_servidor(GUILD) == BOX_COMBATE_CANTICOS

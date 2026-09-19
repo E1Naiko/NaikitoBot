@@ -30,21 +30,21 @@ USUARIO = 42
 CANAL = 99
 
 NOMBRE = "SeptiembreSinFAP"
-INICIO = "2026-09-01"
-FIN = "2026-09-30"
+INICIO = date(2026, 9, 1)
+FIN = date(2026, 9, 30)
 
 RANGO_SEIS_DIAS = "Tercer Sargento 🥉"
 
 
 @pytest.fixture
-def desafio_ssf(base_datos_limpia):
+async def desafio_ssf(base_datos_limpia):
     """Crea el desafío de septiembre sobre una base limpia."""
 
     from modules.ssf.database import inicializar_db
 
-    inicializar_db()
+    await inicializar_db()
 
-    resultado = iniciar_desafio(
+    resultado = await iniciar_desafio(
         GUILD,
         NOMBRE,
         INICIO,
@@ -61,8 +61,8 @@ def mediodia(dia):
     return datetime(2026, 9, dia, 12, 0)
 
 
-def registrar_el_primero():
-    return registrar_usuario(
+async def registrar_el_primero():
+    return await registrar_usuario(
         GUILD,
         USUARIO,
         "Tester",
@@ -70,9 +70,9 @@ def registrar_el_primero():
     )
 
 
-def sobrevivir(dias):
+async def sobrevivir(dias):
     for dia in dias:
-        resultado = registrar_sobrevivi(
+        resultado = await registrar_sobrevivi(
             GUILD,
             USUARIO,
             mediodia(dia),
@@ -84,26 +84,26 @@ def sobrevivir(dias):
 # BUG 2 — REGISTRARSE CUENTA COMO EL DÍA 1
 # ============================================================
 
-def test_registrarse_crea_el_registro_del_dia(desafio_ssf):
-    resultado = registrar_el_primero()
+async def test_registrarse_crea_el_registro_del_dia(desafio_ssf):
+    resultado = await registrar_el_primero()
 
     assert resultado["exitoso"]
     assert resultado["racha"] == 1
     assert resultado["mejor_racha"] == 1
     assert resultado["rango"] == calcular_rango(1)
 
-    assert tiene_registro(desafio_ssf, USUARIO, INICIO)
+    assert await tiene_registro(desafio_ssf, USUARIO, INICIO)
 
-    participante = obtener_participante(desafio_ssf, USUARIO)
+    participante = await obtener_participante(desafio_ssf, USUARIO)
     assert participante[6] == 1  # racha_actual
     assert participante[7] == 1  # mejor_racha
 
 
-def test_registrarse_el_1_y_cumplir_del_2_al_6_da_racha_6(desafio_ssf):
-    registrar_el_primero()
-    sobrevivir([2, 3, 4, 5, 6])
+async def test_registrarse_el_1_y_cumplir_del_2_al_6_da_racha_6(desafio_ssf):
+    await registrar_el_primero()
+    await sobrevivir([2, 3, 4, 5, 6])
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
 
     assert estado["exitoso"]
     assert estado["racha_actual"] == 6
@@ -111,17 +111,17 @@ def test_registrarse_el_1_y_cumplir_del_2_al_6_da_racha_6(desafio_ssf):
     assert estado["rango"] == RANGO_SEIS_DIAS
 
 
-def test_sobrevivi_el_dia_de_registro_no_cuenta_doble(desafio_ssf):
-    registrar_el_primero()
+async def test_sobrevivi_el_dia_de_registro_no_cuenta_doble(desafio_ssf):
+    await registrar_el_primero()
 
-    resultado = registrar_sobrevivi(GUILD, USUARIO, mediodia(1))
+    resultado = await registrar_sobrevivi(GUILD, USUARIO, mediodia(1))
 
     assert resultado == {
         "exitoso": False,
         "motivo": "ya_registrado",
     }
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
     assert estado["racha_actual"] == 1
 
 
@@ -129,15 +129,15 @@ def test_sobrevivi_el_dia_de_registro_no_cuenta_doble(desafio_ssf):
 # BUG 1 — ELIMINAR CONSERVA LA RACHA Y EL RANGO
 # ============================================================
 
-def test_eliminar_conserva_racha_y_rango(desafio_ssf):
-    registrar_el_primero()
-    sobrevivir([2, 3, 4, 5, 6])
+async def test_eliminar_conserva_racha_y_rango(desafio_ssf):
+    await registrar_el_primero()
+    await sobrevivir([2, 3, 4, 5, 6])
 
-    eliminados = eliminar_faltantes(GUILD, date(2026, 9, 7))
+    eliminados = await eliminar_faltantes(GUILD, date(2026, 9, 7))
 
     assert eliminados == 1
 
-    estado = obtener_estado_usuario(GUILD, USUARIO)
+    estado = await obtener_estado_usuario(GUILD, USUARIO)
 
     assert estado["exitoso"]
     assert estado["eliminado"] is True
@@ -146,12 +146,12 @@ def test_eliminar_conserva_racha_y_rango(desafio_ssf):
     assert estado["rango"] == RANGO_SEIS_DIAS
 
 
-def test_participantes_muestra_la_racha_del_eliminado(desafio_ssf):
-    registrar_el_primero()
-    sobrevivir([2, 3, 4, 5, 6])
-    eliminar_faltantes(GUILD, date(2026, 9, 7))
+async def test_participantes_muestra_la_racha_del_eliminado(desafio_ssf):
+    await registrar_el_primero()
+    await sobrevivir([2, 3, 4, 5, 6])
+    await eliminar_faltantes(GUILD, date(2026, 9, 7))
 
-    participantes = obtener_lista_participantes(GUILD)
+    participantes = await obtener_lista_participantes(GUILD)
 
     assert len(participantes) == 1
 

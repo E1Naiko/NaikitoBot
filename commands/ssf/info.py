@@ -53,7 +53,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = obtener_estado_usuario(
+        resultado = await obtener_estado_usuario(
             guild_id=interaction.guild.id,
             user_id=interaction.user.id,
         )
@@ -106,7 +106,7 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
-        desafio = obtener_estado_desafio(
+        desafio = await obtener_estado_desafio(
             interaction.guild.id,
         )
 
@@ -118,7 +118,7 @@ class InfoMixin:
             )
             return
 
-        lista = obtener_lista_participantes(
+        lista = await obtener_lista_participantes(
             interaction.guild.id,
         )
 

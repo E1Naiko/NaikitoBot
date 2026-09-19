@@ -8,7 +8,6 @@ después de un reinicio del bot, cuando la view del botón ya no está en
 memoria.
 """
 
-import asyncio
 from datetime import timedelta
 
 import pytest
@@ -16,7 +15,7 @@ import pytest
 import commands.box.desafios as desafios_mod
 from commands.box.cog import Box
 from commands.box.desafios import ChallengeView
-from core.database import conectar_db
+from tests.harness import conectar_db
 from core.utils import ahora
 from modules.box.database import (
     aceptar_desafio,
@@ -55,21 +54,12 @@ class BotFalso:
         return self._canales.get(canal_id)
 
 
-def correr(coro):
-    loop = asyncio.new_event_loop()
-
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
-def _llamar(cog, nombre, interaccion, *args):
-    """Ejecuta el callback de un ``app_commands.command`` del cog."""
 
-    metodo = getattr(type(cog), nombre).callback
-
-    return correr(metodo(cog, interaccion, *args))
+async def _llamar(cog, nombre_metodo, interaccion, *args):
+    metodo = getattr(type(cog), nombre_metodo).callback
+    return await metodo(cog, interaccion, *args)
 
 
 # ============================================================
@@ -118,12 +108,12 @@ def interaccion(canal, user_id):
     )
 
 
-def desafiar(cog, canal, retador=RETADOR, rival=CONTRINCANTE, tipo="FIGHTING"):
+async def desafiar(cog, canal, retador=RETADOR, rival=CONTRINCANTE, tipo="FIGHTING"):
     """Crea una solicitud por el camino real y devuelve su tarjeta."""
 
     origen = interaccion(canal, retador)
 
-    correr(cog._crear_desafio(origen, UsuarioFalso(rival, "Rival"), tipo))
+    await cog._crear_desafio(origen, UsuarioFalso(rival, "Rival"), tipo)
 
     tarjeta = canal.ultimo
 
@@ -142,13 +132,13 @@ def pendientes():
 # ============================================================
 
 
-def test_cancelar_retira_la_solicitud_y_su_tarjeta(cog, canal):
+async def test_cancelar_retira_la_solicitud_y_su_tarjeta(cog, canal):
     """El que propuso puede retirar lo que mandó."""
 
-    tarjeta = desafiar(cog, canal)
+    tarjeta = await desafiar(cog, canal)
 
     aviso = interaccion(canal, RETADOR)
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert pendientes() == 0
 
@@ -163,53 +153,53 @@ def test_cancelar_retira_la_solicitud_y_su_tarjeta(cog, canal):
     assert tarjeta.ediciones == 1
 
 
-def test_el_desafiado_puede_rechazar_la_solicitud(cog, canal):
+async def test_el_desafiado_puede_rechazar_la_solicitud(cog, canal):
     """Recibirla también habilita a sacarla de en medio."""
 
-    tarjeta = desafiar(cog, canal)
+    tarjeta = await desafiar(cog, canal)
 
     aviso = interaccion(canal, CONTRINCANTE)
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert pendientes() == 0
     assert "🛑 Solicitud rechazada" in aviso.texto
     assert "🛑 Solicitud cancelada" in tarjeta.texto
 
 
-def test_el_sparring_se_cancela_igual(cog, canal):
-    tarjeta = desafiar(cog, canal, tipo="SPARRING")
+async def test_el_sparring_se_cancela_igual(cog, canal):
+    tarjeta = await desafiar(cog, canal, tipo="SPARRING")
 
     aviso = interaccion(canal, RETADOR)
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert pendientes() == 0
     assert "**sparring**" in aviso.texto
     assert "sparring" in tarjeta.texto
 
 
-def test_cancelar_sin_solicitudes_avisa(cog, canal):
+async def test_cancelar_sin_solicitudes_avisa(cog, canal):
     aviso = interaccion(canal, RETADOR)
 
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert "Sin solicitudes pendientes" in aviso.texto
     assert aviso.respuestas[-1].efimero is True
 
 
-def test_con_varias_solicitudes_pide_elegir(cog, canal):
+async def test_con_varias_solicitudes_pide_elegir(cog, canal):
     """Con más de una pendiente no se adivina: se cancela la que se señala."""
 
-    desafiar(cog, canal, rival=CONTRINCANTE)
-    desafiar(cog, canal, rival=OTRO)
+    await desafiar(cog, canal, rival=CONTRINCANTE)
+    await desafiar(cog, canal, rival=OTRO)
 
     aviso = interaccion(canal, RETADOR)
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert "varias solicitudes" in aviso.texto
     assert pendientes() == 2, "no se canceló nada sin saber cuál era"
 
     elegido = interaccion(canal, RETADOR)
-    _llamar(cog, "cancelar", elegido, UsuarioFalso(OTRO, "Otro"))
+    await _llamar(cog, "cancelar", elegido, UsuarioFalso(OTRO, "Otro"))
 
     assert "🛑 Solicitud cancelada" in elegido.texto
 
@@ -221,12 +211,12 @@ def test_con_varias_solicitudes_pide_elegir(cog, canal):
     assert contrincantes == [CONTRINCANTE]
 
 
-def test_una_solicitud_vencida_no_se_lista(cog, canal):
+async def test_una_solicitud_vencida_no_se_lista(cog, canal):
     """Vencida ya no es una solicitud: no hay nada que cancelar."""
 
     inicio = ahora()
 
-    crear_desafio(
+    await crear_desafio(
         GUILD,
         RETADOR,
         CONTRINCANTE,
@@ -237,19 +227,22 @@ def test_una_solicitud_vencida_no_se_lista(cog, canal):
     )
 
     aviso = interaccion(canal, RETADOR)
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert "Sin solicitudes pendientes" in aviso.texto
 
 
-def test_cancelar_una_solicitud_que_ya_no_esta_avisa(cog, canal, monkeypatch):
+async def test_cancelar_una_solicitud_que_ya_no_esta_avisa(cog, canal, monkeypatch):
     """Carrera con el botón: entre la lectura y el borrado alguien aceptó."""
 
-    desafiar(cog, canal)
-    monkeypatch.setattr(desafios_mod, "cancelar_desafio", lambda *args: None)
+    await desafiar(cog, canal)
+    async def _sin_solicitud(*args):
+        return None
+
+    monkeypatch.setattr(desafios_mod, "cancelar_desafio", _sin_solicitud)
 
     aviso = interaccion(canal, RETADOR)
-    _llamar(cog, "cancelar", aviso)
+    await _llamar(cog, "cancelar", aviso)
 
     assert "Ya no se puede cancelar" in aviso.texto
 
@@ -259,23 +252,23 @@ def test_cancelar_una_solicitud_que_ya_no_esta_avisa(cog, canal, monkeypatch):
 # ============================================================
 
 
-def test_aceptar_una_solicitud_cancelada_no_arranca_nada(cog, canal, monkeypatch):
+async def test_aceptar_una_solicitud_cancelada_no_arranca_nada(cog, canal, monkeypatch):
     """El botón de una tarjeta vieja no puede abrir una pelea inexistente."""
 
     monkeypatch.setattr(desafios_mod, "BOX_CHANNEL_IDS", (CANAL,))
 
-    tarjeta = desafiar(cog, canal)
+    tarjeta = await desafiar(cog, canal)
     [desafio_id] = [
-        pendiente["id"] for pendiente in desafios_pendientes(GUILD, RETADOR, ahora())
+        pendiente["id"] for pendiente in await desafios_pendientes(GUILD, RETADOR, ahora())
     ]
 
-    _llamar(cog, "cancelar", interaccion(canal, RETADOR))
+    await _llamar(cog, "cancelar", interaccion(canal, RETADOR))
 
     boton = interaccion(canal, CONTRINCANTE)
     boton.message = tarjeta
     view = ChallengeView(cog, desafio_id, RETADOR, CONTRINCANTE, "FIGHTING")
 
-    correr(view.aceptar.callback(boton))
+    await view.aceptar.callback(boton)
 
     assert "Desafío no disponible" in boton.texto
 
@@ -287,27 +280,27 @@ def test_aceptar_una_solicitud_cancelada_no_arranca_nada(cog, canal, monkeypatch
     assert acciones == 0
 
 
-def test_el_timeout_no_pisa_una_tarjeta_ya_retirada(cog, canal):
+async def test_el_timeout_no_pisa_una_tarjeta_ya_retirada(cog, canal):
     """La view vive en memoria hasta una hora: no puede contradecir al canal.
 
     Si el timeout escribiera igual, una solicitud cancelada terminaría
     mostrando "expirado" una hora después, que es otra cosa.
     """
 
-    tarjeta = desafiar(cog, canal)
+    tarjeta = await desafiar(cog, canal)
     view = tarjeta.kwargs.get("view")
 
-    _llamar(cog, "cancelar", interaccion(canal, RETADOR))
+    await _llamar(cog, "cancelar", interaccion(canal, RETADOR))
 
     assert tarjeta.ediciones == 1
 
-    correr(view.on_timeout())
+    await view.on_timeout()
 
     assert tarjeta.ediciones == 1, "el timeout volvió a editar la tarjeta"
     assert "⌛ Desafío expirado" not in tarjeta.texto
 
 
-def test_una_pelea_en_curso_conserva_el_boton(cog, canal, monkeypatch):
+async def test_una_pelea_en_curso_conserva_el_boton(cog, canal, monkeypatch):
     """Motivo transitorio: la solicitud sigue pendiente y el botón también.
 
     Antes el motivo se escribía en la tarjeta y se la dejaba sin view, así que
@@ -317,7 +310,7 @@ def test_una_pelea_en_curso_conserva_el_boton(cog, canal, monkeypatch):
     monkeypatch.setattr(desafios_mod, "BOX_CHANNEL_IDS", (CANAL,))
 
     inicio = ahora().replace(microsecond=0)
-    primera = crear_desafio(
+    primera = await crear_desafio(
         GUILD,
         OTRO,
         CUARTO,
@@ -327,19 +320,19 @@ def test_una_pelea_en_curso_conserva_el_boton(cog, canal, monkeypatch):
         canal_id=CANAL,
     )
 
-    tarjeta = desafiar(cog, canal)
+    tarjeta = await desafiar(cog, canal)
     view = tarjeta.kwargs.get("view")
 
     # Recién después se pone una pelea en el ring: al revés, /box desafio no
     # llegaría a crear la solicitud que queremos probar.
-    assert aceptar_desafio(
+    assert (await aceptar_desafio(
         primera, GUILD, CUARTO, inicio, recompensa=1000, tipo="FIGHTING"
-    )["estado"] == "aceptado"
+    ))["estado"] == "aceptado"
 
     boton = interaccion(canal, CONTRINCANTE)
     boton.message = tarjeta
 
-    correr(view.aceptar.callback(boton))
+    await view.aceptar.callback(boton)
 
     assert "Todavía no se puede aceptar" in boton.texto
     assert "En el ring" in boton.texto
@@ -348,10 +341,10 @@ def test_una_pelea_en_curso_conserva_el_boton(cog, canal, monkeypatch):
     # La tarjeta no se tocó y la view sigue esperando el próximo intento
     assert tarjeta.ediciones == 0
     assert view.is_finished() is False
-    assert len(desafios_pendientes(GUILD, RETADOR, ahora())) == 1
+    assert len(await desafios_pendientes(GUILD, RETADOR, ahora())) == 1
 
 
-def test_aceptar_le_responde_al_que_apreto_el_boton(cog, canal, monkeypatch):
+async def test_aceptar_le_responde_al_que_apreto_el_boton(cog, canal, monkeypatch):
     """El desafiado recibe su propia confirmación, no solo la tarjeta editada.
 
     La interacción del botón se difiere efímera: si no llega una respuesta
@@ -360,13 +353,13 @@ def test_aceptar_le_responde_al_que_apreto_el_boton(cog, canal, monkeypatch):
 
     monkeypatch.setattr(desafios_mod, "BOX_CHANNEL_IDS", (CANAL,))
 
-    tarjeta = desafiar(cog, canal)
+    tarjeta = await desafiar(cog, canal)
     view = tarjeta.kwargs.get("view")
 
     boton = interaccion(canal, CONTRINCANTE)
     boton.message = tarjeta
 
-    correr(view.aceptar.callback(boton))
+    await view.aceptar.callback(boton)
 
     assert "🥊 ¡Desafío aceptado!" in tarjeta.texto
     assert "Aceptaste el desafío" in boton.texto
@@ -379,10 +372,10 @@ def test_aceptar_le_responde_al_que_apreto_el_boton(cog, canal, monkeypatch):
 # ============================================================
 
 
-def test_desafios_pendientes_mira_los_dos_roles(base):
+async def test_desafios_pendientes_mira_los_dos_roles(base):
     inicio = ahora()
 
-    viva = crear_desafio(
+    viva = await crear_desafio(
         GUILD,
         RETADOR,
         CONTRINCANTE,
@@ -391,7 +384,7 @@ def test_desafios_pendientes_mira_los_dos_roles(base):
         tipo="FIGHTING",
         canal_id=CANAL,
     )
-    crear_desafio(
+    await crear_desafio(
         GUILD,
         OTRO,
         CUARTO,
@@ -401,9 +394,9 @@ def test_desafios_pendientes_mira_los_dos_roles(base):
         canal_id=CANAL,
     )
 
-    del_retador = desafios_pendientes(GUILD, RETADOR, inicio)
-    del_desafiado = desafios_pendientes(GUILD, CONTRINCANTE, inicio)
-    del_ajeno = desafios_pendientes(GUILD, CUARTO, inicio)
+    del_retador = await desafios_pendientes(GUILD, RETADOR, inicio)
+    del_desafiado = await desafios_pendientes(GUILD, CONTRINCANTE, inicio)
+    del_ajeno = await desafios_pendientes(GUILD, CUARTO, inicio)
 
     assert [fila["id"] for fila in del_retador] == [viva]
     assert [fila["id"] for fila in del_desafiado] == [viva]
@@ -413,9 +406,9 @@ def test_desafios_pendientes_mira_los_dos_roles(base):
     assert del_retador[0]["mensaje_id"] is None
 
 
-def test_cancelar_desafio_solo_lo_cancela_quien_participa(base):
+async def test_cancelar_desafio_solo_lo_cancela_quien_participa(base):
     inicio = ahora()
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD,
         RETADOR,
         CONTRINCANTE,
@@ -425,21 +418,21 @@ def test_cancelar_desafio_solo_lo_cancela_quien_participa(base):
         canal_id=CANAL,
     )
 
-    assert cancelar_desafio(desafio_id, GUILD, CUARTO, inicio) is None
-    assert desafio_registrado(desafio_id) is True
+    assert await cancelar_desafio(desafio_id, GUILD, CUARTO, inicio) is None
+    assert await desafio_registrado(desafio_id) is True
 
-    cancelado = cancelar_desafio(desafio_id, GUILD, CONTRINCANTE, inicio)
+    cancelado = await cancelar_desafio(desafio_id, GUILD, CONTRINCANTE, inicio)
 
     assert cancelado["tipo"] == "SPARRING"
     assert cancelado["retador_id"] == RETADOR
     assert cancelado["contrincante_id"] == CONTRINCANTE
-    assert desafio_registrado(desafio_id) is False
-    assert cancelar_desafio(desafio_id, GUILD, RETADOR, inicio) is None
+    assert await desafio_registrado(desafio_id) is False
+    assert await cancelar_desafio(desafio_id, GUILD, RETADOR, inicio) is None
 
 
-def test_cancelar_no_toca_las_solicitudes_de_otro_servidor(base):
+async def test_cancelar_no_toca_las_solicitudes_de_otro_servidor(base):
     inicio = ahora()
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD,
         RETADOR,
         CONTRINCANTE,
@@ -448,13 +441,13 @@ def test_cancelar_no_toca_las_solicitudes_de_otro_servidor(base):
         tipo="FIGHTING",
     )
 
-    assert cancelar_desafio(desafio_id, 999, RETADOR, inicio) is None
-    assert desafio_registrado(desafio_id) is True
+    assert await cancelar_desafio(desafio_id, 999, RETADOR, inicio) is None
+    assert await desafio_registrado(desafio_id) is True
 
 
-def test_registrar_la_tarjeta_deja_anotado_donde_quedo(base):
+async def test_registrar_la_tarjeta_deja_anotado_donde_quedo(base):
     inicio = ahora()
-    desafio_id = crear_desafio(
+    desafio_id = await crear_desafio(
         GUILD,
         RETADOR,
         CONTRINCANTE,
@@ -464,55 +457,38 @@ def test_registrar_la_tarjeta_deja_anotado_donde_quedo(base):
         canal_id=CANAL,
     )
 
-    registrar_mensaje_desafio(desafio_id, 123456)
+    await registrar_mensaje_desafio(desafio_id, 123456)
 
-    fila = desafios_pendientes(GUILD, RETADOR, inicio)[0]
+    fila = (await desafios_pendientes(GUILD, RETADOR, inicio))[0]
 
     assert fila["mensaje_id"] == 123456
 
 
-def test_una_base_vieja_gana_las_columnas_nuevas(base_datos_limpia):
-    """Las columnas se agregan con ALTER TABLE: los datos viejos no se pierden.
+async def test_inicializar_db_es_idempotente_y_recrea_tablas(base_datos_limpia):
+    """El esquema lo maneja el ORM: ``inicializar_db`` crea lo que falta.
 
-    Una instalación que ya venía corriendo tiene ``box_desafios`` sin tipo ni
-    tarjeta; el esquema se pone al día al arrancar y las filas que había
-    siguen ahí, con los valores por defecto.
+    El viejo sistema de ``ALTER TABLE`` desapareció con la migración a
+    SQLAlchemy; una base que arranca de cero o a la que le falta una tabla
+    se pone al día con ``create_all``, y lo que ya existe queda intacto.
     """
 
+    await crear_desafio(
+        GUILD, RETADOR, CONTRINCANTE, ahora(), ahora() + timedelta(hours=1)
+    )
+
     with conectar_db() as db:
-        db.execute("DROP TABLE box_desafios")
-        db.execute(
-            """
-            CREATE TABLE box_desafios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guild_id INTEGER NOT NULL,
-                retador_id INTEGER NOT NULL,
-                contrincante_id INTEGER NOT NULL,
-                expira_en TEXT NOT NULL,
-                UNIQUE (guild_id, retador_id, contrincante_id)
-            )
-            """
-        )
-        db.execute(
-            """
-            INSERT INTO box_desafios (
-                guild_id, retador_id, contrincante_id, expira_en
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (GUILD, RETADOR, CONTRINCANTE, "2999-01-01T00:00:00"),
-        )
+        db.execute("DROP TABLE box_acciones")
         db.commit()
 
-    inicializar_db()
+    await inicializar_db()
 
     with conectar_db() as db:
         columnas = {
-            fila[1] for fila in db.execute("PRAGMA table_info(box_desafios)")
+            fila[1] for fila in db.execute("PRAGMA table_info(box_acciones)")
         }
-        fila = db.execute(
-            "SELECT tipo, canal_id, mensaje_id FROM box_desafios"
+        desafio = db.execute(
+            "SELECT retador_id, contrincante_id FROM box_desafios"
         ).fetchone()
 
-    assert {"tipo", "canal_id", "mensaje_id"} <= columnas
-    assert fila == ("SPARRING", None, None)
+    assert {"id", "guild_id", "user_id", "tipo", "iniciado_en"} <= columnas
+    assert desafio == (RETADOR, CONTRINCANTE)

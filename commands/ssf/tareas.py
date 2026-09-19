@@ -68,7 +68,7 @@ class TareasMixin:
             # =================================================
 
             resultados = (
-                procesar_eliminaciones_diarias(
+                await procesar_eliminaciones_diarias(
                     fecha_a_revisar
                 )
             )
@@ -207,7 +207,7 @@ class TareasMixin:
 
             try:
 
-                cerrados = cerrar_desafios_finalizados(
+                cerrados = await cerrar_desafios_finalizados(
                     ahora_actual.date()
                 )
 

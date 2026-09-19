@@ -1,7 +1,9 @@
 """Configuración compartida de las pruebas.
 
-Fija la base de datos a un archivo temporal ANTES de importar ``config``,
-que lee la variable de entorno ``DATABASE`` en el momento de la importación.
+Fija la base de datos a un archivo SQLite temporal ANTES de importar
+``config``, que arma la URL de la base en el momento de la importación.
+La capa de datos usa SQLAlchemy asíncrono: en producción corre sobre
+PostgreSQL (asyncpg) y en las pruebas sobre SQLite (aiosqlite).
 """
 
 import os
@@ -19,13 +21,10 @@ import pytest  # noqa: E402
 
 
 @pytest.fixture
-def base_datos_limpia():
-    """Deja la base de datos vacía y con el esquema de Box creado."""
+async def base_datos_limpia():
+    """Deja la base de datos vacía y con el esquema completo creado."""
 
-    if os.environ["DATABASE"] and os.path.exists(os.environ["DATABASE"]):
-        os.remove(os.environ["DATABASE"])
+    from core.database import vaciar_db
 
-    from modules.box.database import inicializar_db
-
-    inicializar_db()
+    await vaciar_db()
     return os.environ["DATABASE"]

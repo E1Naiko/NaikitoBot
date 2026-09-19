@@ -66,15 +66,9 @@ def arbol():
     ).tree
 
 
-def ejecutar(coro):
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        coro
-    )
-
-
-def comprobar(tree, data, canal, user_id):
+async def comprobar(tree, data, canal, user_id):
     interaccion = InteraccionFalsa(data, canal, user_id)
-    permitido = ejecutar(tree.interaction_check(interaccion))
+    permitido = await tree.interaction_check(interaccion)
     return permitido, interaccion.response.mensajes
 
 
@@ -88,14 +82,14 @@ BOX_SALDO = {
 # /box
 # ============================================================
 
-def test_box_solo_en_canal_designado(config_canales):
-    permitido, _ = comprobar(arbol(), BOX_SALDO, BOX, USUARIO)
+async def test_box_solo_en_canal_designado(config_canales):
+    permitido, _ = await comprobar(arbol(), BOX_SALDO, BOX, USUARIO)
     assert permitido
 
 
 @pytest.mark.parametrize("canal", [GENERAL, MADRUGUE, SSF, OTRO])
-def test_box_rechaza_fuera_del_canal_designado(config_canales, canal):
-    permitido, mensajes = comprobar(arbol(), BOX_SALDO, canal, USUARIO)
+async def test_box_rechaza_fuera_del_canal_designado(config_canales, canal):
+    permitido, mensajes = await comprobar(arbol(), BOX_SALDO, canal, USUARIO)
     assert not permitido
     assert mensajes
     texto = mensajes[-1].texto
@@ -103,8 +97,8 @@ def test_box_rechaza_fuera_del_canal_designado(config_canales, canal):
     assert "Box" in texto
 
 
-def test_box_admin_exento_de_canal(config_canales):
-    permitido, _ = comprobar(arbol(), BOX_SALDO, OTRO, ADMIN)
+async def test_box_admin_exento_de_canal(config_canales):
+    permitido, _ = await comprobar(arbol(), BOX_SALDO, OTRO, ADMIN)
     assert permitido
 
 
@@ -112,33 +106,33 @@ def test_box_admin_exento_de_canal(config_canales):
 # El resto de los comandos sigue restringido
 # ============================================================
 
-def test_ping_solo_en_general(config_canales):
+async def test_ping_solo_en_general(config_canales):
     data = {"name": "ping", "options": []}
 
-    permitido, _ = comprobar(arbol(), data, GENERAL, USUARIO)
+    permitido, _ = await comprobar(arbol(), data, GENERAL, USUARIO)
     assert permitido
 
-    permitido, _ = comprobar(arbol(), data, OTRO, USUARIO)
+    permitido, _ = await comprobar(arbol(), data, OTRO, USUARIO)
     assert not permitido
 
 
-def test_madrugue_solo_en_su_canal(config_canales):
+async def test_madrugue_solo_en_su_canal(config_canales):
     data = {"name": "madrugue", "options": []}
 
-    permitido, _ = comprobar(arbol(), data, MADRUGUE, USUARIO)
+    permitido, _ = await comprobar(arbol(), data, MADRUGUE, USUARIO)
     assert permitido
 
-    permitido, _ = comprobar(arbol(), data, OTRO, USUARIO)
+    permitido, _ = await comprobar(arbol(), data, OTRO, USUARIO)
     assert not permitido
 
 
-def test_ssf_solo_en_su_canal(config_canales):
+async def test_ssf_solo_en_su_canal(config_canales):
     data = {"name": "ssf", "options": [{"type": 1, "name": "registrar", "options": []}]}
 
-    permitido, _ = comprobar(arbol(), data, SSF, USUARIO)
+    permitido, _ = await comprobar(arbol(), data, SSF, USUARIO)
     assert permitido
 
-    permitido, _ = comprobar(arbol(), data, OTRO, USUARIO)
+    permitido, _ = await comprobar(arbol(), data, OTRO, USUARIO)
     assert not permitido
 
 
@@ -146,7 +140,7 @@ def test_ssf_solo_en_su_canal(config_canales):
 # Botones: no deben ser una vía alternativa
 # ============================================================
 
-def test_boton_tienda_rechaza_fuera_del_canal(config_canales):
+async def test_boton_tienda_rechaza_fuera_del_canal(config_canales):
     from commands.box.tienda import BotonCompra
 
     boton = BotonCompra(USUARIO, "mejora", "entrenamiento")
@@ -156,13 +150,13 @@ def test_boton_tienda_rechaza_fuera_del_canal(config_canales):
         USUARIO,
     )
 
-    ejecutar(boton.callback(interaccion))
+    await boton.callback(interaccion)
 
     assert interaccion.response.mensajes
     assert "solo puede usarse en el canal de Box" in interaccion.response.mensajes[-1].texto
 
 
-def test_boton_tienda_admin_exento(base_datos_limpia, config_canales):
+async def test_boton_tienda_admin_exento(base_datos_limpia, config_canales):
     from commands.box.tienda import BotonCompra
 
     boton = BotonCompra(ADMIN, "mejora", "entrenamiento")
@@ -172,7 +166,7 @@ def test_boton_tienda_admin_exento(base_datos_limpia, config_canales):
         ADMIN,
     )
 
-    ejecutar(boton.callback(interaccion))
+    await boton.callback(interaccion)
 
     # Al estar exento pasa al chequeo de propiedad/compra, no recibe el aviso
     # de canal; y como el botón pertenece al propio admin, intenta comprar.
@@ -182,7 +176,7 @@ def test_boton_tienda_admin_exento(base_datos_limpia, config_canales):
     )
 
 
-def test_boton_desafio_rechaza_fuera_del_canal(config_canales):
+async def test_boton_desafio_rechaza_fuera_del_canal(config_canales):
     from commands.box.desafios import ChallengeView
 
     class Caja:
@@ -196,7 +190,7 @@ def test_boton_desafio_rechaza_fuera_del_canal(config_canales):
         USUARIO,
     )
 
-    ejecutar(vista.aceptar.callback(interaccion))
+    await vista.aceptar.callback(interaccion)
 
     assert interaccion.response.mensajes
     assert "solo puede aceptarse en el canal de Box" in interaccion.response.mensajes[-1].texto

@@ -28,7 +28,7 @@ class RegistroMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultado = registrar_madrugue(
+        resultado = await registrar_madrugue(
             guild_id=interaction.guild.id,
             user_id=interaction.user.id,
             username=interaction.user.display_name,

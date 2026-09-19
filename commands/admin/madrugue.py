@@ -58,7 +58,7 @@ class MadrugueAdminMixin:
             return
 
         madrugadores, registros, puntos = (
-            obtener_estadisticas_servidor(
+            await obtener_estadisticas_servidor(
                 interaction.guild.id
             )
         )
@@ -118,7 +118,7 @@ class MadrugueAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        resultados = obtener_top_madrugadores(
+        resultados = await obtener_top_madrugadores(
             interaction.guild.id,
             limite=10,
         )
@@ -212,7 +212,7 @@ class MadrugueAdminMixin:
             )
             return
 
-        registro = obtener_registro_del_dia_admin(
+        registro = await obtener_registro_del_dia_admin(
             interaction.guild.id,
             usuario.id,
             fecha_obj,
@@ -227,7 +227,7 @@ class MadrugueAdminMixin:
 
         hora, puntos = registro
 
-        eliminado = eliminar_registro_del_dia(
+        eliminado = await eliminar_registro_del_dia(
             interaction.guild.id,
             usuario.id,
             fecha_obj,
@@ -271,7 +271,7 @@ class MadrugueAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        resumen = obtener_resumen_usuario(
+        resumen = await obtener_resumen_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -286,7 +286,7 @@ class MadrugueAdminMixin:
             )
             return
 
-        eliminado = eliminar_registros_usuario(
+        eliminado = await eliminar_registros_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -342,7 +342,7 @@ class MadrugueAdminMixin:
             return
 
         madrugadores, registros, puntos = (
-            obtener_estadisticas_servidor(
+            await obtener_estadisticas_servidor(
                 interaction.guild.id
             )
         )
@@ -353,7 +353,7 @@ class MadrugueAdminMixin:
             )
             return
 
-        eliminado = eliminar_registros_servidor(
+        eliminado = await eliminar_registros_servidor(
             interaction.guild.id
         )
 
@@ -569,7 +569,7 @@ class MadrugueAdminMixin:
         # ----------------------------------------------------
 
         try:
-            registro_existente = obtener_registro_del_dia(
+            registro_existente = await obtener_registro_del_dia(
                 interaction.guild.id,
                 usuario.id,
                 fecha_obj,
@@ -617,7 +617,7 @@ class MadrugueAdminMixin:
         # ----------------------------------------------------
 
         try:
-            fechas_registradas = obtener_fechas_registradas(
+            fechas_registradas = await obtener_fechas_registradas(
                 interaction.guild.id,
                 usuario.id,
             )
@@ -650,7 +650,7 @@ class MadrugueAdminMixin:
         # ----------------------------------------------------
 
         try:
-            guardar_registro(
+            await guardar_registro(
                 guild_id=interaction.guild.id,
                 user_id=usuario.id,
                 username=usuario.display_name,
@@ -721,7 +721,7 @@ class MadrugueAdminMixin:
         if not await solo_servidor(interaction):
             return
 
-        resumen = obtener_resumen_usuario(
+        resumen = await obtener_resumen_usuario(
             interaction.guild.id,
             usuario.id,
         )
@@ -735,12 +735,12 @@ class MadrugueAdminMixin:
 
         cantidad, puntos, primera, ultima = resumen
 
-        stats = obtener_stats_madrugue(
+        stats = await obtener_stats_madrugue(
             interaction.guild.id,
             usuario.id,
         )
 
-        registros = obtener_ultimos_registros(
+        registros = await obtener_ultimos_registros(
             interaction.guild.id,
             usuario.id,
             limite=8,

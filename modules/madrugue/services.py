@@ -166,7 +166,7 @@ class ResultadoMadrugue:
     puntos_anterior: float = 0.0
 
 
-def registrar_madrugue(
+async def registrar_madrugue(
     guild_id,
     user_id,
     username,
@@ -199,7 +199,7 @@ def registrar_madrugue(
     # COMPROBAR REGISTRO EXISTENTE
     # ========================================================
 
-    registro_existente = obtener_registro_del_dia(
+    registro_existente = await obtener_registro_del_dia(
         guild_id,
         user_id,
         fecha,
@@ -220,7 +220,7 @@ def registrar_madrugue(
     # RACHA
     # ========================================================
 
-    fechas = obtener_fechas_registradas(
+    fechas = await obtener_fechas_registradas(
         guild_id,
         user_id,
     )
@@ -247,7 +247,7 @@ def registrar_madrugue(
     # GUARDAR
     # ========================================================
 
-    guardar_registro(
+    await guardar_registro(
         guild_id=guild_id,
         user_id=user_id,
         username=username,
@@ -262,7 +262,7 @@ def registrar_madrugue(
     # TOTAL
     # ========================================================
 
-    total_puntos = obtener_total_puntos(
+    total_puntos = await obtener_total_puntos(
         guild_id,
         user_id,
     )
@@ -278,7 +278,7 @@ def registrar_madrugue(
         total_puntos=total_puntos,
     )
 
-def obtener_stats_madrugue(
+async def obtener_stats_madrugue(
     guild_id,
     user_id,
 ):
@@ -286,12 +286,12 @@ def obtener_stats_madrugue(
     Obtiene las estadísticas de Madrugue de un usuario.
     """
 
-    total_puntos = obtener_total_puntos(
+    total_puntos = await obtener_total_puntos(
         guild_id,
         user_id,
     )
 
-    fechas = obtener_fechas_registradas(
+    fechas = await obtener_fechas_registradas(
         guild_id,
         user_id,
     )
@@ -305,7 +305,7 @@ def obtener_stats_madrugue(
         "mejor_racha": mejor_racha,
     }
     
-def obtener_top_madrugue(
+async def obtener_top_madrugue(
     guild_id,
     limite=10,
 ):
@@ -313,7 +313,7 @@ def obtener_top_madrugue(
     Obtiene el TOP de Madrugue de un servidor.
     """
 
-    return obtener_top_madrugadores(
+    return await obtener_top_madrugadores(
         guild_id,
         limite,
     )

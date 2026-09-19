@@ -27,23 +27,21 @@ def admin_ids(monkeypatch):
 
 
 @pytest.fixture
-def cog(base_datos_limpia, admin_ids):
+async def cog(base_datos_limpia, admin_ids):
     """Cog /admin con la tabla de Madrugue creada."""
 
     from modules.madrugue.database import inicializar_db
 
-    inicializar_db()
+    await inicializar_db()
 
     from commands.admin.cog import Admin
 
     return construir_cog(Admin)
 
 
-def llamar(cog, nombre_metodo, interaccion, *args):
+async def llamar(cog, nombre_metodo, interaccion, *args):
     metodo = getattr(type(cog), nombre_metodo).callback
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        metodo(cog, interaccion, *args)
-    )
+    return await metodo(cog, interaccion, *args)
 
 
 def interaccion_admin():
@@ -54,12 +52,12 @@ def interaccion_admin():
     )
 
 
-def guardar(fecha: date, hora: str, puntos_finales: float):
+async def guardar(fecha: date, hora: str, puntos_finales: float):
     """Guarda un registro de Madrugue directamente en la base."""
 
     from modules.madrugue.database import guardar_registro
 
-    guardar_registro(
+    await guardar_registro(
         guild_id=GUILD,
         user_id=USUARIO,
         username="Tester",
@@ -71,10 +69,10 @@ def guardar(fecha: date, hora: str, puntos_finales: float):
     )
 
 
-def test_ver_sin_registros_informa(cog):
+async def test_ver_sin_registros_informa(cog):
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "madrugue_ver",
         interaccion,
@@ -85,13 +83,13 @@ def test_ver_sin_registros_informa(cog):
     assert "registros de Madrugue" in interaccion.texto
 
 
-def test_ver_muestra_resumen_y_ultimos_registros(cog):
-    guardar(date(2026, 9, 1), "05:45", 100.0)
-    guardar(date(2026, 9, 2), "06:30", 87.5)
+async def test_ver_muestra_resumen_y_ultimos_registros(cog):
+    await guardar(date(2026, 9, 1), "05:45", 100.0)
+    await guardar(date(2026, 9, 2), "06:30", 87.5)
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "madrugue_ver",
         interaccion,
@@ -109,12 +107,12 @@ def test_ver_muestra_resumen_y_ultimos_registros(cog):
     assert "`06:30`" in texto
 
 
-def test_ver_no_filtra_por_canal_ni_requiere_dm(cog):
+async def test_ver_no_filtra_por_canal_ni_requiere_dm(cog):
     """Un admin puede consultar desde cualquier canal; solo requiere servidor."""
 
     interaccion = interaccion_admin()
 
-    llamar(
+    await llamar(
         cog,
         "madrugue_ver",
         interaccion,

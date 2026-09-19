@@ -13,6 +13,6 @@ from modules.madrugue.database import inicializar_db
 async def setup(bot: commands.Bot):
     """Crea el esquema de Madrugue y registra sus comandos."""
 
-    inicializar_db()
+    await inicializar_db()
 
     await bot.add_cog(Madrugue(bot))
