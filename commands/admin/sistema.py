@@ -25,6 +25,49 @@ from config import (
 )
 
 
+LIMITE_MENSAJE_DISCORD = 2000
+ENCABEZADO_RESULTADOS = "**Ejecución finalizada**"
+ENCABEZADO_CONTINUACION = "**Ejecución finalizada (continuación)**"
+
+
+def _fragmentar_resultados(resultados: list[str]) -> list[str]:
+    """Agrupa el informe del archivo en mensajes válidos para Discord."""
+
+    if not resultados:
+        return [f"{ENCABEZADO_RESULTADOS}\nNo había comandos para ejecutar."]
+
+    # Una sola línea también puede ser enorme (el archivo admite hasta 1 MiB),
+    # así que se recorta antes de agrupar. Se reserva lugar para el encabezado
+    # más largo y el salto de línea.
+    limite_linea = (
+        LIMITE_MENSAJE_DISCORD
+        - len(ENCABEZADO_CONTINUACION)
+        - 2
+    )
+    lineas = [
+        linea
+        if len(linea) <= limite_linea
+        else f"{linea[: limite_linea - 1]}…"
+        for linea in resultados
+    ]
+
+    mensajes: list[str] = []
+    actual = ENCABEZADO_RESULTADOS
+
+    for linea in lineas:
+        candidato = f"{actual}\n{linea}"
+
+        if len(candidato) <= LIMITE_MENSAJE_DISCORD:
+            actual = candidato
+            continue
+
+        mensajes.append(actual)
+        actual = f"{ENCABEZADO_CONTINUACION}\n{linea}"
+
+    mensajes.append(actual)
+    return mensajes
+
+
 def _texto_faltan_argumentos(nombre_comando: str) -> str:
     """Aviso cuando una línea de un TXT no completa los argumentos obligatorios."""
 
@@ -63,6 +106,11 @@ class _FileExecutionResponse:
 
     def is_done(self) -> bool:
         return True
+
+    async def defer(self, **kwargs):
+        """No vuelve a diferir: ``fileexecute`` ya confirmó la interacción."""
+
+        return None
 
     async def send_message(self, *args, **kwargs):
         return await self._interaction.followup.send(*args, **kwargs)
@@ -303,7 +351,7 @@ class SistemaMixin:
             grupo = "madrugue"
             nombre_comando = primero
 
-        elif primero in {"info", "fileexecute"}:
+        elif primero in {"info", "fileexecute", "test"}:
             grupo = None
             nombre_comando = primero
 
@@ -389,7 +437,31 @@ class SistemaMixin:
 
         await interaction.response.defer(ephemeral=True)
 
-        contenido = (await archivo.read()).decode("utf-8-sig")
+        try:
+            datos = await archivo.read()
+        except discord.HTTPException as error:
+            await responder_texto(
+                interaction,
+                "❌ No pude descargar el archivo adjunto. "
+                "Volvé a subirlo e intentá nuevamente.\n\n"
+                f"Detalle: `{error}`",
+                color_area="error",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            contenido = datos.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            await responder_texto(
+                interaction,
+                "❌ No pude leer el archivo. Guardalo como texto UTF-8 "
+                "y volvé a intentarlo.",
+                color_area="error",
+                ephemeral=True,
+            )
+            return
+
         lineas = [linea.strip() for linea in contenido.splitlines()]
         lineas = [linea for linea in lineas if linea and not linea.startswith("#")]
 
@@ -405,15 +477,26 @@ class SistemaMixin:
         for numero, linea in enumerate(lineas, start=1):
             try:
                 await self._ejecutar_linea_archivo(interaction, linea)
-            except (ValueError, discord.DiscordException) as error:
-                resultados.append(f"❌ Línea {numero}: {error}")
+            except Exception as error:
+                # Cada línea es independiente: un error inesperado de un
+                # comando no debe abortar las líneas restantes ni dejar el
+                # defer sin una respuesta final.
+                causa = getattr(error, "original", error)
+                detalle = str(causa) or type(causa).__name__
+                resultados.append(f"❌ Línea {numero}: {detalle}")
+                print(
+                    "[ADMIN FILEEXECUTE] "
+                    f"línea={numero} error={type(causa).__name__}: {detalle}",
+                    flush=True,
+                )
             else:
                 resultados.append(f"✅ Línea {numero}: ejecutada")
 
-        await interaction.followup.send(
-            "**Ejecución finalizada**\n" + "\n".join(resultados),
-            ephemeral=True,
-        )
+        for mensaje in _fragmentar_resultados(resultados):
+            await interaction.followup.send(
+                mensaje,
+                ephemeral=True,
+            )
 
     # ========================================================
     # INFO

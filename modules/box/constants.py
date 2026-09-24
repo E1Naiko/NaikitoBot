@@ -182,6 +182,7 @@ EQUIPAMIENTO_COMBATE = {
 NOMBRES_ACCIONES = {
     "TRABAJANDO": "trabajar",
     "ENTRENANDO": "entrenar",
+    "DESCANSANDO": "descansar",
     "SPARRING": "hacer sparring",
     "FIGHTING": "pelear",
     "PROMOVIENDO": "promocionarse",
@@ -221,7 +222,7 @@ TEXTO_AYUDA = (
     "`/box tratamiento tipo` — Compra un tratamiento para curar una lesión.\n"
     "`/box suministro tipo` — Usa suministros que restauran vida, cansancio,\n"
     "defensa (servicio de reparación) o la lesión.\n"
-    "`/box descanso` — Reinicia la probabilidad de lesión.\n"
+    "`/box descanso minutos|hasta` — Descansa para reducir la probabilidad de lesión.\n"
     "`/box topdesafios` — Muestra el ranking de desafíos.\n"
     "`/box combate` — Muestra tu pelea o sparring narrado en vivo.\n\n"
     "Las acciones duran el tiempo indicado y continúan aunque el bot se reinicie."

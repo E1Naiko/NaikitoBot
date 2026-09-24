@@ -73,7 +73,7 @@ async def test_comandos_de_consulta_responden(cog, comando):
 
     await llamar(cog, comando, interaccion)
 
-    assert interaccion.cantidad_respuestas == 1, (
+    assert interaccion.cantidad_respuestas >= 1, (
         f"/box {comando} no respondió nada: Discord mostraría "
         "'la aplicación no responde'"
     )
@@ -316,22 +316,123 @@ async def test_no_se_pueden_apilar_acciones(cog):
     assert "Ya estás" in segunda.texto
 
 
-async def test_descanso_reinicia_probabilidad(cog):
-    from modules.box.services import admin_modificar_probabilidad_lesion
+async def test_descanso_inicia_una_accion_sin_reducir_al_instante(cog):
+    from modules.box.services import (
+        admin_modificar_probabilidad_lesion,
+        obtener_accion_activa,
+    )
 
     await admin_modificar_probabilidad_lesion(GUILD, USUARIO, 50.0)
     interaccion = InteraccionFalsa(GUILD, USUARIO)
 
-    await llamar(cog, "descanso", interaccion)
+    await llamar(cog, "descanso", interaccion, 60, None)
 
-    assert "0%" in interaccion.texto
-    assert await probabilidad_lesion() == 0
+    assert "Comenzaste a descansar" in interaccion.texto
+    assert "1 punto" in interaccion.texto
+    assert await probabilidad_lesion() == pytest.approx(50.0)
+
+    accion = await obtener_accion_activa(GUILD, USUARIO)
+    assert accion is not None
+    assert accion[0] == "DESCANSANDO"
+
+    # Igual que las otras acciones temporizadas, acusa recibo antes de tocar
+    # PostgreSQL y termina contestando con un followup.
+    assert interaccion.cantidad_respuestas == 2
+    assert interaccion.respuestas[0].contenido is None
+    assert interaccion.respuestas[0].efimero is False
+
+
+async def test_descanso_reduce_proporcionalmente_al_finalizar(cog):
+    from modules.box.services import (
+        admin_modificar_probabilidad_lesion,
+        completar_acciones_vencidas,
+        obtener_accion_activa,
+        obtener_saldo,
+    )
+
+    await admin_modificar_probabilidad_lesion(GUILD, USUARIO, 50.0)
+    await llamar(
+        cog,
+        "descanso",
+        InteraccionFalsa(GUILD, USUARIO),
+        30,
+        None,
+    )
+
+    accion = await obtener_accion_activa(GUILD, USUARIO)
+    completadas = await completar_acciones_vencidas(
+        accion[1] + timedelta(seconds=1)
+    )
+
+    assert len(completadas) == 1
+    assert completadas[0][2] == "DESCANSANDO"
+    assert completadas[0][3] == pytest.approx(0.5)
+    assert completadas[0][5] is False
+    assert await probabilidad_lesion() == pytest.approx(49.5)
+    assert await obtener_saldo(GUILD, USUARIO) == (0, 0)
+    assert await obtener_accion_activa(GUILD, USUARIO) is None
+
+
+async def test_descanso_nunca_reduce_por_debajo_de_cero(cog):
+    from modules.box.services import (
+        admin_modificar_probabilidad_lesion,
+        completar_acciones_vencidas,
+        obtener_accion_activa,
+    )
+
+    await admin_modificar_probabilidad_lesion(GUILD, USUARIO, 0.25)
+    await llamar(
+        cog,
+        "descanso",
+        InteraccionFalsa(GUILD, USUARIO),
+        60,
+        None,
+    )
+
+    accion = await obtener_accion_activa(GUILD, USUARIO)
+    [completada] = await completar_acciones_vencidas(
+        accion[1] + timedelta(seconds=1)
+    )
+
+    assert completada[3] == pytest.approx(0.25)
+    assert await probabilidad_lesion() == 0.0
+
+
+async def test_descanso_permite_lesionado_pero_no_lo_cura(cog):
+    from modules.box.services import (
+        admin_modificar_probabilidad_lesion,
+        completar_acciones_vencidas,
+        obtener_accion_activa,
+        obtener_estado_box,
+    )
+
+    lesionar()
+    await admin_modificar_probabilidad_lesion(GUILD, USUARIO, 25.0)
+
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+    await llamar(cog, "descanso", interaccion, 60, None)
+
+    accion = await obtener_accion_activa(GUILD, USUARIO)
+    await completar_acciones_vencidas(accion[1] + timedelta(seconds=1))
+
+    probabilidad, lesionado_hasta = await obtener_estado_box(GUILD, USUARIO)
+    assert probabilidad == pytest.approx(24.0)
+    assert lesionado_hasta is not None
+    assert "Comenzaste a descansar" in interaccion.texto
+
+
+async def test_descanso_requiere_duracion(cog):
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+
+    await llamar(cog, "descanso", interaccion, None, None)
+
+    assert "Debes indicar minutos" in interaccion.texto
 
 
 async def test_descanso_se_rechaza_con_accion_activa(cog):
     await llamar(cog, "entrenar", InteraccionFalsa(GUILD, USUARIO), 60, None)
     interaccion = InteraccionFalsa(GUILD, USUARIO)
 
-    await llamar(cog, "descanso", interaccion)
+    await llamar(cog, "descanso", interaccion, 60, None)
 
-    assert "No puedes descansar" in interaccion.texto
+    assert "Ya estás" in interaccion.texto

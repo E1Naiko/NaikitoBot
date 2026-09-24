@@ -4,7 +4,6 @@ Cubren ``/admin box top``, ``stats``, ``historial``, ``lesionados``,
 ``finalizar`` y ``procesar``, ejecutando los callbacks reales.
 """
 
-import asyncio
 from datetime import timedelta
 
 import pytest
@@ -308,6 +307,43 @@ async def test_finalizar_liquida_accion_vencida(cog):
     from modules.box.services import obtener_accion_activa
 
     assert await obtener_accion_activa(GUILD, USUARIO) is None
+
+
+async def test_finalizar_descanso_reduce_probabilidad_sin_recompensa(cog):
+    from modules.box.services import (
+        admin_modificar_probabilidad_lesion,
+        iniciar_accion,
+        obtener_estado_box,
+        obtener_saldo,
+    )
+
+    await crear_usuario(USUARIO)
+    await admin_modificar_probabilidad_lesion(GUILD, USUARIO, 25.0)
+
+    ahora_actual = ahora()
+    await iniciar_accion(
+        GUILD,
+        USUARIO,
+        "DESCANSANDO",
+        ahora_actual - timedelta(hours=2),
+        ahora_actual - timedelta(hours=1),
+        0,
+    )
+
+    interaccion = interaccion_admin()
+    await llamar(
+        cog,
+        "box_finalizar",
+        interaccion,
+        miembro(USUARIO, "Pepe"),
+    )
+
+    assert "Acción liquidada correctamente" in interaccion.texto
+    assert "descansar" in interaccion.texto
+    assert "1.000 puntos porcentuales" in interaccion.texto
+    assert "Recompensa entregada" not in interaccion.texto
+    assert (await obtener_estado_box(GUILD, USUARIO))[0] == pytest.approx(24.0)
+    assert await obtener_saldo(GUILD, USUARIO) == (0, 0)
 
 
 async def test_finalizar_accion_no_vencida_informa(cog):

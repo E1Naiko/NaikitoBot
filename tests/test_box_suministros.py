@@ -311,8 +311,6 @@ async def test_boton_suministro_abre_el_menu_efimero():
         if item.to_component_dict()["custom_id"].endswith(":suministro:recuperacion")
     )
 
-    import asyncio
-
     interaccion = InteraccionFalsa(GUILD, USUARIO)
     await boton_suministro.callback(interaccion)
 
@@ -322,20 +320,22 @@ async def test_boton_suministro_abre_el_menu_efimero():
     assert interaccion.respuestas[-1].efimero
 
 
-async def test_selector_de_suministro_aplica_y_se_deshabilita():
+async def test_selector_de_suministro_aplica_y_actualiza_la_tienda(cog):
     from commands.box.tienda import VistaSuministro
 
     await dar_dinero(5000)
     await obtener_equipo(GUILD, USUARIO)
     await actualizar_equipo(GUILD, USUARIO, vida=7)
 
-    vista = VistaSuministro(USUARIO)
+    apertura = InteraccionFalsa(GUILD, USUARIO)
+    await llamar(cog, "tienda", apertura)
+    mensaje_tienda = apertura.respuestas[-1]
+
+    vista = VistaSuministro(USUARIO, tienda_message=mensaje_tienda)
     selector = vista.children[0]
 
     # Simula la elección del usuario en Discord.
     selector._values = ["vida"]
-
-    import asyncio
 
     interaccion = InteraccionFalsa(GUILD, USUARIO)
     await selector.callback(interaccion)
@@ -343,6 +343,8 @@ async def test_selector_de_suministro_aplica_y_se_deshabilita():
     assert selector.disabled
     assert interaccion.cantidad_respuestas >= 2
     assert "Bebida isotónica" in interaccion.texto
+    assert mensaje_tienda.ediciones == 1
+    assert "Dinero disponible: **3500$**" in mensaje_tienda.texto
 
 
 async def test_selector_rechaza_a_un_usuario_que_no_es_el_dueño():
@@ -351,8 +353,6 @@ async def test_selector_rechaza_a_un_usuario_que_no_es_el_dueño():
     vista = VistaSuministro(USUARIO)
     selector = vista.children[0]
     selector._values = ["vida"]
-
-    import asyncio
 
     interaccion = InteraccionFalsa(GUILD, 999)
     await selector.callback(interaccion)

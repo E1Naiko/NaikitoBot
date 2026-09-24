@@ -59,8 +59,10 @@ def lesionar(user_id=DUEÑO):
         db.commit()
 
 
-async def clic(boton, user_id=DUEÑO, en_servidor=True):
+async def clic(boton, user_id=DUEÑO, en_servidor=True, mensaje=None):
     interaccion = InteraccionFalsa(GUILD, user_id, en_servidor=en_servidor)
+    if mensaje is not None:
+        interaccion.message = mensaje
     await boton.callback(interaccion)
     return interaccion
 
@@ -295,6 +297,37 @@ async def test_catalogo_muestra_los_niveles_del_usuario(cog):
     texto = await construir_catalogo(interaccion)
 
     assert "Nivel **1/10**" in texto
+
+
+async def test_tienda_muestra_el_balance_actual(cog):
+    await dar_dinero(DUEÑO, 5000)
+
+    interaccion = InteraccionFalsa(GUILD, DUEÑO)
+    await type(cog).tienda.callback(cog, interaccion)
+
+    assert "Balance actual" in interaccion.texto
+    assert "Dinero disponible: **5000$**" in interaccion.texto
+    assert "Experiencia: **0 EXP**" in interaccion.texto
+
+
+async def test_boton_actualiza_balance_nivel_y_precio_en_el_mismo_mensaje(cog):
+    await dar_dinero(DUEÑO, 5000)
+
+    apertura = InteraccionFalsa(GUILD, DUEÑO)
+    await type(cog).tienda.callback(cog, apertura)
+    mensaje_tienda = apertura.respuestas[-1]
+
+    assert "Dinero disponible: **5000$**" in mensaje_tienda.texto
+    assert "Nivel **0/10**" in mensaje_tienda.texto
+
+    boton = BotonCompra(DUEÑO, "mejora", "entrenamiento")
+    compra = await clic(boton, mensaje=mensaje_tienda)
+
+    assert "Compraste un nivel" in compra.texto
+    assert mensaje_tienda.ediciones == 1
+    assert "Dinero disponible: **4000$**" in mensaje_tienda.texto
+    assert "Nivel **1/10**" in mensaje_tienda.texto
+    assert "Siguiente nivel: **1250**" in mensaje_tienda.texto
 
 
 # ============================================================

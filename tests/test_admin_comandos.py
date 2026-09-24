@@ -6,7 +6,13 @@ así que estas pruebas recorren el mismo camino que Discord.
 
 import pytest
 
-from tests.harness import Choice, InteraccionFalsa, construir_cog
+from tests.harness import (
+    Choice,
+    GuildFalso,
+    InteraccionFalsa,
+    UsuarioFalso,
+    construir_cog,
+)
 
 GUILD = 1
 ADMIN = 1
@@ -35,6 +41,7 @@ ARBOL_ESPERADO = {
     "admin box top|Command",
     "admin fileexecute|Command",
     "admin info|Command",
+    "admin test|Command",
     "admin madrugue|Group",
     "admin madrugue manualadd|Command",
     "admin madrugue resetdia|Command",
@@ -115,7 +122,11 @@ class AdjuntoFalso:
 
     def __init__(self, contenido="", nombre="comandos.txt"):
         self.filename = nombre
-        self._contenido = contenido.encode("utf-8")
+        self._contenido = (
+            contenido.encode("utf-8")
+            if isinstance(contenido, str)
+            else contenido
+        )
         self.size = len(self._contenido)
 
     async def read(self):
@@ -180,6 +191,7 @@ COMANDOS_CON_ARGUMENTO_FALSO = [
     ("box_procesar", ()),
     ("fileexecute", (None,)),
     ("info", ()),
+    ("test", ()),
     ("madrugue_stats", ()),
     ("madrugue_top", ()),
     ("madrugue_ver", (None,)),
@@ -225,6 +237,7 @@ async def test_comandos_rechazan_a_no_administradores(cog, comando, argumentos):
     "comando, argumentos",
     [
         ("box_info", (None,)),
+        ("test", ()),
         ("madrugue_stats", ()),
         ("madrugue_manualadd", (None, "2026-09-01", "05:45")),
         ("stats", ()),
@@ -301,6 +314,44 @@ async def test_box_cancelar_sin_accion_activa_informa(cog):
 
     assert "no tiene ninguna acción activa" in interaccion.texto
     assert interaccion.respuestas[-1].kwargs.get("view", "ausente") is not None
+
+
+# ============================================================
+# /admin manualadd
+# ============================================================
+
+async def test_manualadd_difiere_y_guarda_el_registro(cog):
+    """Las consultas de base no deben consumir la ventana de Discord."""
+
+    from datetime import date
+
+    from modules.madrugue.database import obtener_registro_del_dia
+
+    usuario = UsuarioFalso(USUARIO, "Madrugador")
+    interaccion = interaccion_admin()
+    interaccion.guild = GuildFalso(GUILD, {USUARIO: usuario})
+
+    await llamar(
+        cog,
+        "manualadd",
+        interaccion,
+        usuario,
+        "2026-09-01",
+        "05:45",
+    )
+
+    assert interaccion.cantidad_respuestas == 2
+    assert interaccion.respuestas[0].contenido is None
+    assert interaccion.respuestas[0].efimero is True
+    assert "REGISTRO MANUAL AGREGADO" in interaccion.texto
+
+    registro = await obtener_registro_del_dia(
+        GUILD,
+        USUARIO,
+        date(2026, 9, 1),
+    )
+    assert registro is not None
+    assert registro[0] == "05:45"
 
 
 # ============================================================
@@ -386,3 +437,70 @@ async def test_fileexecute_con_miembro_inexistente(cog_en_arbol):
 
     assert "Ejecución finalizada" in interaccion.texto
     assert "No se encontró el miembro" in interaccion.texto
+
+
+async def test_fileexecute_ejecuta_manualadd_despues_del_defer(cog_en_arbol):
+    """Un comando interno no debe intentar diferir la interacción otra vez."""
+
+    from datetime import date
+
+    from modules.madrugue.database import obtener_registro_del_dia
+
+    usuario = UsuarioFalso(USUARIO, "Madrugador")
+    interaccion = interaccion_admin()
+    interaccion.guild = GuildFalso(GUILD, {USUARIO: usuario})
+
+    await llamar(
+        cog_en_arbol,
+        "fileexecute",
+        interaccion,
+        AdjuntoFalso("manualadd 42 2026-09-01 05:45"),
+    )
+
+    assert "Ejecución finalizada" in interaccion.texto
+    assert "✅ Línea 1" in interaccion.texto
+    assert any(
+        "REGISTRO MANUAL AGREGADO" in respuesta.texto
+        for respuesta in interaccion.respuestas
+    )
+    assert await obtener_registro_del_dia(
+        GUILD,
+        USUARIO,
+        date(2026, 9, 1),
+    ) is not None
+
+
+async def test_fileexecute_rechaza_archivo_que_no_es_utf8(cog):
+    interaccion = interaccion_admin()
+
+    await llamar(
+        cog,
+        "fileexecute",
+        interaccion,
+        AdjuntoFalso(b"\xff\xfe\xfa"),
+    )
+
+    assert "texto UTF-8" in interaccion.texto
+
+
+async def test_fileexecute_fragmenta_un_informe_mayor_a_2000_caracteres(
+    cog_en_arbol,
+):
+    interaccion = interaccion_admin()
+    comando_desconocido = "x" * 100
+    contenido = "\n".join([comando_desconocido] * 50)
+
+    await llamar(
+        cog_en_arbol,
+        "fileexecute",
+        interaccion,
+        AdjuntoFalso(contenido),
+    )
+
+    informes = [
+        respuesta
+        for respuesta in interaccion.respuestas
+        if "Ejecución finalizada" in respuesta.texto
+    ]
+    assert len(informes) > 1
+    assert all(len(informe.contenido) <= 2000 for informe in informes)
