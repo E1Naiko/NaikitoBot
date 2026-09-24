@@ -1033,7 +1033,7 @@ async def cerrar_desafios_finalizados(fecha):
         if ultima_revision is None:
             continue
 
-        if ultima_revision < fecha_fin_obj:
+        if ultima_revision < fecha_fin:
             continue
 
         # ----------------------------------------------------

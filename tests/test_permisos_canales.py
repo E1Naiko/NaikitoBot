@@ -5,8 +5,6 @@ Box en los canales de ``BOX_CHANNEL_ID``, que los administradores queden
 exentos y que los botones de tienda/desafío no sean un bypass.
 """
 
-import asyncio
-
 import discord
 from discord.ext import commands
 import pytest
@@ -26,12 +24,24 @@ USUARIO = 42
 class RespuestaFalsa:
     def __init__(self):
         self.mensajes = []
+        self.done = False
 
     def is_done(self):
-        # Estas interacciones nunca se defieren en estas pruebas.
-        return False
+        return self.done
 
     async def send_message(self, content=None, **kwargs):
+        from tests.harness import _Mensaje
+
+        self.mensajes.append(_Mensaje(content, kwargs))
+        self.done = True
+
+    async def defer(self, **kwargs):
+        from tests.harness import _Mensaje
+
+        self.mensajes.append(_Mensaje(None, kwargs))
+        self.done = True
+
+    async def send(self, content=None, **kwargs):
         from tests.harness import _Mensaje
 
         self.mensajes.append(_Mensaje(content, kwargs))
@@ -44,6 +54,8 @@ class InteraccionFalsa:
         self.user = type("Usuario", (), {"id": user_id})()
         self.guild = type("Guild", (), {"id": 1})() if guild else None
         self.response = RespuestaFalsa()
+        self.followup = self.response
+        self.message = None
         self.command_failed = False
 
 

@@ -33,7 +33,15 @@ async def test_todas_las_extensiones_cargan_juntas(base_datos_limpia):
         assert "ssf registrar" in nombres
         assert "box saldo" in nombres
     finally:
-        bot.get_cog("Ssf").procesar_ssf_automatico.cancel()
-        bot.get_cog("Box").comprobar_acciones.cancel()
-        bot.get_cog("Box").narrar_combates.cancel()
+        ssf = bot.get_cog("Ssf")
+        box = bot.get_cog("Box")
+
+        if ssf is not None:
+            ssf.procesar_ssf_automatico.cancel()
+
+        if box is not None:
+            box.comprobar_acciones.cancel()
+            box.reducir_probabilidad_lesion.cancel()
+            box.narrar_combates.cancel()
+
         await asyncio.sleep(0)

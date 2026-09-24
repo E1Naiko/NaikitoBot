@@ -42,6 +42,7 @@ ENTORNO_ALTERNATIVO = {
     "BOX_LESION_PROBABILIDAD_POR_HORA": "2.0",
     "BOX_LESION_PROBABILIDAD_MAXIMA": "80",
     "BOX_LESION_DECAIMIENTO_POR_HORA": "0.5",
+    "BOX_DESCANSO_REDUCCION_POR_HORA": "2.5",
     "BOX_DESAFIO_VENTANA_HORAS": "0.5",
     "BOX_DESAFIO_DURACION_HORAS": "1.5",
     "BOX_DESAFIO_EXP_SPARRING": "8",
@@ -94,6 +95,7 @@ ENTORNO_POR_DEFECTO = {
     "BOX_LESION_PROBABILIDAD_POR_HORA": "1.0",
     "BOX_LESION_PROBABILIDAD_MAXIMA": "100",
     "BOX_LESION_DECAIMIENTO_POR_HORA": "0.01",
+    "BOX_DESCANSO_REDUCCION_POR_HORA": "1.0",
     "BOX_DESAFIO_VENTANA_HORAS": "1",
     "BOX_DESAFIO_DURACION_HORAS": "1",
     "BOX_DESAFIO_EXP_SPARRING": "5",
@@ -172,6 +174,7 @@ print(json.dumps({
         config.BOX_LESION_PROBABILIDAD_MAXIMA,
         config.BOX_LESION_DECAIMIENTO_POR_HORA,
     ],
+    "descanso_reduccion": config.BOX_DESCANSO_REDUCCION_POR_HORA,
     "texto_lesion": texto_horas(config.BOX_LESION_HORAS),
     "desafio": [
         config.BOX_DESAFIO_DURACION_HORAS,
@@ -280,6 +283,7 @@ def test_el_env_cambia_lesiones_desafios_y_sponsors():
     assert datos["limites_minutos"] == [1, 720]
 
     assert datos["lesion"] == pytest.approx([2.5, 2.0, 80, 0.5])
+    assert datos["descanso_reduccion"] == 2.5
     assert datos["texto_lesion"] == "2.5 horas"
 
     assert datos["desafio"] == [1.5, 8, 12, 9]
@@ -373,6 +377,7 @@ def test_valores_por_defecto_mantienen_el_balance_historico():
     assert datos["precios_por_nivel"] == [1563, 2000]
 
     assert datos["lesion"] == pytest.approx([3.0, 1.0, 100.0, 0.01])
+    assert datos["descanso_reduccion"] == 1.0
     assert datos["texto_lesion"] == "3 horas"
 
     assert datos["desafio"] == [1.0, 5, 10, 5]
@@ -443,6 +448,8 @@ def test_valores_por_defecto_mantienen_el_balance_historico():
         ("BOX_LESION_PROBABILIDAD_POR_HORA", "150"),
         ("BOX_LESION_PROBABILIDAD_MAXIMA", "-1"),
         ("BOX_LESION_DECAIMIENTO_POR_HORA", "-0.01"),
+        ("BOX_DESCANSO_REDUCCION_POR_HORA", "0"),
+        ("BOX_DESCANSO_REDUCCION_POR_HORA", "-1"),
         # Desafíos.
         ("BOX_DESAFIO_VENTANA_HORAS", "0"),
         ("BOX_DESAFIO_DURACION_HORAS", "0"),

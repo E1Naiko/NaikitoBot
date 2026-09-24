@@ -56,6 +56,7 @@ __all__ = [
     "BOX_LESION_PROBABILIDAD_POR_HORA",
     "BOX_LESION_PROBABILIDAD_MAXIMA",
     "BOX_LESION_DECAIMIENTO_POR_HORA",
+    "BOX_DESCANSO_REDUCCION_POR_HORA",
     "BOX_COMBATE_ACTIVO",
     "BOX_COMBATE_CANTICOS",
     "BOX_COMBATE_EQUIPO_ACTIVO",
@@ -716,8 +717,9 @@ BOX_LESION_HORAS = _leer_decimal(
 )
 
 # Cuánto sube la probabilidad de lesionarse por cada hora de acción,
-# el techo de esa probabilidad y cuánto baja por cada hora de
-# descanso (sin acción activa). Todo en puntos porcentuales.
+# el techo de esa probabilidad, cuánto baja pasivamente por cada hora sin
+# acción y cuánto baja activamente con /box descanso. Todo en puntos
+# porcentuales.
 
 BOX_LESION_PROBABILIDAD_POR_HORA = _leer_decimal(
     "BOX_LESION_PROBABILIDAD_POR_HORA",
@@ -732,6 +734,12 @@ BOX_LESION_PROBABILIDAD_MAXIMA = _leer_decimal(
 BOX_LESION_DECAIMIENTO_POR_HORA = _leer_decimal(
     "BOX_LESION_DECAIMIENTO_POR_HORA",
     0.01,
+)
+
+# Reducción activa al completar ``/box descanso``. Se prorratea por minuto.
+BOX_DESCANSO_REDUCCION_POR_HORA = _leer_decimal(
+    "BOX_DESCANSO_REDUCCION_POR_HORA",
+    1.0,
 )
 
 _comprobar(
@@ -754,6 +762,12 @@ _comprobar(
     BOX_LESION_DECAIMIENTO_POR_HORA >= 0,
     "BOX_LESION_DECAIMIENTO_POR_HORA debe ser mayor o igual que 0, "
     f"pero se recibió {BOX_LESION_DECAIMIENTO_POR_HORA}.",
+)
+
+_comprobar(
+    BOX_DESCANSO_REDUCCION_POR_HORA > 0,
+    "BOX_DESCANSO_REDUCCION_POR_HORA debe ser mayor que 0, "
+    f"pero se recibió {BOX_DESCANSO_REDUCCION_POR_HORA}.",
 )
 
 # ------------------------------------------------------------

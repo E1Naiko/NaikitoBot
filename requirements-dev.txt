@@ -1,6 +1,7 @@
 # Dependencias de desarrollo (pruebas)
 -r requirements.txt
 pytest==9.1.1
+pytest-asyncio==1.4.0
 pyflakes==3.4.0
 # Windows no incluye la base de datos de zonas horarias de IANA, y
 # config/settings.py ejecuta ZoneInfo("America/Argentina/Buenos_Aires") al

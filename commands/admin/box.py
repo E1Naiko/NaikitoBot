@@ -3,6 +3,7 @@
 import discord
 from discord import app_commands
 
+from config import BOX_DESCANSO_REDUCCION_POR_HORA
 from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
@@ -99,16 +100,26 @@ class BoxAdminMixin:
         if accion:
             tipo, iniciado_en, finaliza_en, recompensa, dinero = accion
 
-            recompensa_texto = f"{recompensa} EXP"
+            if tipo == "DESCANSANDO":
+                horas = (finaliza_en - iniciado_en).total_seconds() / 3600
+                reduccion = horas * BOX_DESCANSO_REDUCCION_POR_HORA
+                resultado_texto = (
+                    "Reducción al terminar: hasta "
+                    f"**{reduccion:.3f} puntos porcentuales**"
+                )
+            else:
+                recompensa_texto = f"{recompensa} EXP"
 
-            if dinero:
-                recompensa_texto += f" + {dinero}$"
+                if dinero:
+                    recompensa_texto += f" + {dinero}$"
+
+                resultado_texto = f"Recompensa: **{recompensa_texto}**"
 
             accion_texto = (
                 f"**{tipo}**\n"
                 f"Inicio: `{iniciado_en}`\n"
                 f"Finaliza: `{finaliza_en}`\n"
-                f"Recompensa: **{recompensa_texto}**"
+                f"{resultado_texto}"
             )
         else:
             accion_texto = "✅ Sin acción activa."
@@ -1090,6 +1101,11 @@ class BoxAdminMixin:
                 )
             else:
                 texto += "\n😞 No consiguió sponsor."
+        elif tipo == "DESCANSANDO":
+            texto += (
+                "\n🛌 Probabilidad de lesión reducida en "
+                f"**{recompensa:.3f} puntos porcentuales**."
+            )
         else:
             recompensa_texto = f"{recompensa} EXP"
 

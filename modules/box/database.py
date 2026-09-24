@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 
 from config import (
     BOX_CANSANCIO_INICIAL,
+    BOX_DESCANSO_REDUCCION_POR_HORA,
     BOX_COMBATE_ACTIVO,
     BOX_COMBATE_TICK_SEGUNDOS,
     BOX_COMBATE_UNICO_GLOBAL,
@@ -26,7 +27,6 @@ from config import (
     BOX_DEFENSA_INICIAL,
     BOX_DEFENSA_MAXIMO,
     BOX_DESAFIO_DURACION_HORAS,
-    BOX_DESAFIO_EXP_SPARRING,
     BOX_DESAFIO_PREMIO_VS_BOT,
     BOX_LESION_DECAIMIENTO_POR_HORA,
     BOX_LESION_HORAS,
@@ -189,37 +189,17 @@ async def obtener_estado_box(guild_id: int, user_id: int):
     return fila or (0.0, None)
 
 
-async def descansar(guild_id: int, user_id: int):
-    """Reinicia la probabilidad de lesión sin curar al usuario."""
-
-    async with crear_sesion() as sesion:
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-
-        if usuario is None:
-            sesion.add(
-                BoxUsuario(
-                    guild_id=guild_id,
-                    user_id=user_id,
-                    probabilidad_lesion=0.0,
-                )
-            )
-        else:
-            usuario.probabilidad_lesion = 0.0
-
-        await sesion.commit()
-
-
 # ============================================================
 # DECAIMIENTO DE LA PROBABILIDAD
 # ============================================================
 
 async def reducir_probabilidad_lesion_inactivos(
-    cantidad: float = 0.01,
+    cantidad: float = BOX_LESION_DECAIMIENTO_POR_HORA,
 ) -> int:
     """
     Reduce la probabilidad de lesión de los usuarios sin acción activa.
 
-    Cada llamada representa una hora sin entrenar ni trabajar: baja la
+    Cada llamada representa una hora sin ninguna acción activa: baja la
     probabilidad en ``cantidad`` puntos porcentuales, sin pasar de 0.
     Aplica también a usuarios lesionados (una lesión no es una acción).
     """
@@ -909,11 +889,10 @@ async def procesar_sponsors_medicos(ahora: datetime):
 async def _liquidar_accion(sesion, fila, ahora: datetime):
     """Liquida una única acción vencida y devuelve sus datos para notificar.
 
-    PROMOVIENDO es una acción especial:
-    - No da EXP.
-    - No da dinero.
-    - No genera lesión.
-    - Tiene una probabilidad de conseguir sponsor.
+    Las acciones especiales no usan la liquidación normal:
+
+    - ``PROMOVIENDO`` busca un sponsor sin recompensas ni riesgo de lesión.
+    - ``DESCANSANDO`` reduce la probabilidad de lesión sin curar al usuario.
     """
 
     (
@@ -936,6 +915,39 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
     )
 
     await _asegurar_usuario(sesion, guild_id, user_id)
+
+    # =================================================
+    # DESCANSO
+    # =================================================
+
+    if tipo == "DESCANSANDO":
+        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
+        probabilidad_anterior = usuario.probabilidad_lesion
+        reduccion_programada = (
+            duracion_horas * BOX_DESCANSO_REDUCCION_POR_HORA
+        )
+        probabilidad_nueva = max(
+            0.0,
+            probabilidad_anterior - reduccion_programada,
+        )
+        reduccion_efectiva = probabilidad_anterior - probabilidad_nueva
+
+        usuario.probabilidad_lesion = probabilidad_nueva
+
+        # Descansar no cura una lesión, no da recompensas y tampoco puede
+        # provocar una lesión nueva. El cuarto campo comunica cuánto se redujo
+        # realmente para que los avisos automáticos y administrativos puedan
+        # mostrarlo sin cambiar el contrato de la tupla de liquidación.
+        return (
+            guild_id,
+            user_id,
+            tipo,
+            reduccion_efectiva,
+            0,
+            False,
+            None,
+            None,
+        )
 
     # =================================================
     # PROMOCIÓN
@@ -989,8 +1001,9 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
     lesionado_hasta = usuario.lesionado_hasta
 
     probabilidad = min(
-        100.0,
-        probabilidad_anterior + duracion_horas,
+        BOX_LESION_PROBABILIDAD_MAXIMA,
+        probabilidad_anterior
+        + duracion_horas * BOX_LESION_PROBABILIDAD_POR_HORA,
     )
 
     se_lesiona = random.random() < (
@@ -1050,14 +1063,10 @@ _COLUMNAS_ACCION_VENCIDA = (
 
 
 async def completar_acciones_vencidas(ahora: datetime):
-    """
-    Liquida acciones vencidas y devuelve sus datos para notificar.
+    """Liquida acciones vencidas y devuelve sus datos para notificar.
 
-    PROMOVIENDO es una acción especial:
-    - No da EXP.
-    - No da dinero.
-    - No genera lesión.
-    - Tiene una probabilidad de conseguir sponsor.
+    La liquidación contempla las reglas especiales de promoción y descanso;
+    las acciones normales entregan recompensas y sortean una posible lesión.
     """
 
     completadas = []

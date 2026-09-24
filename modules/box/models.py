@@ -46,7 +46,7 @@ class BoxUsuario(Base):
 
 
 class BoxAccion(Base):
-    """Una acción en curso (entrenar o trabajar) de un boxeador."""
+    """Una acción temporizada de un boxeador (incluido el descanso)."""
 
     __tablename__ = "box_acciones"
     __table_args__ = (

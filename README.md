@@ -81,6 +81,7 @@ BOX_EXPERIENCIA_POR_MINUTO=10
 BOX_DINERO_POR_MINUTO=100
 BOX_PRECIO_MULTIPLICADOR=1.0
 BOX_LESION_HORAS=3
+BOX_DESCANSO_REDUCCION_POR_HORA=1.0
 BOX_DESAFIO_DURACION_HORAS=1
 BOX_COMBATE_ACTIVO=1
 BOX_COMBATE_TICK_SEGUNDOS=15
@@ -181,6 +182,7 @@ restricción de canal: pueden usar cualquier comando desde cualquier canal.
 | Comando | Parámetros | Descripción |
 | --- | --- | --- |
 | `/admin info` | Ninguno | Muestra la configuración del bot: canales, tasas de Box, fechas de SeptSinFP y zona horaria. |
+| `/admin test` | Ninguno | Ejecuta un diagnóstico seguro y de solo lectura del árbol de comandos, la base de datos, Box, Madrugue, SeptSinFP, los canales, permisos y tareas automáticas. |
 | `/admin fileexecute` | `archivo` | Ejecuta comandos administrativos desde un archivo TXT. |
 
 ### Madrugue
@@ -282,7 +284,7 @@ día perdido (`2026-09-04`) queda con racha 1. Se corrige con
 | `/box stats` | Ninguno | Muestra tus estadísticas de Box; la respuesta es privada. |
 | `/box topdesafios` | Ninguno | Muestra victorias, derrotas y ratio de cada participante. |
 | `/box combate` | Ninguno | Muestra cómo va tu pelea o sparring narrado en vivo. |
-| `/box descanso` | Ninguno | Reinicia tu probabilidad de lesión a 0%. |
+| `/box descanso` | `minutos` o `hasta` | Inicia un descanso que reduce la probabilidad de lesión al finalizar. |
 | `/box tratamiento` | `tipo` | Compra un tratamiento para quitar una lesión. |
 | `/box suministro` | `tipo` | Usa suministros de recuperación (vida, cansancio, defensa o lesión). |
 | `/box ayuda` | Ninguno | Envía por mensaje directo la lista de comandos de Box. |
@@ -428,8 +430,12 @@ acciones ni desafíos. Mientras esté sin ninguna acción en curso (esté o no
 lesionado), su probabilidad baja
 `BOX_LESION_DECAIMIENTO_POR_HORA` puntos porcentuales por hora (0.01 por
 defecto): el bot reduce ese monto una vez por hora para los usuarios inactivos,
-sin pasar de 0%. `/box descanso` reinicia la probabilidad a 0%, pero no cura
-una lesión activa. El `Tratamiento Fisioterapeutico` cuesta
+sin pasar de 0%. `/box descanso` funciona como una acción temporizada: recibe
+`minutos` o `hasta`, bloquea otras acciones mientras está activo y, al terminar,
+reduce la probabilidad de lesión a razón de
+`BOX_DESCANSO_REDUCCION_POR_HORA` puntos porcentuales por hora (1 por defecto),
+prorrateados por minuto. Puede iniciarse estando lesionado, pero no cura la
+lesión activa. El `Tratamiento Fisioterapeutico` cuesta
 `BOX_PRECIO_TRATAMIENTO_FISIOTERAPEUTICO` (10000 por defecto), quita la lesión
 y conserva la probabilidad acumulada. El `Tratamiento 5 estrellas` cuesta
 `BOX_PRECIO_TRATAMIENTO_CINCO_ESTRELLAS` (50000 por defecto), quita la lesión
@@ -467,8 +473,11 @@ Para comprar una mejora se utiliza la opción correspondiente:
 
 ### Comprar con los botones de la tienda
 
-`/box tienda` muestra el catálogo y, debajo, un botón por artículo con el emoji
-que lo representa. Tocar el botón compra ese artículo.
+`/box tienda` muestra el catálogo, el balance actual del jugador y, debajo, un
+botón por artículo con el emoji que lo representa. Tocar el botón compra ese
+artículo. Después de cada compra hecha desde esos botones, el bot vuelve a leer
+la base y edita el mismo mensaje: actualiza al instante el dinero disponible,
+la experiencia, los niveles, las calidades y los precios siguientes.
 
 Cada botón guarda en su `custom_id` a qué usuario pertenece la tienda
 (`box_comprar:<owner>:<categoría>:<artículo>`), así que solo funciona para quien

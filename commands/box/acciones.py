@@ -1,6 +1,4 @@
-"""Comandos de acciones temporizadas: entrenar, trabajar y promoverse."""
-
-from datetime import datetime
+"""Acciones temporizadas: entrenar, trabajar, promoverse y descansar."""
 
 import discord
 from discord import app_commands
@@ -9,6 +7,7 @@ from discord.ext import tasks
 from commands.box.base import solo_servidor
 from config import (
     BOX_CHANNEL_IDS,
+    BOX_DESCANSO_REDUCCION_POR_HORA,
     BOX_DINERO_POR_MINUTO,
     BOX_EXPERIENCIA_POR_MINUTO,
     BOX_LESION_HORAS,
@@ -49,8 +48,28 @@ UNIDAD_RECOMPENSA = {
 }
 
 
-def texto_recompensa(tipo: str, recompensa: int, dinero_recompensa: int) -> str:
-    """Describe lo que el usuario recibió al terminar una acción."""
+def formato_puntos_porcentuales(valor: float) -> str:
+    """Muestra una tasa con precisión útil, sin ceros decimales sobrantes."""
+
+    return f"{valor:.3f}".rstrip("0").rstrip(".")
+
+
+def texto_recompensa(
+    tipo: str,
+    recompensa: float,
+    dinero_recompensa: int,
+) -> str:
+    """Describe el resultado que recibió el usuario al terminar una acción."""
+
+    if tipo == "DESCANSANDO":
+        if recompensa <= 0:
+            return "La probabilidad de lesión ya estaba en **0%**."
+
+        puntos = formato_puntos_porcentuales(recompensa)
+        return (
+            "Redujo su probabilidad de lesión en "
+            f"**{puntos} puntos porcentuales**."
+        )
 
     if tipo == "TRABAJANDO":
         return f"**{dinero_recompensa} $**"
@@ -66,7 +85,7 @@ def texto_recompensa(tipo: str, recompensa: int, dinero_recompensa: int) -> str:
 
 
 class AccionesMixin:
-    """Entrenar, trabajar y promoverse, más la liquidación periódica."""
+    """Acciones temporizadas y su liquidación periódica."""
 
     @tasks.loop(seconds=15)
     async def comprobar_acciones(self):
@@ -114,7 +133,7 @@ class AccionesMixin:
             )
             seccion(
                 embed,
-                "Recompensa",
+                "🛌 Recuperación" if tipo == "DESCANSANDO" else "Recompensa",
                 texto_recompensa(tipo, recompensa, dinero_recompensa),
             )
             if se_lesiona:
@@ -200,6 +219,12 @@ class AccionesMixin:
         if not await solo_servidor(interaction):
             return
 
+        # Validar y registrar una acción requiere varias operaciones de base.
+        # Se confirma primero para no perder la ventana de 3 segundos de
+        # Discord si PostgreSQL está lento. También cubre descanso.
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         _, lesionado_hasta = await obtener_estado_box(
             interaction.guild.id,
             interaction.user.id,
@@ -261,6 +286,29 @@ class AccionesMixin:
             return
 
         finaliza = int(duracion.finaliza_en.timestamp())
+
+        if tipo == "DESCANSANDO":
+            reduccion = (
+                duracion.minutos
+                / 60
+                * BOX_DESCANSO_REDUCCION_POR_HORA
+            )
+            await responder(
+                interaction,
+                "🛌 Comenzaste a descansar",
+                color_area="box",
+                secciones_=[
+                    ("⏱️ Duración", f"**{duracion.minutos} minutos**"),
+                    ("⏰ Finaliza", f"<t:{finaliza}:R>"),
+                    (
+                        "🩹 Recuperación al finalizar",
+                        "Hasta **"
+                        f"{formato_puntos_porcentuales(reduccion)} puntos "
+                        "porcentuales** menos de probabilidad de lesión.",
+                    ),
+                ],
+            )
+            return
 
         if tipo == "PROMOVIENDO":
             await responder(
@@ -380,6 +428,34 @@ class AccionesMixin:
             interaction,
             minutos,
             "PROMOVIENDO",
+            0,
+            hasta,
+            permitir_lesionado=True,
+        )
+
+    @app_commands.command(
+        name="descanso",
+        description="Descansa para reducir tu probabilidad de lesión.",
+    )
+    @app_commands.describe(
+        minutos=(
+            "Cantidad de minutos de descanso "
+            f"({BOX_MINUTOS_MINIMO}-{BOX_MINUTOS_MAXIMO})."
+        ),
+        hasta="Hora a la que quieres terminar, formato HH:MM.",
+    )
+    async def descanso(
+        self,
+        interaction: discord.Interaction,
+        minutos: int | None = None,
+        hasta: str | None = None,
+    ):
+        """Inicia un descanso temporizado, incluso si el usuario está lesionado."""
+
+        await self._comenzar_accion(
+            interaction,
+            minutos,
+            "DESCANSANDO",
             0,
             hasta,
             permitir_lesionado=True,

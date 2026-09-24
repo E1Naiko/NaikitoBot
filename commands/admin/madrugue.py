@@ -516,6 +516,14 @@ class MadrugueAdminMixin:
         if not await solo_servidor(interaction):
             return
 
+        # Este comando consulta la base varias veces antes de guardar. Se
+        # confirma la interacción antes de esas operaciones para no perder la
+        # ventana inicial de 3 segundos de Discord. Cuando ``manualadd`` se
+        # ejecuta desde ``fileexecute`` la interacción proxy ya está diferida,
+        # por eso no se intenta responder una segunda vez.
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
         # ----------------------------------------------------
         # VALIDAR FECHA
         # ----------------------------------------------------

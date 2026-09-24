@@ -1,7 +1,5 @@
 """Consulta y gestión del perfil de Box: saldo, stats, equipo, ranking y ayuda."""
 
-from datetime import datetime
-
 import discord
 from discord import app_commands
 
@@ -11,7 +9,6 @@ from modules.box.services import (
     EQUIPAMIENTO,
     TEXTO_AYUDA,
     calidad_equipamiento,
-    descansar,
     formato_ratio,
     obtener_accion_activa,
     obtener_equipo,
@@ -185,30 +182,6 @@ class InfoMixin:
                 ),
                 ("Equipamiento", equipamiento, False),
             ],
-        )
-
-    @app_commands.command(
-        name="descanso",
-        description="Reinicia tu probabilidad de lesión a cero.",
-    )
-    async def descanso(self, interaction: discord.Interaction):
-        if not await solo_servidor(interaction):
-            return
-
-        if await obtener_accion_activa(interaction.guild.id, interaction.user.id):
-            await responder_error(
-                interaction,
-                "⚠️ Acción activa",
-                "No puedes descansar mientras realizas una acción.",
-            )
-            return
-
-        # Descansar está permitido incluso estando lesionado.
-        await descansar(interaction.guild.id, interaction.user.id)
-        await responder_ok(
-            interaction,
-            "🛌 Descanso",
-            "Tu probabilidad de lesión volvió a **0%**.",
         )
 
     @app_commands.command(

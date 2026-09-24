@@ -31,6 +31,7 @@ from modules.box.services import (
     es_nivel_maximo,
     obtener_equipo,
     obtener_nivel_mejora,
+    obtener_saldo,
     precio_equipamiento,
     precio_mejora,
 )
@@ -54,6 +55,42 @@ BOTONES_POR_FILA = 5
 
 def custom_id_de(owner_id: int, categoria: str, clave: str) -> str:
     return f"{PREFIJO_CUSTOM_ID}:{owner_id}:{categoria}:{clave}"
+
+
+async def construir_embed_tienda(interaction) -> discord.Embed:
+    """Construye la tienda con el saldo, precios y niveles más recientes."""
+
+    return crear_embed(
+        "🛒 Tienda de Box",
+        await construir_catalogo(interaction),
+        color_area="box",
+    )
+
+
+async def actualizar_mensaje_tienda(interaction, mensaje=None) -> bool:
+    """Vuelve a leer la base y edita el mensaje público de la tienda.
+
+    Los botones dinámicos sobreviven reinicios, por lo que no se depende de
+    estado en memoria: el mensaje y los datos actuales llegan con cada clic.
+    Un fallo al refrescar no revierte una compra ya confirmada en la base.
+    """
+
+    mensaje = mensaje or getattr(interaction, "message", None)
+    if not callable(getattr(mensaje, "edit", None)):
+        return False
+
+    try:
+        embed = await construir_embed_tienda(interaction)
+        await mensaje.edit(embed=embed)
+    except Exception as error:
+        print(
+            "[BOX TIENDA] no se pudo actualizar el mensaje: "
+            f"{type(error).__name__}: {error}",
+            flush=True,
+        )
+        return False
+
+    return True
 
 
 class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_CUSTOM_ID):
@@ -124,10 +161,18 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
                     "Elegí qué suministro querés usar:",
                     color_area="box",
                 ),
-                view=VistaSuministro(self.owner_id),
+                view=VistaSuministro(
+                    self.owner_id,
+                    tienda_message=interaction.message,
+                ),
                 ephemeral=True,
             )
             return
+
+        # La compra y la reconstrucción completa del catálogo pueden tocar la
+        # base varias veces. Se acusa recibo primero y luego se edita el mismo
+        # mensaje de la tienda con saldo, niveles y precios nuevos.
+        await interaction.response.defer(ephemeral=True)
 
         resultado = await ejecutar_compra(
             interaction.guild.id,
@@ -135,7 +180,8 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
             self.categoria,
             self.clave,
         )
-        await interaction.response.send_message(
+        await actualizar_mensaje_tienda(interaction)
+        await interaction.followup.send(
             embed=crear_embed(
                 "✅ Compra" if resultado.exitoso else "⚠️ Compra rechazada",
                 resultado.texto,
@@ -148,8 +194,9 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
 class SelectorSuministro(discord.ui.Select):
     """Menú para elegir el tipo de suministro dentro de la tienda."""
 
-    def __init__(self, owner_id: int):
+    def __init__(self, owner_id: int, tienda_message=None):
         self.owner_id = owner_id
+        self.tienda_message = tienda_message
 
         opciones = [
             discord.SelectOption(
@@ -186,6 +233,11 @@ class SelectorSuministro(discord.ui.Select):
             )
             return
 
+        # Se difiere antes de comprar para proteger la ventana de Discord. El
+        # menú efímero se deshabilita por edición directa y la tienda pública se
+        # reconstruye con el nuevo balance.
+        await interaction.response.defer(ephemeral=True)
+
         tipo = self.values[0]
         resultado = await usar_suministro_resultado(
             interaction.guild.id,
@@ -193,9 +245,13 @@ class SelectorSuministro(discord.ui.Select):
             tipo,
         )
 
-        # El menú es de un solo uso: se deshabilita tras elegir.
         self.disabled = True
-        await interaction.response.edit_message(view=self.view)
+        if interaction.message is not None:
+            await interaction.message.edit(view=self.view)
+        await actualizar_mensaje_tienda(
+            interaction,
+            mensaje=self.tienda_message,
+        )
         await interaction.followup.send(
             embed=crear_embed(
                 "✅ Suministro"
@@ -211,10 +267,11 @@ class SelectorSuministro(discord.ui.Select):
 class VistaSuministro(discord.ui.View):
     """Vista efímera con el menú de tipos de suministro."""
 
-    def __init__(self, owner_id: int):
+    def __init__(self, owner_id: int, tienda_message=None):
         super().__init__(timeout=120)
         self.owner_id = owner_id
-        self.add_item(SelectorSuministro(owner_id))
+        self.tienda_message = tienda_message
+        self.add_item(SelectorSuministro(owner_id, tienda_message))
 
 
 class TiendaView(discord.ui.View):
@@ -255,6 +312,10 @@ class TiendaMixin:
     async def tienda(self, interaction: discord.Interaction):
         if not await solo_servidor(interaction):
             return
+
+        # El catálogo consulta saldo, mejoras y equipo. Se difiere para que una
+        # base lenta no haga expirar la interacción antes de mostrar la tienda.
+        await interaction.response.defer()
 
         await responder(
             interaction,
@@ -392,8 +453,15 @@ async def construir_catalogo(interaction) -> str:
 
     guild_id = interaction.guild.id
     user_id = interaction.user.id
+    experiencia, dinero = await obtener_saldo(guild_id, user_id)
 
-    lineas = ["🛒 **Tienda de Box**", "\n**Mejoras**"]
+    lineas = [
+        "🛒 **Tienda de Box**",
+        "\n**Balance actual**",
+        f"💰 Dinero disponible: **{dinero}$**",
+        f"⭐ Experiencia: **{experiencia} EXP**",
+        "\n**Mejoras**",
+    ]
 
     for clave, mejora in MEJORAS.items():
         nivel = await obtener_nivel_mejora(guild_id, user_id, clave)

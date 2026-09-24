@@ -8,6 +8,7 @@ cada área vive en su propio mixin y se combinan acá.
 from discord.ext import commands
 
 from commands.admin.box import BoxAdminMixin
+from commands.admin.diagnostico import DiagnosticoMixin
 from commands.admin.madrugue import MadrugueAdminMixin
 from commands.admin.sistema import SistemaMixin
 from commands.admin.ssf import SsfAdminMixin
@@ -15,6 +16,7 @@ from commands.admin.ssf import SsfAdminMixin
 
 class Admin(
     BoxAdminMixin,
+    DiagnosticoMixin,
     MadrugueAdminMixin,
     SistemaMixin,
     SsfAdminMixin,
