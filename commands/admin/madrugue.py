@@ -1,14 +1,19 @@
 """Administración de Madrugue: ranking, registros y reseteos."""
 
 from datetime import date, datetime
+import csv
+import io
 
 import discord
 from discord import app_commands
+from sqlalchemy import select
 
 from core.mensajes import responder, responder_texto
+from core.database import crear_sesion
 from commands.admin.base import solo_admin, solo_servidor
 from config import MADRUGUE_PUNTOS_100, MADRUGUE_PUNTOS_25
 from core.utils import ahora
+from modules.madrugue.models import RegistroMadrugue
 from modules.madrugue.services import (
     calcular_multiplicador_horario,
     calcular_racha_para_nuevo_registro,
@@ -704,6 +709,93 @@ class MadrugueAdminMixin:
             f"**{puntos_finales:.3f}**",
             ephemeral=True,
         )
+
+    # ========================================================
+    # IMPORTAR HISTÓRICO
+    # ========================================================
+
+    @madrugue.command(
+        name="importar",
+        description="Importa registros históricos desde un CSV.",
+    )
+    @app_commands.describe(
+        archivo="CSV UTF-8 con user_id, username, fecha, hora y puntos históricos.",
+    )
+    async def madrugue_importar(
+        self,
+        interaction: discord.Interaction,
+        archivo: discord.Attachment,
+    ):
+        """Importa registros de Madrugue sin recalcular sus valores históricos."""
+
+        if not await solo_admin(interaction) or not await solo_servidor(interaction):
+            return
+        if not archivo.filename.lower().endswith(".csv"):
+            await responder_texto(interaction, "❌ El archivo debe tener extensión `.csv`.", ephemeral=True)
+            return
+        if archivo.size > 1024 * 1024:
+            await responder_texto(interaction, "❌ El CSV no puede superar 1 MiB.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        try:
+            texto = (await archivo.read()).decode("utf-8-sig")
+            lector = csv.DictReader(io.StringIO(texto))
+            requeridas = {"user_id", "username", "fecha", "hora", "puntos_base", "multiplicador", "puntos_finales"}
+            if not lector.fieldnames or not requeridas.issubset(lector.fieldnames):
+                raise ValueError("faltan columnas obligatorias en el CSV")
+            filas = []
+            claves = set()
+            for numero, fila in enumerate(lector, start=2):
+                try:
+                    registro = (
+                        int(fila["user_id"]), fila["username"].strip(),
+                        date.fromisoformat(fila["fecha"]), fila["hora"],
+                        int(fila["puntos_base"]), float(fila["multiplicador"]),
+                        float(fila["puntos_finales"]),
+                    )
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError(f"línea {numero}: datos inválidos ({error})") from error
+                if not registro[1] or len(registro[3]) != 5:
+                    raise ValueError(f"línea {numero}: username u hora inválidos")
+                clave = (registro[0], registro[2])
+                if clave in claves:
+                    raise ValueError(f"línea {numero}: usuario y fecha repetidos en el archivo")
+                claves.add(clave)
+                filas.append(registro)
+            if len(filas) > 500:
+                raise ValueError("el archivo no puede contener más de 500 registros")
+
+            nuevos = repetidos = 0
+            async with crear_sesion() as sesion:
+                for user_id, username, fecha, hora, base, multiplicador, puntos in filas:
+                    existente = (await sesion.execute(select(RegistroMadrugue).where(
+                        RegistroMadrugue.guild_id == interaction.guild.id,
+                        RegistroMadrugue.user_id == user_id,
+                        RegistroMadrugue.fecha == fecha,
+                    ))).scalar_one_or_none()
+                    if existente:
+                        valores = (existente.username, existente.hora, existente.puntos_base, existente.multiplicador, existente.puntos_finales)
+                        esperados = (username, hora, base, multiplicador, puntos)
+                        if valores != esperados:
+                            raise ValueError(f"conflicto con el registro existente de {user_id} del {fecha}")
+                        repetidos += 1
+                        continue
+                    sesion.add(RegistroMadrugue(
+                        guild_id=interaction.guild.id, user_id=user_id, username=username,
+                        fecha=fecha, hora=hora, puntos_base=base,
+                        multiplicador=multiplicador, puntos_finales=puntos,
+                    ))
+                    nuevos += 1
+                await sesion.commit()
+        except (UnicodeDecodeError, ValueError) as error:
+            await responder_texto(interaction, f"❌ No se importó nada: {error}", ephemeral=True)
+            return
+        except Exception as error:
+            await responder_texto(interaction, f"❌ Error al importar; no se aplicaron los cambios: {error}", ephemeral=True)
+            return
+
+        await responder_texto(interaction, f"✅ Importación completada. Nuevos: **{nuevos}** · Ya existentes: **{repetidos}**.", ephemeral=True)
 
     # ========================================================
     # VER

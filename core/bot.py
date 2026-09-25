@@ -263,6 +263,11 @@ class NaikitoBot(commands.Bot):
                 id=GUILD_ID
             )
 
+            # Reemplaza también comandos antiguos que Discord pueda conservar
+            # con una firma diferente (por ejemplo, /admin manualadd). Sin
+            # limpiar el árbol local, discord.py puede dejar la definición vieja
+            # registrada y producir CommandSignatureMismatch al invocarla.
+            self.tree.clear_commands(guild=guild)
             self.tree.copy_global_to(
                 guild=guild
             )
