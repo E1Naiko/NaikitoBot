@@ -245,9 +245,22 @@ class SelectorSuministro(discord.ui.Select):
             tipo,
         )
 
+        # El menú es un mensaje efímero: ``interaction.message.edit`` usa el
+        # endpoint del canal y Discord responde 404 (Unknown Message) porque
+        # esos mensajes no existen en el canal. Se edita por el webhook de la
+        # interacción, que tras el ``defer`` apunta al mensaje del menú.
+        # El suministro ya está cobrado: si Discord rechaza la edición se
+        # registra y se sigue, para que la confirmación llegue igual.
         self.disabled = True
-        if interaction.message is not None:
-            await interaction.message.edit(view=self.view)
+        self.view.stop()
+        try:
+            await interaction.edit_original_response(view=self.view)
+        except discord.HTTPException as error:
+            print(
+                "[BOX TIENDA] no se pudo deshabilitar el menú de "
+                f"suministros: {type(error).__name__}: {error}",
+                flush=True,
+            )
         await actualizar_mensaje_tienda(
             interaction,
             mensaje=self.tienda_message,

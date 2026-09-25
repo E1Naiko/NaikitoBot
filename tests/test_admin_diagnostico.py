@@ -158,6 +158,7 @@ async def test_diagnostico_de_canales_revisa_permisos_sin_enviar(cog, monkeypatc
     canal = CanalConPermisosInsuficientes()
     monkeypatch.setattr(diagnostico, "GENERAL_CHANNEL_IDS", {canal.id})
     monkeypatch.setattr(diagnostico, "MADRUGUE_CHANNEL_IDS", set())
+    monkeypatch.setattr(diagnostico, "LAHORA_CANALES_ID", set())
     monkeypatch.setattr(diagnostico, "BOX_CHANNEL_IDS", set())
     monkeypatch.setattr(diagnostico, "SSF_CANALES_ID", set())
     monkeypatch.setattr(cog.bot, "get_channel", lambda canal_id: canal)
@@ -182,6 +183,7 @@ async def test_manifiesto_coincide_con_el_arbol_real(
     from commands.admin.cog import Admin
     from commands.box.cog import Box
     from commands.general import General
+    from commands.lahora.cog import LaHora
     from commands.madrugue.cog import Madrugue
     from commands.ssf.cog import Ssf
     from core.bot import NaikitoBot
@@ -192,7 +194,7 @@ async def test_manifiesto_coincide_con_el_arbol_real(
     monkeypatch.setattr(tasks.Loop, "start", lambda *_args, **_kwargs: None)
     bot = NaikitoBot()
     try:
-        for clase in (General, Madrugue, Admin, Ssf, Box):
+        for clase in (General, Madrugue, LaHora, Admin, Ssf, Box):
             await bot.add_cog(clase(bot))
 
         resultado = bot.get_cog("Admin")._diagnosticar_arbol()

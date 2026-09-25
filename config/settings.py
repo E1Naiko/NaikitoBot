@@ -21,6 +21,12 @@ __all__ = [
     "MADRUGUE_PUNTOS_5",
     "MADRUGUE_BONUS_MAXIMO",
     "MADRUGUE_BONUS_MINIMO",
+    "LAHORA_HORAS",
+    "LAHORA_DURACION_MINUTOS",
+    "LAHORA_PUNTOS_BASE",
+    "LAHORA_BONUS_VELOCIDAD",
+    "LAHORA_BONUS_PRIMERO",
+    "LAHORA_CANALES_ID",
     "ADMIN_USER_IDS",
     "GUILD_ID",
     "GENERAL_CHANNEL_IDS",
@@ -110,6 +116,19 @@ load_dotenv(PROJECT_ROOT / ".env")
 # LECTURA Y VALIDACIÓN DE VARIABLES
 # ============================================================
 
+def _parsear_hora(valor):
+    """Convierte ``HH:MM`` estricto en ``time`` o devuelve ``None``."""
+
+    if not re.fullmatch("[0-9]{2}:[0-9]{2}", valor):
+        return None
+
+    try:
+        return datetime.strptime(valor, "%H:%M").time()
+
+    except ValueError:
+        return None
+
+
 def _leer_hora(nombre, defecto):
     """Lee una variable ``HH:MM`` y falla con un error claro si no valida.
 
@@ -119,17 +138,7 @@ def _leer_hora(nombre, defecto):
 
     valor = os.getenv(nombre, defecto).strip()
 
-    hora = None
-
-    if re.fullmatch("[0-9]{2}:[0-9]{2}", valor):
-        try:
-            hora = datetime.strptime(
-                valor,
-                "%H:%M",
-            ).time()
-
-        except ValueError:
-            hora = None
+    hora = _parsear_hora(valor)
 
     if hora is None:
         raise RuntimeError(
@@ -437,6 +446,120 @@ _comprobar(
 
 
 # ============================================================
+# CONFIGURACIÓN DE LA HORA (420)
+# ============================================================
+
+# Canal 420: cuando alguien escribe "420" dentro de una de las ventanas
+# (por defecto el minuto 04:20 y el minuto 16:20) suma puntos. Todo se
+# configura desde el .env con variables LAHORA_* y se valida al arrancar.
+
+def _leer_lista_horas(nombre, defecto):
+    """Lee una lista ``HH:MM,HH:MM`` con el mismo formato estricto."""
+
+    valor = os.getenv(nombre, defecto).strip()
+    partes = [parte.strip() for parte in valor.split(",") if parte.strip()]
+
+    _comprobar(
+        bool(partes),
+        f"{nombre} debe tener al menos una hora HH:MM (por ejemplo "
+        f"{defecto}), pero se recibió '{valor}'.",
+    )
+
+    horas = []
+
+    for parte in partes:
+        hora = _parsear_hora(parte)
+
+        _comprobar(
+            hora is not None,
+            f"cada hora de {nombre} debe tener formato HH:MM (por "
+            f"ejemplo {defecto}), pero se recibió '{parte}'.",
+        )
+
+        horas.append(hora)
+
+    return tuple(sorted(horas))
+
+
+LAHORA_HORAS = _leer_lista_horas(
+    "LAHORA_HORAS",
+    "04:20,16:20",
+)
+
+LAHORA_DURACION_MINUTOS = _leer_entero(
+    "LAHORA_DURACION_MINUTOS",
+    1,
+)
+
+LAHORA_PUNTOS_BASE = _leer_entero(
+    "LAHORA_PUNTOS_BASE",
+    10,
+)
+
+LAHORA_BONUS_VELOCIDAD = _leer_decimal(
+    "LAHORA_BONUS_VELOCIDAD",
+    0.5,
+)
+
+LAHORA_BONUS_PRIMERO = _leer_entero(
+    "LAHORA_BONUS_PRIMERO",
+    5,
+)
+
+_comprobar(
+    1 <= LAHORA_DURACION_MINUTOS <= 59,
+    "LAHORA_DURACION_MINUTOS debe ser un entero entre 1 y 59, pero se "
+    f"recibió {LAHORA_DURACION_MINUTOS}.",
+)
+
+_comprobar(
+    len(set(LAHORA_HORAS)) == len(LAHORA_HORAS),
+    "LAHORA_HORAS no puede repetir horas, pero se recibió "
+    f"{', '.join(_hhmm(hora) for hora in LAHORA_HORAS)}.",
+)
+
+
+def _minutos_del_dia(hora: time) -> int:
+    return hora.hour * 60 + hora.minute
+
+
+for _hora in LAHORA_HORAS:
+    _comprobar(
+        _minutos_del_dia(_hora) + LAHORA_DURACION_MINUTOS <= 24 * 60,
+        f"la ventana de LAHORA_HORAS que abre a las {_hhmm(_hora)} "
+        f"dura {LAHORA_DURACION_MINUTOS} minutos y cruzaría la "
+        "medianoche.",
+    )
+
+for _anterior, _siguiente in zip(LAHORA_HORAS, LAHORA_HORAS[1:]):
+    _comprobar(
+        _minutos_del_dia(_anterior) + LAHORA_DURACION_MINUTOS
+        <= _minutos_del_dia(_siguiente),
+        f"las ventanas de LAHORA_HORAS de las {_hhmm(_anterior)} y las "
+        f"{_hhmm(_siguiente)} se superponen con "
+        f"LAHORA_DURACION_MINUTOS={LAHORA_DURACION_MINUTOS}.",
+    )
+
+_comprobar(
+    LAHORA_PUNTOS_BASE >= 1,
+    "LAHORA_PUNTOS_BASE debe ser un número entero mayor o igual que 1, "
+    f"pero se recibió {LAHORA_PUNTOS_BASE}.",
+)
+
+_comprobar(
+    LAHORA_BONUS_VELOCIDAD >= 0,
+    "LAHORA_BONUS_VELOCIDAD debe ser mayor o igual que 0, pero se "
+    f"recibió {LAHORA_BONUS_VELOCIDAD}.",
+)
+
+_comprobar(
+    LAHORA_BONUS_PRIMERO >= 0,
+    "LAHORA_BONUS_PRIMERO debe ser mayor o igual que 0, pero se "
+    f"recibió {LAHORA_BONUS_PRIMERO}.",
+)
+
+
+# ============================================================
 # USUARIOS CON ACCESO ADMINISTRATIVO
 # ============================================================
 
@@ -465,6 +588,12 @@ GENERAL_CHANNEL_IDS = {
 MADRUGUE_CHANNEL_IDS = {
     int(canal_id.strip())
     for canal_id in os.getenv("MADRUGUE_CHANNEL_ID", "").split(",")
+    if canal_id.strip()
+}
+
+LAHORA_CANALES_ID = {
+    int(canal_id.strip())
+    for canal_id in os.getenv("LAHORA_CANALES_ID", "").split(",")
     if canal_id.strip()
 }
 

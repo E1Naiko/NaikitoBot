@@ -311,6 +311,18 @@ class InteraccionFalsa:
     async def original_response(self):
         return MensajeFalso()
 
+    async def edit_original_response(self, content=None, **kwargs):
+        """Edita la respuesta original por el webhook de la interacción.
+
+        Es la única forma de editar un mensaje efímero: ``Message.edit``
+        usa el endpoint del canal y Discord responde 404 para esos
+        mensajes. Se registra para poder afirmar sobre la edición.
+        """
+
+        mensaje = _Mensaje(content, kwargs)
+        self.respuestas.append(mensaje)
+        return mensaje
+
     @property
     def texto(self):
         """Texto de la última respuesta enviada."""
