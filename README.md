@@ -74,6 +74,7 @@ GENERAL_CHANNEL_ID=<ID_CANAL_GENERAL>
 MADRUGUE_CHANNEL_ID=<ID_CANAL_MADRUGUE>
 BOX_CHANNEL_ID=<ID_CANAL_1>[,<ID_CANAL_2>]
 SSF_CANALES_ID=<ID_CANAL>[,<ID_CANAL_2>]
+LAHORA_CANALES_ID=<ID_CANAL_420>
 TIMEZONE=America/Argentina/Buenos_Aires
 SSF_FECHA_INICIO=YYYY-MM-DD
 SSF_FECHA_FIN=YYYY-MM-DD
@@ -94,6 +95,11 @@ MADRUGUE_PUNTOS_25=25
 MADRUGUE_PUNTOS_5=5
 MADRUGUE_BONUS_MAXIMO=0.100
 MADRUGUE_BONUS_MINIMO=0.001
+LAHORA_HORAS=04:20,16:20
+LAHORA_DURACION_MINUTOS=1
+LAHORA_PUNTOS_BASE=10
+LAHORA_BONUS_VELOCIDAD=0.5
+LAHORA_BONUS_PRIMERO=5
 ```
 
 El archivo `.env.example` documenta todas las variables disponibles, incluidas
@@ -106,7 +112,7 @@ con variables definidas directamente por la plataforma.
 ## Presentación
 
 Las respuestas del bot usan la capa común `core/mensajes.py`, que arma embeds
-con un color por área (Box, Madrugue, SeptSinFP, admin o general) y secciones
+con un color por área (Box, Madrugue, 420, SeptSinFP, admin o general) y secciones
 ordenadas (`crear_embed`, `responder`, `responder_error`, etc.). Usar esas
 helpers mantiene el formato consistente entre comandos.
 
@@ -120,8 +126,8 @@ python main.py
 
 Los comandos están separados por canales: `GENERAL_CHANNEL_ID` permite los
 comandos generales; `BOX_CHANNEL_ID` permite los comandos de Box;
-`MADRUGUE_CHANNEL_ID` permite solo Madrugue; y `SSF_CANALES_ID` permite solo
-SeptSinFP. Los IDs pueden separarse por comas. Los usuarios incluidos en
+`MADRUGUE_CHANNEL_ID` permite solo Madrugue; `LAHORA_CANALES_ID` permite solo
+los comandos del canal 420; y `SSF_CANALES_ID` permite solo SeptSinFP. Los IDs pueden separarse por comas. Los usuarios incluidos en
 `ADMIN_USER_IDS` quedan exentos de la restricción de canal: pueden usar
 cualquier comando desde cualquier canal.
 
@@ -156,6 +162,41 @@ comandos (`/madrugue`, `/madrugue_ayuda` y `/admin manualadd`) se arman con
 estos valores. Un valor inválido (una hora fuera del formato `HH:MM`, ventanas
 desordenadas, puntos negativos o el bonus invertido) impide que el bot arranque
 con un error que indica la variable culpable.
+
+## Canal 420 (laHora)
+
+En el canal de `LAHORA_CANALES_ID` no hace falta ningún comando para sumar:
+cuando alguien escribe **420** dentro de una ventana (por defecto el minuto
+04:20 y el minuto 16:20, hora de `TIMEZONE`), el bot lo registra y reacciona
+con 🌿, y además con 🥇 al primero de la ventana. Fuera de horario o repetido
+no responde nada, para no llenar el canal.
+
+- Cuentan `420`, `4:20`, `04:20`, `4.20`, `16:20`, `420!!`, `420 🌿`… (el
+  mensaje tiene que ser solo el 420, con signos o emojis alrededor).
+- Un 420 por persona en cada ventana: se puede sumar a las 04:20 y a las 16:20
+  el mismo día.
+- Se usa la hora de envío del mensaje, no la de procesamiento: un 420 de las
+  16:20:59 cuenta aunque el bot lo procese un segundo después.
+- El bot necesita en ese canal los permisos **Ver canal**, **Leer el historial
+  de mensajes** y **Añadir reacciones**, y el intent **Message Content**
+  activado en el Developer Portal. `/admin test` avisa si falta alguno.
+
+Puntos: `LAHORA_PUNTOS_BASE` × multiplicador de velocidad (de
+`1 + LAHORA_BONUS_VELOCIDAD` en el segundo 0 a `1` al cerrar la ventana) +
+`LAHORA_BONUS_PRIMERO` para el primero. Con los valores por defecto el primero
+en el segundo 0 suma 20 puntos y alguien a los 30 segundos suma 12,5.
+
+| Comando | Descripción |
+| --- | --- |
+| `/420_stats [usuario]` | Puntos, cantidad de 420, veces primero, racha actual, mejor racha y mejor tiempo. |
+| `/420_top` | Ranking histórico del servidor. |
+| `/420_hoy` | Quiénes dijeron 420 hoy, por ventana y en orden de llegada. |
+| `/420_ayuda` | Explica cómo funciona el canal, los horarios y los puntos. |
+
+Las ventanas se configuran con `LAHORA_HORAS` (horas `HH:MM` separadas por
+comas) y `LAHORA_DURACION_MINUTOS` (1 a 59). Ventanas repetidas, superpuestas
+o que cruzan la medianoche impiden arrancar con un error que nombra la
+variable culpable. La racha cuenta días consecutivos con al menos un 420.
 
 ## Comandos de SeptSinFP
 
@@ -196,6 +237,29 @@ restricción de canal: pueden usar cualquier comando desde cualquier canal.
 | `/admin madrugue resetusuario` | `usuario` | Elimina todos los registros de un usuario. |
 | `/admin madrugue resettotal` | `confirmar`: `SI` o `NO` | Elimina todos los registros del servidor cuando se confirma. |
 | `/admin madrugue manualadd` | `usuario`, `fecha`, `hora` | Agrega manualmente una madrugada. |
+
+### 420
+
+| Comando | Parámetros | Descripción |
+| --- | --- | --- |
+| `/admin 420 importar` | `canal` (opcional), `desde` (opcional, `YYYY-MM-DD`) | Recorre el historial del canal 420 (por defecto los de `LAHORA_CANALES_ID`, desde el primer mensaje) y registra los 420 que ya estaban, con las mismas reglas que en vivo. Se puede correr varias veces sin duplicar. |
+| `/admin 420 manualadd` | `usuario`, `fecha`, `hora` (`HH:MM:SS` o `HH:MM`) | Registra a mano un 420. La hora tiene que caer en una ventana. |
+| `/admin 420 resetdia` | `usuario`, `fecha`, `ventana` (opcional) | Borra los 420 de un usuario en esa fecha (o solo en esa ventana). |
+| `/admin 420 ver` | `usuario` | Muestra los últimos 20 registros del usuario (marca los manuales). |
+| `/admin 420 resetusuario` | `usuario` | Borra todos los 420 de un usuario. |
+| `/admin 420 resettotal` | `confirmar`: `SI` o `NO` | Borra todos los 420 del servidor. |
+| `/admin 420 stats` | Ninguno | Usuarios, cantidad de 420 y puntos repartidos. |
+
+Las posiciones (y el bonus del primero) siempre salen del orden real de los
+mensajes: después de importar, agregar o borrar, el bot reordena la ventana
+afectada. Si un 420 manual es anterior al que figuraba primero, pasa a ser el
+primero y el otro baja al segundo puesto.
+
+`importar` necesita que el bot pueda **leer el historial** del canal. Muestra
+el progreso cada 1000 mensajes; si tarda más de 15 minutos (el límite de
+Discord para responder), el resumen final llega por mensaje directo. En el
+historial solo se ve el texto actual de cada mensaje, así que no se cuentan
+los mensajes editados después de que cerró su ventana.
 
 ### SeptSinFP
 
@@ -513,9 +577,12 @@ administrativo independiente. El archivo puede contener hasta 50 comandos y medi
 hasta 1 MiB.
 
 Cada línea usa la misma estructura que los comandos: `grupo comando argumentos`.
-Los grupos son `madrugue`, `ssf` y `box`:
+Los grupos son `madrugue`, `420`, `ssf` y `box` (`420 importar` no se puede
+usar desde un archivo):
 
 ```text
+420 manualadd <ID_USUARIO> YYYY-MM-DD HH:MM:SS
+420 resetdia <ID_USUARIO> YYYY-MM-DD [HH:MM de la ventana]
 madrugue manualadd <ID_USUARIO> YYYY-MM-DD HH:MM
 madrugue resetdia <@ID_USUARIO> YYYY-MM-DD
 madrugue resetusuario <ID_USUARIO>

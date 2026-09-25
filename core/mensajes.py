@@ -1,6 +1,6 @@
 """Presentación de mensajes del bot con embeds y secciones.
 
-Centraliza el formato para que todas las áreas (Box, Madrugue, SeptSinFP,
+Centraliza el formato para que todas las áreas (Box, Madrugue, 420, SeptSinFP,
 admin y generales) mantengan el mismo estilo: un título, una descripción
 corta y campos/secciones ordenados.
 """
@@ -19,6 +19,7 @@ COLOR_GENERAL = discord.Color.blurple()
 COLOR_BOX = discord.Color.dark_red()
 COLOR_MADRUGUE = discord.Color.gold()
 COLOR_SSF = discord.Color.teal()
+COLOR_LAHORA = discord.Color.dark_green()
 COLOR_ADMIN = discord.Color.dark_grey()
 
 COLOR_OK = discord.Color.green()
@@ -30,6 +31,7 @@ COLORES = {
     "box": COLOR_BOX,
     "madrugue": COLOR_MADRUGUE,
     "ssf": COLOR_SSF,
+    "lahora": COLOR_LAHORA,
     "admin": COLOR_ADMIN,
     "ok": COLOR_OK,
     "error": COLOR_ERROR,
