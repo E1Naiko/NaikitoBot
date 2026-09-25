@@ -347,6 +347,93 @@ async def test_selector_de_suministro_aplica_y_actualiza_la_tienda(cog):
     assert "Dinero disponible: **3500$**" in mensaje_tienda.texto
 
 
+class _MensajeEfimero:
+    """El menú de suministros: un mensaje efímero.
+
+    Discord no deja editarlos por el endpoint del canal (``Message.edit``):
+    responde 404 *Unknown Message* (código 10008). Solo se editan a través
+    del webhook de la interacción (``edit_original_response``).
+    """
+
+    id = 555
+
+    async def edit(self, *args, **kwargs):
+        from tests.harness import _no_encontrado
+
+        raise _no_encontrado("Unknown Message")
+
+
+async def test_selector_edita_el_menu_efimero_por_la_interaccion(cog):
+    """Regresión: ``interaction.message.edit`` reventaba con 404 en producción.
+
+    El suministro ya estaba cobrado cuando explotaba, así que el usuario se
+    quedaba sin confirmación, la tienda sin refrescar y el menú habilitado.
+    """
+
+    from commands.box.tienda import VistaSuministro
+
+    await dar_dinero(5000)
+    await obtener_equipo(GUILD, USUARIO)
+    await actualizar_equipo(GUILD, USUARIO, vida=7)
+
+    apertura = InteraccionFalsa(GUILD, USUARIO)
+    await llamar(cog, "tienda", apertura)
+    mensaje_tienda = apertura.respuestas[-1]
+
+    vista = VistaSuministro(USUARIO, tienda_message=mensaje_tienda)
+    selector = vista.children[0]
+    selector._values = ["vida"]
+
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+    interaccion.message = _MensajeEfimero()
+    await selector.callback(interaccion)
+
+    # El menú se deshabilitó editando la respuesta original de la interacción.
+    ediciones = [
+        mensaje
+        for mensaje in interaccion.respuestas
+        if mensaje.view is vista
+    ]
+    assert ediciones, "el menú efímero no se editó por la interacción"
+    assert selector.disabled
+    assert vista.is_finished()
+
+    # Y el resto del flujo siguió: tienda refrescada y confirmación enviada.
+    assert mensaje_tienda.ediciones == 1
+    assert "Dinero disponible: **3500$**" in mensaje_tienda.texto
+    assert "Bebida isotónica" in interaccion.texto
+    assert interaccion.respuestas[-1].efimero
+
+
+async def test_selector_confirma_aunque_falle_deshabilitar_el_menu(cog):
+    """Si Discord rechaza la edición del menú, la confirmación igual llega."""
+
+    import discord
+
+    from commands.box.tienda import VistaSuministro
+
+    await dar_dinero(5000)
+    await obtener_equipo(GUILD, USUARIO)
+    await actualizar_equipo(GUILD, USUARIO, vida=7)
+
+    vista = VistaSuministro(USUARIO)
+    selector = vista.children[0]
+    selector._values = ["vida"]
+
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+
+    async def rechazar(**_kwargs):
+        from tests.harness import _no_encontrado
+
+        raise _no_encontrado("Unknown Webhook")
+
+    interaccion.edit_original_response = rechazar
+    await selector.callback(interaccion)
+
+    assert "Bebida isotónica" in interaccion.texto
+    assert isinstance(interaccion.respuestas[-1].embed, discord.Embed)
+
+
 async def test_selector_rechaza_a_un_usuario_que_no_es_el_dueño():
     from commands.box.tienda import VistaSuministro
 
