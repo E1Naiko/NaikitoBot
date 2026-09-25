@@ -17,6 +17,7 @@ from config import (
     BOX_COMBATE_ACTIVO,
     GENERAL_CHANNEL_IDS,
     GUILD_ID,
+    LAHORA_CANALES_ID,
     MADRUGUE_CHANNEL_IDS,
     SSF_CANALES_ID,
 )
@@ -36,6 +37,14 @@ ICONOS_ESTADO = {
     ESTADO_ERROR: "❌",
 }
 
+# Permisos que el bot necesita en cada canal configurado. En el canal 420
+# además confirma cada registro con una reacción y necesita leer el
+# contenido de los mensajes.
+PERMISOS_CANAL = ("view_channel", "send_messages", "embed_links")
+PERMISOS_POR_AREA = {
+    "420": PERMISOS_CANAL + ("read_message_history", "add_reactions"),
+}
+
 # Manifiesto de comandos hoja que debe exponer esta versión. Además de detectar
 # callbacks rotos, permite avisar si una extensión no cargó o si una
 # sincronización dejó afuera un comando completo.
@@ -46,6 +55,10 @@ COMANDOS_ESPERADOS = frozenset(
         "madrugue_stats",
         "madrugue_top",
         "madrugue_ayuda",
+        "420_stats",
+        "420_top",
+        "420_hoy",
+        "420_ayuda",
         "admin test",
         "admin info",
         "admin fileexecute",
@@ -63,6 +76,13 @@ COMANDOS_ESPERADOS = frozenset(
         "admin madrugue resetusuario",
         "admin madrugue resettotal",
         "admin madrugue manualadd",
+        "admin 420 importar",
+        "admin 420 manualadd",
+        "admin 420 resetdia",
+        "admin 420 ver",
+        "admin 420 resetusuario",
+        "admin 420 resettotal",
+        "admin 420 stats",
         "admin ssf revivir",
         "admin ssf iniciar",
         "admin ssf agregar",
@@ -281,6 +301,7 @@ class DiagnosticoMixin:
         por_area = {
             "general": GENERAL_CHANNEL_IDS,
             "Madrugue": MADRUGUE_CHANNEL_IDS,
+            "420": LAHORA_CANALES_ID,
             "Box": BOX_CHANNEL_IDS,
             "SeptSinFP": SSF_CANALES_ID,
         }
@@ -326,7 +347,7 @@ class DiagnosticoMixin:
                 permisos = permissions_for(miembro_bot)
                 faltan = [
                     nombre
-                    for nombre in ("view_channel", "send_messages", "embed_links")
+                    for nombre in PERMISOS_POR_AREA.get(area, PERMISOS_CANAL)
                     if not getattr(permisos, nombre, False)
                 ]
                 if faltan:

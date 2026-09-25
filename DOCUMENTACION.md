@@ -104,10 +104,13 @@ El sistema más completo: cada usuario puede crear un boxeador, entrenar para ga
 ### 2. 🌙 Sistema Madrugue
 Recompensa a los usuarios que están conectados durante la madrugada (horas configurables en `.env`) con puntos que pueden canjear por recompensas.
 
-### 3. 📅 Sistema SeptSinFP (Septiembre Sin FP)
+### 3. 🌿 Sistema laHora (canal 420)
+Registra automáticamente a quienes escriben "420" en el canal 420 justo a las 04:20 o a las 16:20 (ventanas configurables en `.env`), con puntos por velocidad, bonus al primero, rachas y ranking (`/420_top`, `/420_stats`, `/420_hoy`, `/420_ayuda`). Código en `commands/lahora/` y `modules/lahora/`.
+
+### 4. 📅 Sistema SeptSinFP (Septiembre Sin FP)
 Evento anual de septiembre donde los usuarios registran días consecutivos sin consumir contenido para adultos, acumulan puntos y siguen su racha.
 
-### 4. ⚙️ Comandos administrativos
+### 5. ⚙️ Comandos administrativos
 Comandos protegidos por ID de usuario para diagnóstico, mantenimiento, gestión de usuarios y configuración.
 
 ---
@@ -133,6 +136,7 @@ Los modelos se definen en cada submódulo de `modules/*/models.py` y heredan de 
 El bot usa una clase personalizada `RestrictedCommandTree` que **bloquea automáticamente comandos en canales no permitidos**:
 - Los comandos `/box` solo funcionan en canales de Box configurados
 - Los comandos `/madrugue` solo funcionan en canales de Madrugue
+- Los comandos `/420_*` solo funcionan en canales 420 (`LAHORA_CANALES_ID`)
 - Los comandos `/ssf` solo funcionan en canales de SeptSinFP
 - En canales generales solo funciona `/ping`
 - Los administradores pueden usar cualquier comando en cualquier canal
@@ -144,7 +148,7 @@ Cuando un usuario intenta usar un comando en un canal equivocado, recibe un mens
 ## 🎨 Formato de mensajes
 
 Todas las respuestas del bot usan embeds con un formato uniforme gestionado por `core.mensajes`:
-- Colores diferenciados por sistema (rojo para Box, dorado para Madrugue, verde azulado para SSF)
+- Colores diferenciados por sistema (rojo para Box, dorado para Madrugue, verde oscuro para 420, verde azulado para SSF)
 - Colores estándar para respuestas ok/error/aviso
 - Funciones helper `responder()`, `responder_ok()`, `responder_error()` para simplificar el código
 - Soporte para mensajes efímeros y vistas con botones

@@ -6,6 +6,7 @@ mediante ``bot.load_extension()``:
 * :mod:`commands.general` — Comandos generales (``/ping``).
 * :mod:`commands.box` — Comandos slash del sistema de boxeo.
 * :mod:`commands.madrugue` — Comandos slash del sistema Madrugue.
+* :mod:`commands.lahora` — Registro automático y comandos del canal 420.
 * :mod:`commands.ssf` — Comandos slash del evento SeptSinFP.
 * :mod:`commands.admin` — Comandos slash administrativos protegidos.
 """

@@ -17,6 +17,7 @@ from config import (
     BOX_EXPERIENCIA_POR_MINUTO,
     GENERAL_CHANNEL_IDS,
     GUILD_ID,
+    LAHORA_CANALES_ID,
     MADRUGUE_CHANNEL_IDS,
     SSF_CANALES_ID,
     SSF_FECHA_FIN,
@@ -329,7 +330,7 @@ class SistemaMixin:
 
         # Por compatibilidad, los comandos de Madrugue pueden escribirse
         # sin el subgrupo: ``stats`` equivale a ``madrugue stats``.
-        if primero in {"madrugue", "ssf", "box"}:
+        if primero in {"madrugue", "ssf", "box", "420"}:
             grupo = primero
 
             if not argumentos:
@@ -365,6 +366,12 @@ class SistemaMixin:
 
         if nombre_comando == "fileexecute":
             raise ValueError("fileexecute no puede ejecutarse desde un archivo.")
+
+        if grupo == "420" and nombre_comando == "importar":
+            raise ValueError(
+                "420 importar no puede ejecutarse desde un archivo: "
+                "usá /admin 420 importar directamente."
+            )
 
         parametros = comando.parameters
         requeridos = [
@@ -572,6 +579,12 @@ class SistemaMixin:
         embed.add_field(
             name="🌅 Canales de Madrugue",
             value=canales_texto(MADRUGUE_CHANNEL_IDS),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🌿 Canales 420",
+            value=canales_texto(LAHORA_CANALES_ID),
             inline=True,
         )
 

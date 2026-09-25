@@ -7,6 +7,7 @@ from config import (
     BOX_CHANNEL_IDS,
     GENERAL_CHANNEL_IDS,
     GUILD_ID,
+    LAHORA_CANALES_ID,
     MADRUGUE_CHANNEL_IDS,
     PREFIX,
     SSF_CANALES_ID,
@@ -76,6 +77,10 @@ class RestrictedCommandTree(app_commands.CommandTree):
             permitido = bool(command_name and command_name.startswith("madrugue"))
             zona = "Madrugue"
             canales = MADRUGUE_CHANNEL_IDS
+        elif channel_id in LAHORA_CANALES_ID:
+            permitido = bool(command_name and command_name.startswith("420"))
+            zona = "420"
+            canales = LAHORA_CANALES_ID
         elif channel_id in SSF_CANALES_ID:
             permitido = command_name == "ssf"
             zona = "SeptSinFP"
@@ -87,6 +92,7 @@ class RestrictedCommandTree(app_commands.CommandTree):
                 BOX_CHANNEL_IDS
                 | GENERAL_CHANNEL_IDS
                 | MADRUGUE_CHANNEL_IDS
+                | LAHORA_CANALES_ID
                 | SSF_CANALES_ID
             )
 
@@ -204,6 +210,10 @@ class NaikitoBot(commands.Bot):
 
         await self.load_extension(
             "commands.madrugue"
+        )
+
+        await self.load_extension(
+            "commands.lahora"
         )
 
         await self.load_extension(

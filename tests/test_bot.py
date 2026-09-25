@@ -17,6 +17,7 @@ async def test_todas_las_extensiones_cargan_juntas(base_datos_limpia):
     try:
         await bot.load_extension("commands.general")
         await bot.load_extension("commands.madrugue")
+        await bot.load_extension("commands.lahora")
         await bot.load_extension("commands.admin")
         await bot.load_extension("commands.ssf")
         await bot.load_extension("commands.box")
@@ -28,6 +29,8 @@ async def test_todas_las_extensiones_cargan_juntas(base_datos_limpia):
         assert "ping" in nombres
         assert "madrugue" in nombres
         assert "madrugue_stats" in nombres
+        assert "420_top" in nombres
+        assert "420_stats" in nombres
         assert "admin ssf revivir" in nombres
         assert "admin box info" in nombres
         assert "ssf registrar" in nombres

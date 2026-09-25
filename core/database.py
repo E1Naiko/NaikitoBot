@@ -91,6 +91,7 @@ def registrar_modelos():
     """
 
     from modules.box import models as _box  # noqa: F401
+    from modules.lahora import models as _lahora  # noqa: F401
     from modules.madrugue import models as _madrugue  # noqa: F401
     from modules.ssf import models as _ssf  # noqa: F401
 

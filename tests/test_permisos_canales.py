@@ -16,6 +16,7 @@ GENERAL = 100
 BOX = 200
 MADRUGUE = 300
 SSF = 400
+LAHORA = 420
 OTRO = 500
 ADMIN = 999
 USUARIO = 42
@@ -136,6 +137,33 @@ async def test_madrugue_solo_en_su_canal(config_canales):
 
     permitido, _ = await comprobar(arbol(), data, OTRO, USUARIO)
     assert not permitido
+
+
+@pytest.mark.parametrize("comando", ["420_top", "420_stats", "420_hoy", "420_ayuda"])
+async def test_420_solo_en_su_canal(config_canales, monkeypatch, comando):
+    monkeypatch.setattr(bot_mod, "LAHORA_CANALES_ID", {LAHORA})
+    data = {"name": comando, "options": []}
+
+    permitido, _ = await comprobar(arbol(), data, LAHORA, USUARIO)
+    assert permitido
+
+    for canal in (GENERAL, MADRUGUE, OTRO):
+        permitido, _ = await comprobar(arbol(), data, canal, USUARIO)
+        assert not permitido
+
+
+async def test_canal_420_rechaza_otros_comandos(config_canales, monkeypatch):
+    monkeypatch.setattr(bot_mod, "LAHORA_CANALES_ID", {LAHORA})
+
+    permitido, mensajes = await comprobar(
+        arbol(),
+        {"name": "madrugue", "options": []},
+        LAHORA,
+        USUARIO,
+    )
+
+    assert not permitido
+    assert "420" in mensajes[-1].texto
 
 
 async def test_ssf_solo_en_su_canal(config_canales):

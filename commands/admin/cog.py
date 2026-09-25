@@ -9,6 +9,7 @@ from discord.ext import commands
 
 from commands.admin.box import BoxAdminMixin
 from commands.admin.diagnostico import DiagnosticoMixin
+from commands.admin.lahora import LaHoraAdminMixin
 from commands.admin.madrugue import MadrugueAdminMixin
 from commands.admin.sistema import SistemaMixin
 from commands.admin.ssf import SsfAdminMixin
@@ -17,6 +18,7 @@ from commands.admin.ssf import SsfAdminMixin
 class Admin(
     BoxAdminMixin,
     DiagnosticoMixin,
+    LaHoraAdminMixin,
     MadrugueAdminMixin,
     SistemaMixin,
     SsfAdminMixin,
