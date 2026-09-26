@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 
 from config import SSF_FECHA_FIN, SSF_FECHA_INICIO
-from core.mensajes import responder, responder_texto
+from core.mensajes import diferir, responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from core.utils import ahora
 from modules.ssf.services import (
@@ -71,6 +71,12 @@ class SsfAdminMixin:
                 "Ejemplo: `2026-09-01`.",
                 ephemeral=True,
             )
+            return
+
+        # Diferir antes de tocar la base: si la consulta demora más de
+        # 3 segundos la interacción vence (10062 Unknown interaction).
+        # Se difiere público porque la respuesta de éxito es pública.
+        if not await diferir(interaction, ephemeral=False):
             return
 
         resultado = await revivir_participante(
@@ -185,6 +191,11 @@ class SsfAdminMixin:
 
         nombre = nombre.strip() or f"SeptSinFP {inicio_obj.year}"
 
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos. Público porque la respuesta de éxito es pública.
+        if not await diferir(interaction, ephemeral=False):
+            return
+
         resultado = await iniciar_desafio(
             guild_id=interaction.guild.id,
             nombre=nombre,
@@ -257,6 +268,11 @@ class SsfAdminMixin:
                 "Ejemplo: `2026-09-01`.",
                 ephemeral=True,
             )
+            return
+
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
             return
 
         resultado = await agregar_dia(
@@ -354,6 +370,11 @@ class SsfAdminMixin:
             )
             return
 
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
+            return
+
         resultado = await quitar_dia(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
@@ -431,6 +452,11 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
+            return
+
         resultado = await recalcular_rachas(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
@@ -496,6 +522,11 @@ class SsfAdminMixin:
             return
 
         if not await solo_servidor(interaction):
+            return
+
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
             return
 
         resultado = await obtener_estado_usuario(
@@ -567,6 +598,11 @@ class SsfAdminMixin:
         if not await solo_servidor(interaction):
             return
 
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
+            return
+
         estado = await obtener_estado_desafio(
             interaction.guild.id,
         )
@@ -619,6 +655,11 @@ class SsfAdminMixin:
             return
 
         if not await solo_servidor(interaction):
+            return
+
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
             return
 
         estado = await obtener_estado_desafio(
@@ -719,6 +760,11 @@ class SsfAdminMixin:
             )
             return
 
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
+            return
+
         resultado = await eliminar_participante_admin(
             guild_id=interaction.guild.id,
             user_id=usuario.id,
@@ -815,6 +861,11 @@ class SsfAdminMixin:
             )
             return
 
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
+            return
+
         resultado = await cerrar_desafio_activo(
             interaction.guild.id,
         )
@@ -858,6 +909,11 @@ class SsfAdminMixin:
             return
 
         if not await solo_servidor(interaction):
+            return
+
+        # Diferir antes de tocar la base para no perder la ventana de
+        # 3 segundos (todas las respuestas de este comando son efímeras).
+        if not await diferir(interaction):
             return
 
         resultado = await obtener_desafio_para_ranking(

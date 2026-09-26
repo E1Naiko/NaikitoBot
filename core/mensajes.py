@@ -95,6 +95,47 @@ def secciones(
 # RESPUESTAS A INTERACCIONES
 # ============================================================
 
+async def diferir(
+    interaction: discord.Interaction,
+    *,
+    ephemeral: bool = True,
+) -> bool:
+    """Difiere la respuesta antes de un trabajo lento (base de datos, etc.).
+
+    Discord da solo 3 segundos para la primera respuesta de una interacción.
+    Si el comando consulta la base antes de responder puede pasarse de esa
+    ventana y la interacción vence: ``send_message`` revienta con
+    ``NotFound: 404 (error code: 10062): Unknown interaction``. Diferir
+    primero reserva la ventana (muestra "pensando…") y ``responder`` envía
+    después por followup.
+
+    La visibilidad del defer manda: la respuesta que lo resuelve hereda su
+    ``ephemeral``, así que hay que diferir con la visibilidad de la
+    respuesta principal del comando.
+
+    Devuelve ``False`` si la interacción ya venció al momento de diferir
+    (por ejemplo, con el bot muy lagueado): en ese caso el comando debe
+    abortar, porque ninguna respuesta puede llegar al usuario.
+    """
+
+    if interaction.response.is_done():
+        return True
+
+    try:
+        await interaction.response.defer(ephemeral=ephemeral)
+    except discord.NotFound:
+        # La interacción venció antes de poder diferir: no hay forma de
+        # responder. Se registra y el comando aborta sin tocar la base.
+        print(
+            "[MENSAJES] interacción vencida antes de diferir "
+            f"(usuario={interaction.user.id})",
+            flush=True,
+        )
+        return False
+
+    return True
+
+
 async def responder(
     interaction: discord.Interaction,
     titulo: str,

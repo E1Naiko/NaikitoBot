@@ -601,6 +601,58 @@ async def test_agregar_sobre_revive_equivocado_perdona_el_dia_de_hoy(
 # COMANDOS /admin ssf
 # ============================================================
 
+async def test_comando_revivir_difiere_antes_de_tocar_la_base(
+    cog_admin,
+    hoy_5_sep,
+):
+    """Regresión: sin defer, una consulta lenta pasaba los 3 segundos y la
+    interacción vencía con ``NotFound 10062 (Unknown interaction)``."""
+
+    await registrar(1)
+    await sobrevivir([2, 3])
+    assert await eliminar_faltantes(GUILD, date(2026, 9, 4)) == 1
+
+    interaccion = interaccion_admin()
+
+    await llamar(
+        cog_admin,
+        "ssf_revivir",
+        interaccion,
+        miembro(),
+        "2026-09-04",
+    )
+
+    # La primera respuesta es el defer (sin contenido ni embed): reserva la
+    # ventana de 3 segundos antes de consultar la base.
+    assert interaccion.cantidad_respuestas == 2
+    assert interaccion.respuestas[0].contenido is None
+    assert interaccion.respuestas[0].embed is None
+    assert interaccion.response.is_done()
+
+    assert "revivido correctamente" in interaccion.texto
+    assert "4 días" in interaccion.texto
+
+
+async def test_comando_revivir_valida_fecha_sin_diferir(cog_admin, hoy_5_sep):
+    """La validación de fecha es barata: responde directo, sin defer."""
+
+    await registrar(1)
+
+    interaccion = interaccion_admin()
+
+    await llamar(
+        cog_admin,
+        "ssf_revivir",
+        interaccion,
+        miembro(),
+        "04-09-2026",
+    )
+
+    assert interaccion.cantidad_respuestas == 1
+    assert "no es válida" in interaccion.texto
+    assert interaccion.respuestas[-1].efimero
+
+
 async def test_comando_agregar_responde_exito(cog_admin, hoy_5_sep):
     await registrar(1)
     await sobrevivir([2, 3])
