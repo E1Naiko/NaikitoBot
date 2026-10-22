@@ -8,7 +8,7 @@ from sqlalchemy import case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from core.database import crear_sesion, inicializar_db as _inicializar_db_base
-from modules.lahora.models import RegistroLaHora
+from modules.lahora.models import LaHoraSincronizacion, RegistroLaHora
 
 
 # ============================================================
@@ -362,6 +362,44 @@ async def obtener_estadisticas_servidor(
         )).one()
 
     return tuple(fila)
+
+
+# ============================================================
+# SINCRONIZACIÓN (recuperar lo perdido mientras el bot estaba offline)
+# ============================================================
+
+async def obtener_ultimo_chequeo(canal_id):
+    """Último momento ya repasado de un canal, o ``None`` si nunca se chequeó."""
+
+    async with crear_sesion() as sesion:
+        fila = (await sesion.execute(
+            select(LaHoraSincronizacion.ultimo_chequeo).where(
+                LaHoraSincronizacion.canal_id == canal_id,
+            )
+        )).first()
+
+    return fila[0] if fila else None
+
+
+async def guardar_ultimo_chequeo(guild_id, canal_id, momento):
+    """Guarda (o actualiza) el último momento repasado de un canal."""
+
+    async with crear_sesion() as sesion:
+        existente = await sesion.get(LaHoraSincronizacion, canal_id)
+
+        if existente is None:
+            sesion.add(
+                LaHoraSincronizacion(
+                    canal_id=canal_id,
+                    guild_id=guild_id,
+                    ultimo_chequeo=momento,
+                )
+            )
+        else:
+            existente.guild_id = guild_id
+            existente.ultimo_chequeo = momento
+
+        await sesion.commit()
 
 
 async def recalcular_ventana(

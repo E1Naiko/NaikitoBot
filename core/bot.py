@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 
 from discord import app_commands
@@ -13,8 +15,10 @@ from config import (
     SSF_CANALES_ID,
 )
 
+from core.lahora_sync import sincronizar_lahora
 from core.mensajes import responder
 from core.permissions import es_admin
+from core.version import version_bot
 from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
 )
@@ -383,3 +387,50 @@ class NaikitoBot(commands.Bot):
             print(
                 f"ID: {self.user.id}"
             )
+
+        # Última línea del arranque: versión del bot en uso.
+        print(version_bot(), flush=True)
+
+        # Mientras el bot estuvo offline (caída, reinicio, deploy) se
+        # perdió cualquier "420" dicho en ese lapso: on_message no se
+        # dispara retroactivamente. Al reconectar se repasa el historial
+        # de cada canal 420 configurado, en todos los servidores, para
+        # cargar lo que falte. Se dispara en una tarea aparte para no
+        # demorar on_ready ni bloquear el resto del arranque.
+        asyncio.create_task(self._sincronizar_lahora_al_conectar())
+
+    async def _sincronizar_lahora_al_conectar(self) -> None:
+        """Recupera los \"420\" perdidos mientras el bot estaba offline."""
+
+        try:
+            resultados = await sincronizar_lahora(self)
+        except Exception as error:
+            print(
+                "[420] sincronización automática falló "
+                f"({type(error).__name__}): {error}",
+                flush=True,
+            )
+            return
+
+        if not resultados:
+            return
+
+        for resultado in resultados:
+            if resultado.error:
+                print(
+                    f"[420] sincronización canal={resultado.canal_id} "
+                    f"guild={resultado.guild_id} error={resultado.error}",
+                    flush=True,
+                )
+                continue
+
+            resumen = resultado.resumen
+
+            if resumen is not None and (resumen.importados or resumen.revisados):
+                print(
+                    f"[420] sincronización canal={resultado.canal_id} "
+                    f"guild={resultado.guild_id} "
+                    f"revisados={resumen.revisados} "
+                    f"importados={resumen.importados}",
+                    flush=True,
+                )

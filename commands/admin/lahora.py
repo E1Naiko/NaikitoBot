@@ -1,6 +1,5 @@
 """Administración del canal 420: importar historial, altas y bajas manuales."""
 
-import asyncio
 from datetime import date, datetime, time
 
 import discord
@@ -8,6 +7,7 @@ from discord import app_commands
 
 import config
 from commands.admin.base import solo_admin, solo_servidor
+from core.lahora_sync import candado_sincronizacion, sincronizar_lahora
 from core.mensajes import crear_embed, responder, responder_texto
 from core.utils import ahora
 from modules.lahora.logic import texto_ventanas
@@ -22,8 +22,9 @@ from modules.lahora.services import (
 )
 
 # Una importación recorre todo el historial del canal y puede tardar
-# minutos: se permite una sola a la vez.
-_importando = asyncio.Lock()
+# minutos: se comparte el candado con la sincronización automática para
+# que no corran las dos a la vez sobre el mismo canal.
+_importando = candado_sincronizacion
 
 # Cada cuántos mensajes revisados se actualiza el mensaje de progreso.
 PROGRESO_CADA = 1000
@@ -76,6 +77,51 @@ def _texto_resumen(resumen, errores, terminado: bool) -> str:
         lineas += [f"⚠️ {error}" for error in errores]
 
     return "\n".join(lineas)[:4000]
+
+
+def _texto_sincronizacion(resultados) -> str:
+    """Resumen legible de una corrida de :func:`sincronizar_lahora`."""
+
+    if not resultados:
+        return (
+            "⚠️ No hay canales 420 para repasar. Configurá "
+            "`LAHORA_CANALES_ID` o invitá al bot a algún servidor con ese canal."
+        )
+
+    lineas = []
+    total_importados = 0
+
+    for resultado in resultados:
+        if resultado.error:
+            lineas.append(
+                f"❌ <#{resultado.canal_id}> (servidor `{resultado.guild_id}`): "
+                f"{resultado.error}"
+            )
+            continue
+
+        resumen = resultado.resumen
+        total_importados += resumen.importados
+
+        if resumen.importados:
+            lineas.append(
+                f"🌿 <#{resultado.canal_id}>: **{resumen.importados}** 420 "
+                f"recuperados (revisó **{resumen.revisados}** mensajes nuevos)."
+            )
+        elif resumen.revisados:
+            lineas.append(
+                f"✅ <#{resultado.canal_id}>: sin novedades "
+                f"({resumen.revisados} mensajes nuevos revisados)."
+            )
+        else:
+            lineas.append(f"✅ <#{resultado.canal_id}>: sin mensajes nuevos.")
+
+    encabezado = (
+        f"Se repasaron **{len(resultados)}** canal(es) en "
+        f"**{len({r.guild_id for r in resultados})}** servidor(es). "
+        f"Total recuperado: **{total_importados}** 420."
+    )
+
+    return (encabezado + "\n\n" + "\n".join(lineas))[:4000]
 
 
 class LaHoraAdminMixin:
@@ -238,6 +284,78 @@ class LaHoraAdminMixin:
                     await interaction.user.send(embed=embed)
                 except discord.HTTPException:
                     pass
+
+    # ========================================================
+    # SINCRONIZAR (recuperar lo perdido mientras estaba offline)
+    # ========================================================
+
+    @lahora.command(
+        name="sincronizar",
+        description=(
+            "Revisa los canales 420 de todos los servidores y carga los "
+            "420 que se perdieron mientras el bot estaba offline."
+        ),
+    )
+    async def lahora_sincronizar(
+        self,
+        interaction: discord.Interaction,
+    ):
+        """Dispara a mano la misma sincronización que corre al reconectar.
+
+        A diferencia de ``importar``, no recorre todo el historial: solo
+        repasa lo nuevo desde el último chequeo (en vivo o manual) de cada
+        canal 420 configurado, en todos los servidores donde está el bot.
+        """
+
+        if not await solo_admin(interaction):
+            return
+
+        if candado_sincronizacion.locked():
+            await responder_texto(
+                interaction,
+                "⏳ Ya hay una sincronización o importación en curso. "
+                "Esperá a que termine.",
+                ephemeral=True,
+            )
+            return
+
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True, thinking=True)
+
+        print("[420] sincronización manual iniciada", flush=True)
+
+        resultados = await sincronizar_lahora(self.bot)
+
+        print(
+            f"[420] sincronización manual terminada canales={len(resultados)}",
+            flush=True,
+        )
+
+        hay_errores = any(resultado.error for resultado in resultados)
+
+        # La primera sincronización de un canal nunca chequeado repasa
+        # todo su historial y puede superar los 15 minutos del token de
+        # la interacción: si ya no se puede responder, el resumen llega
+        # por MD (igual que en /admin 420 importar).
+        try:
+            await responder_texto(
+                interaction,
+                _texto_sincronizacion(resultados),
+                color_area="aviso" if hay_errores else "lahora",
+                ephemeral=True,
+            )
+        except discord.HTTPException:
+            try:
+                await interaction.user.send(
+                    embed=crear_embed(
+                        "✅ Sincronización terminada" if not hay_errores
+                        else "⚠️ Sincronización con avisos",
+                        _texto_sincronizacion(resultados),
+                        color_area="lahora" if not hay_errores else "aviso",
+                    )
+                )
+            except discord.HTTPException:
+                pass
 
     # ========================================================
     # ALTA MANUAL

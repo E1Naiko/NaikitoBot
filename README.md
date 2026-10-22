@@ -243,6 +243,7 @@ restricción de canal: pueden usar cualquier comando desde cualquier canal.
 | Comando | Parámetros | Descripción |
 | --- | --- | --- |
 | `/admin 420 importar` | `canal` (opcional), `desde` (opcional, `YYYY-MM-DD`) | Recorre el historial del canal 420 (por defecto los de `LAHORA_CANALES_ID`, desde el primer mensaje) y registra los 420 que ya estaban, con las mismas reglas que en vivo. Se puede correr varias veces sin duplicar. |
+| `/admin 420 sincronizar` | Ninguno | Repasa los canales 420 de **todos** los servidores donde está el bot y carga los 420 que se perdieron mientras estuvo offline. A diferencia de `importar`, no recorre todo el historial: solo lo nuevo desde el último chequeo. Se puede correr sin límite de veces. |
 | `/admin 420 manualadd` | `usuario`, `fecha`, `hora` (`HH:MM:SS` o `HH:MM`) | Registra a mano un 420. La hora tiene que caer en una ventana. |
 | `/admin 420 resetdia` | `usuario`, `fecha`, `ventana` (opcional) | Borra los 420 de un usuario en esa fecha (o solo en esa ventana). |
 | `/admin 420 ver` | `usuario` | Muestra los últimos 20 registros del usuario (marca los manuales). |
@@ -260,6 +261,16 @@ el progreso cada 1000 mensajes; si tarda más de 15 minutos (el límite de
 Discord para responder), el resumen final llega por mensaje directo. En el
 historial solo se ve el texto actual de cada mensaje, así que no se cuentan
 los mensajes editados después de que cerró su ventana.
+
+**Recuperación automática al reconectar:** mientras el bot está offline
+(caída, reinicio, deploy) no recibe los "420" en vivo. Cada vez que se
+conecta a Discord (`on_ready`), repasa solo-lectura el historial de cada
+canal 420 configurado, en todos los servidores donde está, desde el último
+momento que se chequeó (en vivo o por una sincronización anterior) y carga
+lo que se haya perdido, con las mismas reglas que el registro en vivo.
+`/admin 420 sincronizar` dispara manualmente esa misma recuperación sin
+esperar a un reinicio. Es más liviana que `importar`: no vuelve a recorrer
+todo el historial, solo lo nuevo desde la última vez.
 
 ### SeptSinFP
 
@@ -624,3 +635,16 @@ También se puede escribir `/admin` al comienzo de cada línea:
 
 Las líneas vacías y las que comienzan con `#` se ignoran. Solo se ejecutan comandos
 del grupo `/admin`; no se permite ejecutar código Python ni comandos externos.
+
+## Versión
+
+Al terminar de conectarse a Discord, el bot imprime en consola su versión:
+
+```
+NaikitoBot<mayor>.<función>.<revisión>.<YYYYMMDD>
+```
+
+`<función>` y `<revisión>` se mantienen a mano en `core/version.py`
+(`VERSION_FUNCION` sube con cada sistema/función nueva importante,
+`VERSION_REVISION` con ajustes menores sobre esa misma función). La fecha
+sale sola del último commit del repositorio.

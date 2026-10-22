@@ -45,3 +45,19 @@ class RegistroLaHora(Base):
     bonus_posicion: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     puntos_finales: Mapped[float] = mapped_column(Float, nullable=False)
     mensaje_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class LaHoraSincronizacion(Base):
+    """Marca hasta qué momento ya se repasó el historial de un canal 420.
+
+    Mientras el bot está offline no recibe los mensajes en vivo. Al
+    reconectar (o con el comando admin de sincronización) se recorre el
+    historial de cada canal desde este momento, así solo se revisa lo
+    que pudo haberse perdido y no todo el historial cada vez.
+    """
+
+    __tablename__ = "lahora_sincronizacion"
+
+    canal_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    ultimo_chequeo: Mapped[datetime] = mapped_column(FECHA_HORA, nullable=False)

@@ -31,8 +31,8 @@ USUARIO = 42
 CANAL_420 = 420
 
 
-def local(hora, minuto, segundo=0, dia=5, micro=0):
-    return datetime(2026, 9, dia, hora, minuto, segundo, micro, tzinfo=TIMEZONE)
+def local(hora, minuto, segundo=0, dia=5, micro=0, mes=9, anio=2026):
+    return datetime(anio, mes, dia, hora, minuto, segundo, micro, tzinfo=TIMEZONE)
 
 
 # ============================================================
@@ -64,9 +64,12 @@ class CanalConHistorial:
 
     def __init__(self, mensajes, canal_id=CANAL_420, error=None):
         self.id = canal_id
-        self._mensajes = mensajes
+        self._mensajes = list(mensajes)
         self._error = error
         self.llamadas = []
+
+    def agregar(self, mensaje):
+        self._mensajes.append(mensaje)
 
     def history(self, limit=None, after=None, oldest_first=None):
         self.llamadas.append({"limit": limit, "after": after, "oldest_first": oldest_first})
@@ -302,6 +305,107 @@ async def test_comando_importar_requiere_admin(cog):
     await llamar(cog, "lahora_importar", interaccion)
 
     assert "Sin permisos" in interaccion.texto
+
+
+# ============================================================
+# /admin 420 sincronizar
+# ============================================================
+
+class BotFalso:
+    """Doble mínimo de ``NaikitoBot``: solo expone los guilds del bot."""
+
+    def __init__(self, guilds):
+        self.guilds = guilds
+
+    async def fetch_channel(self, canal_id):
+        raise prohibido()
+
+
+async def test_sincronizar_carga_lo_perdido_en_todos_los_canales(cog, monkeypatch):
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
+
+    canal = CanalConHistorial([
+        MensajeHistorial("420", local(16, 20, 3), user_id=1, nombre="Uno"),
+        MensajeHistorial("420", local(4, 20, 9, dia=6), user_id=2, nombre="Dos"),
+    ])
+    guild = GuildFalso(GUILD, canales={CANAL_420: canal})
+    cog.bot = BotFalso([guild])
+
+    interaccion = interaccion_admin()
+    await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert "2** 420" in interaccion.texto
+    assert len(await obtener_top_lahora(GUILD)) == 2
+    # No recorre todo el canal de nuevo: solo lo que no se había chequeado.
+    assert canal.llamadas[0]["after"] is None
+
+
+async def test_sincronizar_dos_veces_no_repite_lo_ya_visto(cog, monkeypatch):
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
+
+    canal = CanalConHistorial([
+        MensajeHistorial("420", local(16, 20, 3), user_id=1, nombre="Uno"),
+    ])
+    guild = GuildFalso(GUILD, canales={CANAL_420: canal})
+    cog.bot = BotFalso([guild])
+
+    await llamar(cog, "lahora_sincronizar", interaccion_admin())
+
+    # Mientras el bot "estuvo offline" llegó un 420 nuevo (en el futuro
+    # respecto al checkpoint real guardado en la corrida anterior).
+    canal.agregar(
+        MensajeHistorial("420", local(16, 20, 4, dia=6, anio=2099), user_id=2, nombre="Dos")
+    )
+
+    interaccion = interaccion_admin()
+    await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert "1** 420" in interaccion.texto
+    assert canal.llamadas[-1]["after"] is not None
+    assert len(await obtener_top_lahora(GUILD)) == 2
+
+
+async def test_sincronizar_sin_canales_configurados(cog, monkeypatch):
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", set())
+    cog.bot = BotFalso([GuildFalso(GUILD)])
+
+    interaccion = interaccion_admin()
+    await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert "No hay canales 420" in interaccion.texto
+
+
+async def test_sincronizar_informa_canal_sin_permiso(cog, monkeypatch):
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
+    canal = CanalConHistorial([], error=prohibido())
+    guild = GuildFalso(GUILD, canales={CANAL_420: canal})
+    cog.bot = BotFalso([guild])
+
+    interaccion = interaccion_admin()
+    await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert "permiso para leer el historial" in interaccion.texto
+
+
+async def test_sincronizar_requiere_admin(cog):
+    interaccion = InteraccionFalsa(GUILD, USUARIO)
+
+    await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert "Sin permisos" in interaccion.texto
+
+
+async def test_sincronizar_no_corre_dos_veces_a_la_vez(cog, monkeypatch):
+    from core.lahora_sync import candado_sincronizacion
+
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
+    cog.bot = BotFalso([GuildFalso(GUILD)])
+
+    async with candado_sincronizacion:
+        interaccion = interaccion_admin()
+        await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert "ya hay una sincronización o importación en curso" in interaccion.texto.lower()
 
 
 # ============================================================
