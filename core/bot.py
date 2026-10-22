@@ -18,6 +18,7 @@ from config import (
 from core.lahora_sync import sincronizar_lahora
 from core.mensajes import responder
 from core.permissions import es_admin
+from core.version import version_bot
 from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
 )
@@ -386,6 +387,9 @@ class NaikitoBot(commands.Bot):
             print(
                 f"ID: {self.user.id}"
             )
+
+        # Última línea del arranque: versión del bot en uso.
+        print(version_bot(), flush=True)
 
         # Mientras el bot estuvo offline (caída, reinicio, deploy) se
         # perdió cualquier "420" dicho en ese lapso: on_message no se

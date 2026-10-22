@@ -635,3 +635,16 @@ También se puede escribir `/admin` al comienzo de cada línea:
 
 Las líneas vacías y las que comienzan con `#` se ignoran. Solo se ejecutan comandos
 del grupo `/admin`; no se permite ejecutar código Python ni comandos externos.
+
+## Versión
+
+Al terminar de conectarse a Discord, el bot imprime en consola su versión:
+
+```
+NaikitoBot<mayor>.<función>.<revisión>.<YYYYMMDD>
+```
+
+`<función>` y `<revisión>` se mantienen a mano en `core/version.py`
+(`VERSION_FUNCION` sube con cada sistema/función nueva importante,
+`VERSION_REVISION` con ajustes menores sobre esa misma función). La fecha
+sale sola del último commit del repositorio.

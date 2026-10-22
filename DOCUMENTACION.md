@@ -11,7 +11,8 @@ Bot de Discord personalizado para servidores comunitarios hispanohablantes, con 
 4.  [Sistemas implementados](#sistemas-implementados)
 5.  [Base de datos](#base-de-datos)
 6.  [Restricciones por canal](#restricciones-por-canal)
-7.  [Extender el bot](#extender-el-bot)
+7.  [Versión del bot](#versión-del-bot)
+8.  [Extender el bot](#extender-el-bot)
 
 ---
 
@@ -85,6 +86,8 @@ El bot sigue una arquitectura en capas clara:
     ```bash
     python main.py
     ```
+    Al terminar de conectarse a Discord, la última línea del arranque es
+    la versión en uso (ver [Versión](#versión-del-bot)).
 
 ---
 
@@ -173,6 +176,31 @@ pytest
 ```
 
 Las pruebas usan una base de datos SQLite en memoria que se vacía entre cada test.
+
+---
+
+## 🔖 Versión del bot
+
+Al terminar de conectarse a Discord (último paso de `on_ready`, después de
+`Naikito Bot conectado como ...`), el bot imprime en consola su versión con
+el formato:
+
+```
+NaikitoBot<mayor>.<función>.<revisión>.<YYYYMMDD>
+```
+
+* `<mayor>`: versión mayor del bot, fija (`1`).
+* `<función>`: número de la última función/sistema implementado. Se sube a
+  mano en `core/version.py` (`VERSION_FUNCION`) cada vez que se agrega un
+  sistema o una función nueva importante.
+* `<revisión>`: ajustes sobre esa misma función. Arranca en `0` y se sube a
+  mano (`VERSION_REVISION`) con cada corrección o retoque menor que no
+  agregue una función nueva; vuelve a `0` cuando sube `VERSION_FUNCION`.
+* `<YYYYMMDD>`: fecha del último commit del repositorio. Se lee sola con
+  `git log` (no hace falta tocarla a mano); si el deploy no tiene `.git` o
+  no tiene git instalado, se usa la fecha de hoy y se avisa por consola.
+
+Código en `core/version.py`.
 
 ---
 
