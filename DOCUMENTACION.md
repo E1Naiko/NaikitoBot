@@ -107,6 +107,15 @@ Recompensa a los usuarios que están conectados durante la madrugada (horas conf
 ### 3. 🌿 Sistema laHora (canal 420)
 Registra automáticamente a quienes escriben "420" en el canal 420 justo a las 04:20 o a las 16:20 (ventanas configurables en `.env`), con puntos por velocidad, bonus al primero, rachas y ranking (`/420_top`, `/420_stats`, `/420_hoy`, `/420_ayuda`). Código en `commands/lahora/` y `modules/lahora/`.
 
+Como el registro depende de que el bot esté conectado para ver el mensaje en
+vivo, cada vez que se reconecta (`on_ready`) repasa sin bloquear el arranque
+el historial de cada canal 420 configurado, en todos los servidores donde
+está, y carga los "420" que se hayan perdido mientras estuvo offline. Guarda
+un checkpoint por canal (`core/lahora_sync.py`, tabla
+`lahora_sincronizacion`) para no reescanear todo el historial en cada
+reconexión. Un administrador puede disparar la misma recuperación a mano con
+`/admin 420 sincronizar`, sin esperar a un reinicio.
+
 ### 4. 📅 Sistema SeptSinFP (Septiembre Sin FP)
 Evento anual de septiembre donde los usuarios registran días consecutivos sin consumir contenido para adultos, acumulan puntos y siguen su racha.
 
