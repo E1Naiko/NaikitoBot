@@ -1,12 +1,14 @@
 """Administración del canal 420: importar historial, altas y bajas manuales."""
 
 from datetime import date, datetime, time
+from math import ceil
 
 import discord
 from discord import app_commands
 
 import config
 from commands.admin.base import solo_admin, solo_servidor
+from core.discord_http import espera_restante, registrar_limite, resumir_error
 from core.lahora_sync import candado_sincronizacion, sincronizar_lahora
 from core.mensajes import crear_embed, responder, responder_texto
 from core.utils import ahora
@@ -83,6 +85,11 @@ def _texto_sincronizacion(resultados) -> str:
     """Resumen legible de una corrida de :func:`sincronizar_lahora`."""
 
     if not resultados:
+        if espera_restante() > 0:
+            return (
+                "⏳ Sincronización pausada por un límite de Discord. "
+                f"Reintentá en unos {ceil(espera_restante())} segundos."
+            )
         return (
             "⚠️ No hay canales 420 para repasar. Configurá "
             "`LAHORA_CANALES_ID` o invitá al bot a algún servidor con ese canal."
@@ -158,6 +165,15 @@ class LaHoraAdminMixin:
         if not await solo_servidor(interaction):
             return
 
+        if espera_restante() > 0:
+            await responder_texto(
+                interaction,
+                "⏳ Discord pidió esperar antes de seguir leyendo. "
+                f"Reintentá en unos {ceil(espera_restante())} segundos.",
+                ephemeral=True,
+            )
+            return
+
         desde_dt = None
 
         if desde:
@@ -184,16 +200,29 @@ class LaHoraAdminMixin:
             canales = []
 
             for canal_id in sorted(config.LAHORA_CANALES_ID):
+                if espera_restante() > 0:
+                    break
+
                 encontrado = interaction.guild.get_channel(canal_id)
 
                 if encontrado is None:
                     try:
                         encontrado = await self.bot.fetch_channel(canal_id)
-                    except discord.HTTPException:
+                    except (discord.HTTPException, discord.RateLimited) as error:
+                        registrar_limite(error, contexto="420.importacion.canal")
                         encontrado = None
 
                 if encontrado is not None:
                     canales.append(encontrado)
+
+        if espera_restante() > 0:
+            await responder_texto(
+                interaction,
+                "⏳ Importación detenida por un límite de Discord. "
+                f"Reintentá en unos {ceil(espera_restante())} segundos.",
+                ephemeral=True,
+            )
+            return
 
         if not canales:
             await responder_texto(
@@ -221,23 +250,41 @@ class LaHoraAdminMixin:
 
             async def historial():
                 for actual in canales:
+                    if espera_restante() > 0:
+                        errores.append(
+                            "Lectura detenida por un límite de Discord. "
+                            "Esperá a que termine la pausa antes de reintentar."
+                        )
+                        return
+
                     try:
                         async for mensaje in actual.history(
                             limit=None,
                             after=desde_dt,
                             oldest_first=True,
                         ):
+                            # El progreso también hace HTTP: si recibe un
+                            # 429, no seguir pidiendo páginas del historial.
+                            if espera_restante() > 0:
+                                errores.append(
+                                    "Lectura detenida por un límite de Discord. "
+                                    "Lo leído hasta ahí quedó importado."
+                                )
+                                return
                             yield mensaje
                     except discord.Forbidden:
                         errores.append(
                             f"<#{actual.id}>: el bot no tiene permiso para "
                             "leer el historial."
                         )
-                    except discord.HTTPException as error:
+                    except (discord.HTTPException, discord.RateLimited) as error:
+                        registrar_limite(error, contexto="420.importacion")
                         errores.append(
                             f"<#{actual.id}>: Discord cortó la lectura "
-                            f"({error}). Lo leído hasta ahí quedó importado."
+                            f"({resumir_error(error)}). Lo leído hasta ahí quedó importado."
                         )
+                        if espera_restante() > 0:
+                            return
 
             async def progreso(resumen):
                 # Si la edición falla (por ejemplo, el token de la
@@ -251,8 +298,8 @@ class LaHoraAdminMixin:
                             color_area="lahora",
                         )
                     )
-                except discord.HTTPException:
-                    pass
+                except (discord.HTTPException, discord.RateLimited) as error:
+                    registrar_limite(error, contexto="420.importacion.progreso")
 
             print(f"[420] importación iniciada canales={nombres}", flush=True)
 
@@ -263,8 +310,9 @@ class LaHoraAdminMixin:
                 cada=PROGRESO_CADA,
             )
 
+            estado_importacion = "detenida" if espera_restante() > 0 else "terminada"
             print(
-                f"[420] importación terminada revisados={resumen.revisados} "
+                f"[420] importación {estado_importacion} revisados={resumen.revisados} "
                 f"importados={resumen.importados} repetidos={resumen.repetidos}",
                 flush=True,
             )
@@ -275,15 +323,26 @@ class LaHoraAdminMixin:
                 color_area="lahora" if not errores else "aviso",
             )
 
+            # No gastar otro intento HTTP durante un bloqueo vigente.
+            if espera_restante() > 0:
+                print(
+                    f"[420] resumen conservado; respuesta omitida por pausa HTTP "
+                    f"importados={resumen.importados} revisados={resumen.revisados}",
+                    flush=True,
+                )
+                return
+
             # Una importación larga puede superar los 15 minutos del token:
             # si ya no se puede responder, el resumen llega por MD.
             try:
                 await interaction.edit_original_response(embed=embed)
-            except discord.HTTPException:
-                try:
-                    await interaction.user.send(embed=embed)
-                except discord.HTTPException:
-                    pass
+            except (discord.HTTPException, discord.RateLimited) as error:
+                registrar_limite(error, contexto="420.importacion.resumen")
+                if espera_restante() == 0:
+                    try:
+                        await interaction.user.send(embed=embed)
+                    except (discord.HTTPException, discord.RateLimited) as error:
+                        registrar_limite(error, contexto="420.importacion.md")
 
     # ========================================================
     # SINCRONIZAR (recuperar lo perdido mientras estaba offline)
@@ -319,6 +378,15 @@ class LaHoraAdminMixin:
             )
             return
 
+        if espera_restante() > 0:
+            await responder_texto(
+                interaction,
+                "⏳ Discord pidió esperar antes de seguir leyendo. "
+                f"Reintentá en unos {ceil(espera_restante())} segundos.",
+                ephemeral=True,
+            )
+            return
+
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -333,6 +401,14 @@ class LaHoraAdminMixin:
 
         hay_errores = any(resultado.error for resultado in resultados)
 
+        if espera_restante() > 0:
+            print(
+                "[420] respuesta omitida por pausa HTTP; "
+                "el checkpoint de los tramos incompletos quedó conservado",
+                flush=True,
+            )
+            return
+
         # La primera sincronización de un canal nunca chequeado repasa
         # todo su historial y puede superar los 15 minutos del token de
         # la interacción: si ya no se puede responder, el resumen llega
@@ -344,18 +420,20 @@ class LaHoraAdminMixin:
                 color_area="aviso" if hay_errores else "lahora",
                 ephemeral=True,
             )
-        except discord.HTTPException:
-            try:
-                await interaction.user.send(
-                    embed=crear_embed(
-                        "✅ Sincronización terminada" if not hay_errores
-                        else "⚠️ Sincronización con avisos",
-                        _texto_sincronizacion(resultados),
-                        color_area="lahora" if not hay_errores else "aviso",
+        except (discord.HTTPException, discord.RateLimited) as error:
+            registrar_limite(error, contexto="420.sincronizacion.resumen")
+            if espera_restante() == 0:
+                try:
+                    await interaction.user.send(
+                        embed=crear_embed(
+                            "✅ Sincronización terminada" if not hay_errores
+                            else "⚠️ Sincronización con avisos",
+                            _texto_sincronizacion(resultados),
+                            color_area="lahora" if not hay_errores else "aviso",
+                        )
                     )
-                )
-            except discord.HTTPException:
-                pass
+                except (discord.HTTPException, discord.RateLimited) as error:
+                    registrar_limite(error, contexto="420.sincronizacion.md")
 
     # ========================================================
     # ALTA MANUAL

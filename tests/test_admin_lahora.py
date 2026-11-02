@@ -307,6 +307,93 @@ async def test_comando_importar_requiere_admin(cog):
     assert "Sin permisos" in interaccion.texto
 
 
+@pytest.mark.parametrize("tipo_limit", ["html", "rate_limited"])
+async def test_importar_429_detiene_otros_canales_y_conserva_parcial(
+    cog, monkeypatch, capsys, tipo_limit
+):
+    import discord
+    from core import discord_http
+    from tests.harness import error_http
+
+    error = (
+        discord.RateLimited(20)
+        if tipo_limit == "rate_limited"
+        else error_http(texto="<html>Cloudflare 1015: IP privada</html>")
+    )
+    primero = CanalConHistorial([
+        MensajeHistorial("420", local(16, 20, 1), user_id=1),
+        MensajeHistorial("420", local(16, 20, 2), user_id=2),
+    ], error=error)
+    segundo = CanalConHistorial([], canal_id=421)
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420, 421})
+    interaccion = interaccion_admin()
+    interaccion.guild = GuildFalso(GUILD, canales={
+        CANAL_420: primero, 421: segundo,
+    })
+
+    await llamar(cog, "lahora_importar", interaccion)
+
+    assert len(await obtener_top_lahora(GUILD)) == 2
+    assert segundo.llamadas == []
+    assert discord_http.espera_restante() > 0
+    assert interaccion.user.mensajes_directos == []
+    salida = capsys.readouterr().out
+    assert "importados=2" in salida
+    assert "<html>" not in salida
+    assert "IP privada" not in salida
+
+
+async def test_importar_durante_pausa_no_pide_historial(cog):
+    from core import discord_http
+
+    discord_http.pausa_discord.registrar(60)
+    canal = CanalConHistorial([])
+
+    interaccion = interaccion_admin(canal)
+    await llamar(cog, "lahora_importar", interaccion, canal)
+
+    assert canal.llamadas == []
+    assert "Reintentá" in interaccion.texto
+    assert await obtener_top_lahora(GUILD) == []
+
+
+async def test_importar_progreso_429_detiene_lectura(cog, monkeypatch):
+    from tests.harness import error_http
+    import commands.admin.lahora as modulo
+
+    monkeypatch.setattr(modulo, "PROGRESO_CADA", 1)
+    canal = CanalConHistorial([
+        MensajeHistorial("420", local(16, 20, 1), user_id=1),
+        MensajeHistorial("420", local(16, 20, 2), user_id=2),
+    ])
+    interaccion = interaccion_admin(canal)
+
+    async def progreso_limitado(*args, **kwargs):
+        raise error_http(headers={"Retry-After": "10"})
+
+    monkeypatch.setattr(interaccion, "edit_original_response", progreso_limitado)
+    await llamar(cog, "lahora_importar", interaccion, canal)
+
+    assert len(await obtener_top_lahora(GUILD)) == 1
+    assert interaccion.user.mensajes_directos == []
+
+
+async def test_importar_resumen_429_no_intenta_md(cog, monkeypatch):
+    from tests.harness import error_http
+
+    canal = CanalConHistorial([MensajeHistorial("420", local(16, 20, 1))])
+    interaccion = interaccion_admin(canal)
+
+    async def resumen_limitado(*args, **kwargs):
+        raise error_http()
+
+    monkeypatch.setattr(interaccion, "edit_original_response", resumen_limitado)
+    await llamar(cog, "lahora_importar", interaccion, canal)
+
+    assert len(await obtener_top_lahora(GUILD)) == 1
+    assert interaccion.user.mensajes_directos == []
+
+
 # ============================================================
 # /admin 420 sincronizar
 # ============================================================
@@ -393,6 +480,21 @@ async def test_sincronizar_requiere_admin(cog):
     await llamar(cog, "lahora_sincronizar", interaccion)
 
     assert "Sin permisos" in interaccion.texto
+
+
+async def test_sincronizar_durante_pausa_no_pide_historial(cog, monkeypatch):
+    from core import discord_http
+
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
+    discord_http.pausa_discord.registrar(60)
+    canal = CanalConHistorial([])
+    cog.bot = BotFalso([GuildFalso(GUILD, canales={CANAL_420: canal})])
+    interaccion = interaccion_admin()
+
+    await llamar(cog, "lahora_sincronizar", interaccion)
+
+    assert canal.llamadas == []
+    assert "Reintentá" in interaccion.texto
 
 
 async def test_sincronizar_no_corre_dos_veces_a_la_vez(cog, monkeypatch):

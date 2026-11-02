@@ -5,8 +5,21 @@ registran cada respuesta enviada para poder afirmar sobre ellas.
 """
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
+import discord
 from discord.utils import MISSING
+
+
+def error_http(status=429, texto="Too Many Requests", headers=None):
+    """HTTPException real con una respuesta mínima, sin hacer llamadas."""
+
+    respuesta = SimpleNamespace(
+        status=status,
+        reason="Too Many Requests" if status == 429 else "Error",
+        headers=headers or {},
+    )
+    return discord.HTTPException(respuesta, texto)
 
 
 class RespuestaFalsa:

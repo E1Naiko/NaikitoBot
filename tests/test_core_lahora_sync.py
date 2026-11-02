@@ -46,10 +46,14 @@ class MensajeHistorial:
 
 
 class CanalConHistorial:
-    def __init__(self, mensajes, canal_id=CANAL_UNO, guild=None):
+    def __init__(
+        self, mensajes, canal_id=CANAL_UNO, guild=None, error=None, al_leer=None
+    ):
         self.id = canal_id
         self.guild = guild
         self._mensajes = list(mensajes)
+        self.error = error
+        self.al_leer = al_leer
         self.llamadas = []
 
     def agregar(self, mensaje):
@@ -63,7 +67,11 @@ class CanalConHistorial:
             for mensaje in ordenados:
                 if after is not None and mensaje.created_at <= after:
                     continue
+                if self.al_leer is not None:
+                    self.al_leer(mensaje)
                 yield mensaje
+            if self.error is not None:
+                raise self.error
 
         return generar()
 
@@ -82,11 +90,16 @@ class _GuildConFachada(GuildFalso):
 
 
 class BotFalso:
-    def __init__(self, guilds, canales_externos=None):
+    def __init__(self, guilds, canales_externos=None, error=None):
         self.guilds = guilds
         self._canales_externos = canales_externos or {}
+        self.error = error
+        self.fetchs = []
 
     async def fetch_channel(self, canal_id):
+        self.fetchs.append(canal_id)
+        if self.error is not None:
+            raise self.error
         canal = self._canales_externos.get(canal_id)
 
         if canal is None:
@@ -245,14 +258,142 @@ async def test_no_corre_dos_veces_en_simultaneo(monkeypatch):
         assert await sincronizar_lahora(bot) == []
 
 
+@pytest.mark.parametrize("tipo_limit", ["html", "rate_limited"])
+async def test_429_detiene_otros_canales_y_conserva_checkpoint(
+    monkeypatch, capsys, tipo_limit
+):
+    import discord
+    from tests.harness import error_http
+
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO, CANAL_DOS})
+    error = (
+        discord.RateLimited(25)
+        if tipo_limit == "rate_limited"
+        else error_http(texto="<html>Cloudflare 1015: IP privada</html>")
+    )
+    canal = CanalConHistorial([
+        MensajeHistorial("420", local(16, 20, 1), user_id=1),
+        MensajeHistorial("420", local(16, 20, 2), user_id=2),
+    ], error=error)
+    otro = CanalConHistorial([], canal_id=CANAL_DOS)
+    guild = GuildFalso(GUILD_UNO, canales={CANAL_UNO: canal, CANAL_DOS: otro})
+    bot = BotFalso([guild, GuildFalso(GUILD_DOS)])
+
+    resultados = await sincronizar_lahora(bot)
+
+    assert len(resultados) == 1
+    assert resultados[0].limitado
+    assert "429" in resultados[0].error
+    assert "<html>" not in capsys.readouterr().out
+    assert otro.llamadas == []
+    assert bot.fetchs == []
+    # aunque parte del historial ya se importó, el tramo no está completo.
+    assert await obtener_ultimo_chequeo(CANAL_UNO) is None
+    assert len(await obtener_top_lahora(GUILD_UNO)) == 2
+
+    # Una reconexión durante la pausa no vuelve a pedir nada a Discord.
+    assert await sincronizar_lahora(bot) == []
+    assert len(canal.llamadas) == 1
+
+
+async def test_reanudar_importa_lo_que_faltaba_sin_duplicar(monkeypatch):
+    from core import discord_http
+    from tests.harness import error_http
+
+    reloj = [100.0]
+    monkeypatch.setattr(
+        discord_http, "pausa_discord", discord_http.PausaDiscord(lambda: reloj[0])
+    )
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO})
+    canal = CanalConHistorial(
+        [MensajeHistorial("420", local(16, 20, 1), user_id=1)],
+        error=error_http(headers={"Retry-After": "10"}),
+    )
+    bot = BotFalso([GuildFalso(GUILD_UNO, canales={CANAL_UNO: canal})])
+
+    assert (await sincronizar_lahora(bot))[0].limitado
+    canal.error = None
+    canal.agregar(MensajeHistorial("420", local(16, 20, 2), user_id=2))
+    reloj[0] += 10
+    resultados = await sincronizar_lahora(bot)
+
+    assert resultados[0].error is None
+    assert resultados[0].resumen.importados == 1
+    assert resultados[0].resumen.repetidos == 1
+    assert len(await obtener_top_lahora(GUILD_UNO)) == 2
+    assert await obtener_ultimo_chequeo(CANAL_UNO) is not None
+
+
+async def test_pausa_de_otra_tarea_impide_iniciar_sincronizacion(monkeypatch):
+    from core import discord_http
+
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO})
+    discord_http.pausa_discord.registrar(60)
+    canal = CanalConHistorial([])
+    bot = BotFalso([GuildFalso(GUILD_UNO, canales={CANAL_UNO: canal})])
+
+    assert await sincronizar_lahora(bot) == []
+    assert canal.llamadas == []
+
+
+async def test_429_resolviendo_canal_no_prueba_los_demas(monkeypatch):
+    from tests.harness import error_http
+
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO, CANAL_DOS})
+    bot = BotFalso([GuildFalso(GUILD_UNO)], error=error_http())
+
+    resultados = await sincronizar_lahora(bot)
+
+    assert len(resultados) == 1
+    assert resultados[0].limitado
+    assert bot.fetchs == [CANAL_UNO]
+
+
+async def test_pausa_durante_lectura_no_avanza_checkpoint(monkeypatch):
+    from core import discord_http
+
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO})
+
+    def reaccion_limitada(mensaje):
+        # Simula un 429 de otra tarea mientras llega la siguiente página.
+        if mensaje.author.id == 2:
+            discord_http.pausa_discord.registrar(60)
+
+    canal = CanalConHistorial([
+        MensajeHistorial("420", local(16, 20, 1), user_id=1),
+        MensajeHistorial("420", local(16, 20, 2), user_id=2),
+    ], al_leer=reaccion_limitada)
+    bot = BotFalso([GuildFalso(GUILD_UNO, canales={CANAL_UNO: canal})])
+    resultados = await sincronizar_lahora(bot)
+
+    assert resultados[0].limitado
+    assert await obtener_ultimo_chequeo(CANAL_UNO) is None
+    assert len(await obtener_top_lahora(GUILD_UNO)) == 1
+
+
 # ============================================================
 # AUTO-SINCRONIZACIÓN AL CONECTAR (on_ready)
 # ============================================================
 
+async def test_on_ready_durante_pausa_no_consulta_discord(monkeypatch, capsys):
+    from core import discord_http
+    from core.bot import NaikitoBot
+
+    discord_http.pausa_discord.registrar(60)
+
+    async def no_sincronizar(bot):
+        pytest.fail("No debe sincronizar durante la pausa")
+
+    monkeypatch.setattr("core.bot.sincronizar_lahora", no_sincronizar)
+    bot = NaikitoBot()
+    await bot._sincronizar_lahora_al_conectar()
+
+    assert "sincronización omitida" in capsys.readouterr().out
+
+
 async def test_on_ready_dispara_la_sincronizacion(monkeypatch):
     """``NaikitoBot.on_ready`` debe disparar la recuperación automática."""
 
-    import discord
     from discord.ext import tasks
 
     from core.bot import NaikitoBot

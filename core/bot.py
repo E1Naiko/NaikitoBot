@@ -15,6 +15,7 @@ from config import (
     SSF_CANALES_ID,
 )
 
+from core.discord_http import espera_restante
 from core.lahora_sync import sincronizar_lahora
 from core.mensajes import responder
 from core.permissions import es_admin
@@ -401,6 +402,14 @@ class NaikitoBot(commands.Bot):
 
     async def _sincronizar_lahora_al_conectar(self) -> None:
         """Recupera los \"420\" perdidos mientras el bot estaba offline."""
+
+        if espera_restante() > 0:
+            print(
+                "[420] sincronización omitida: pausa HTTP vigente; "
+                "se puede recuperar con /admin 420 sincronizar al terminar",
+                flush=True,
+            )
+            return
 
         try:
             resultados = await sincronizar_lahora(self)

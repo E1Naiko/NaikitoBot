@@ -4,6 +4,11 @@ import discord
 from discord.ext import commands
 
 import config
+from core.discord_http import (
+    espera_restante,
+    registrar_limite,
+    resumir_error,
+)
 from modules.lahora.services import es_mensaje_420, registrar_lahora
 
 # Reacciones con las que el bot confirma un 420 válido.
@@ -58,13 +63,20 @@ class RegistroMixin:
             reacciones.append(REACCION_PRIMERO)
 
         for reaccion in reacciones:
+            # La confirmación es opcional: durante un bloqueo no se encolan
+            # reacciones ni se repite el registro que ya quedó guardado.
+            if espera_restante() > 0:
+                break
+
             try:
                 await message.add_reaction(reaccion)
-            except discord.HTTPException as error:
-                # Sin permiso de reacciones el registro igual queda hecho.
+            except (discord.HTTPException, discord.RateLimited) as error:
+                registrar_limite(error, contexto="420.reaccion")
+                # Sin permiso o con un límite el registro igual queda hecho.
                 print(
-                    f"[420] no se pudo reaccionar ({type(error).__name__}): "
-                    f"{error}",
+                    f"[420] reacción omitida mensaje={message.id} "
+                    f"({type(error).__name__}): {resumir_error(error)}; "
+                    "registro conservado",
                     flush=True,
                 )
                 break
