@@ -12,7 +12,7 @@ import discord
 import pytest
 
 from config import TIMEZONE
-from modules.lahora.services import registrar_lahora
+from modules.lahora.services import obtener_top_lahora, registrar_lahora
 from tests.harness import InteraccionFalsa, construir_cog
 
 GUILD = 1
@@ -82,6 +82,7 @@ class MensajeFalso:
         bot=False,
         en_servidor=True,
         falla_reaccion=False,
+        error_reaccion=None,
     ):
         MensajeFalso._siguiente_id += 1
         self.id = MensajeFalso._siguiente_id
@@ -92,9 +93,14 @@ class MensajeFalso:
         self.channel = _Canal(canal)
         self.guild = _Guild(GUILD) if en_servidor else None
         self.reacciones = []
+        self.intentos_reaccion = []
         self._falla_reaccion = falla_reaccion
+        self._error_reaccion = error_reaccion
 
     async def add_reaction(self, emoji):
+        self.intentos_reaccion.append(emoji)
+        if self._error_reaccion is not None:
+            raise self._error_reaccion
         if self._falla_reaccion:
             from tests.harness import prohibido
 
@@ -247,6 +253,53 @@ async def test_usa_la_hora_del_mensaje_y_no_la_de_procesamiento(cog):
     mensaje = await enviar(cog, MensajeFalso("420", local(16, 20, 59)))
 
     assert mensaje.reacciones == ["🌿", "🥇"]
+
+
+@pytest.mark.parametrize("tipo_limit", ["html", "rate_limited"])
+async def test_429_conserva_registro_y_no_intenta_la_medalla(cog, capsys, tipo_limit):
+    from tests.harness import error_http
+
+    error = (
+        discord.RateLimited(20)
+        if tipo_limit == "rate_limited"
+        else error_http(texto="<html>Cloudflare Error 1015: IP privada</html>")
+    )
+    mensaje = await enviar(cog, MensajeFalso(
+        "420", local(16, 20, 1), error_reaccion=error
+    ))
+
+    top = await obtener_top_lahora(GUILD)
+    assert len(top) == 1
+    assert mensaje.intentos_reaccion == ["🌿"]
+    assert mensaje.reacciones == []
+    salida = capsys.readouterr().out
+    assert "registro conservado" in salida
+    assert "429" in salida
+    assert "<html>" not in salida
+    assert "IP privada" not in salida
+
+
+async def test_pausa_por_429_omite_reacciones_sin_dejar_de_registrar(cog, monkeypatch):
+    from core import discord_http
+    from tests.harness import error_http
+
+    reloj = [100.0]
+    monkeypatch.setattr(
+        discord_http, "pausa_discord", discord_http.PausaDiscord(lambda: reloj[0])
+    )
+    await enviar(cog, MensajeFalso(
+        "420", local(16, 20, 1), user_id=1,
+        error_reaccion=error_http(headers={"Retry-After": "10"}),
+    ))
+    durante = await enviar(cog, MensajeFalso("420", local(16, 20, 2), user_id=2))
+
+    assert durante.intentos_reaccion == []
+    assert len(await obtener_top_lahora(GUILD)) == 2
+
+    reloj[0] += 10
+    despues = await enviar(cog, MensajeFalso("420", local(16, 20, 3), user_id=3))
+    assert despues.reacciones == ["🌿"]
+    assert len(await obtener_top_lahora(GUILD)) == 3
 
 
 # ============================================================

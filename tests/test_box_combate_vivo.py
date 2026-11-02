@@ -711,6 +711,79 @@ async def test_un_mensaje_borrado_se_vuelve_a_publicar(narrador, combate):
     assert len(canal.mensajes) == 2, "si alguien borró el asalto, se reenvía"
 
 
+@pytest.mark.parametrize("tipo_limit", ["html", "rate_limited"])
+async def test_429_al_buscar_mensaje_no_lo_duplica_y_pausa(
+    narrador, combate, monkeypatch, capsys, tipo_limit
+):
+    from core import discord_http
+    from tests.harness import error_http
+
+    narrador, canal, reloj, adelantar = narrador
+    adelantar(0)
+    await narrador._narrar_combate(combate)
+    mensaje_original = canal.mensajes[0]
+    error = (
+        discord.RateLimited(20)
+        if tipo_limit == "rate_limited"
+        else error_http(texto="<html>Cloudflare 1015: IP privada</html>")
+    )
+    pedidos = []
+
+    async def fetch_limitado(mensaje_id):
+        pedidos.append(mensaje_id)
+        raise error
+
+    monkeypatch.setattr(canal, "fetch_message", fetch_limitado)
+    adelantar(1)
+    await NarracionMixin.narrar_combates.coro(narrador)
+
+    assert pedidos == [mensaje_original.id]
+    assert canal.mensajes == [mensaje_original]
+    assert mensaje_original.ediciones == 0
+    assert discord_http.espera_restante() > 0
+    salida = capsys.readouterr().out
+    assert "429" in salida
+    assert "<html>" not in salida
+    assert "IP privada" not in salida
+
+    # El siguiente tick no repite la petición durante la pausa.
+    await NarracionMixin.narrar_combates.coro(narrador)
+    assert pedidos == [mensaje_original.id]
+
+
+async def test_narracion_retoma_el_mismo_mensaje_tras_la_pausa(
+    narrador, combate, monkeypatch
+):
+    from core import discord_http
+    from tests.harness import error_http
+
+    reloj_http = [100.0]
+    monkeypatch.setattr(
+        discord_http, "pausa_discord",
+        discord_http.PausaDiscord(lambda: reloj_http[0]),
+    )
+    narrador, canal, reloj, adelantar = narrador
+    adelantar(0)
+    await narrador._narrar_combate(combate)
+    original = canal.fetch_message
+
+    async def fetch_limitado(mensaje_id):
+        raise error_http(headers={"Retry-After": "10"})
+
+    monkeypatch.setattr(canal, "fetch_message", fetch_limitado)
+    adelantar(1)
+    await NarracionMixin.narrar_combates.coro(narrador)
+    assert canal.mensajes[0].ediciones == 0
+
+    monkeypatch.setattr(canal, "fetch_message", original)
+    reloj_http[0] += 10
+    await NarracionMixin.narrar_combates.coro(narrador)
+
+    assert len(canal.mensajes) == 1
+    assert canal.mensajes[0].ediciones == 1
+    assert await tiene_accion_activa(GUILD, RETADOR)
+
+
 async def test_terminar_la_narracion_no_libera_la_accion(narrador, combate):
     """La pelea puede terminar en 12 minutos; la acción sigue bloqueando 24 h.
 

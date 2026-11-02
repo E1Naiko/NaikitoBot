@@ -20,6 +20,16 @@ os.environ["DATABASE"] = str(_BASE / "test_box.db")
 import pytest  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _pausa_http_aislada(monkeypatch):
+    """Un 429 simulado no deja pausadas las pruebas siguientes."""
+
+    from core.discord_http import PausaDiscord
+    from core import discord_http
+
+    monkeypatch.setattr(discord_http, "pausa_discord", PausaDiscord())
+
+
 @pytest.fixture
 async def base_datos_limpia():
     """Deja la base de datos vacía y con el esquema completo creado."""

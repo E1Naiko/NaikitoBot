@@ -269,8 +269,50 @@ canal 420 configurado, en todos los servidores donde está, desde el último
 momento que se chequeó (en vivo o por una sincronización anterior) y carga
 lo que se haya perdido, con las mismas reglas que el registro en vivo.
 `/admin 420 sincronizar` dispara manualmente esa misma recuperación sin
-esperar a un reinicio. Es más liviana que `importar`: no vuelve a recorrer
-todo el historial, solo lo nuevo desde la última vez.
+esperar a un reinicio. Es más liviana que `importar`: salvo la primera
+revisión de un canal, no vuelve a recorrer todo el historial.
+
+#### Límites de Discord y Cloudflare (HTTP 429)
+
+Un `429` cuya respuesta contiene HTML y `Cloudflare Error 1015` es un
+bloqueo temporal de la IP de salida, distinto de un error de permisos o de
+la base de datos. El registro de un 420 se guarda **antes** de reaccionar:
+si falta la reacción 🌿, sus puntos pueden estar guardados igualmente.
+Consultalos con `/420_stats`; no hace falta borrar ni volver a agregar el
+registro. Un `ya_registrado` con posición y puntos en cero informa que se
+ignoró un duplicado, no que se hayan borrado los puntos originales.
+
+Las reacciones, la recuperación/importación del historial y la narración
+de Box comparten una pausa cooperativa dentro del proceso
+(`core/discord_http.py`). Ante un 429 respetan `Retry-After` si viene en el
+encabezado HTTP o en la respuesta de Discord. Si Cloudflare no informa una
+duración, aplican una pausa de **300 segundos** como medida conservadora;
+eso no garantiza que el bloqueo externo haya terminado. Los errores se
+registran en una línea, sin volcar el HTML ni la IP de la respuesta.
+
+Durante la pausa se omiten las reacciones y se detienen las lecturas y la
+narración. El registro de nuevos 420 en vivo sigue funcionando, sin duplicar
+registros ni cambiar las reglas de recompensa.
+Los tramos de historial incompletos conservan su checkpoint y pueden
+volver a leerse sin duplicar puntos. No se programan reintentos automáticos
+de reacción: al terminar la pausa, una nueva reconexión o
+`/admin 420 sincronizar` puede recuperar los mensajes; las reacciones
+omitidas no se reenvían. Si un bloqueo corta una importación manual, el
+resumen parcial queda en la consola y no se intenta enviarlo por MD durante
+la pausa. La pausa no se comparte entre procesos independientes.
+
+Si el bloqueo persiste, comprobá que haya **una sola instancia** del bot
+usando el token y contactá al proveedor de hosting para revisar la IP de
+salida. Cambiar el token no levanta un bloqueo de IP. `RESUMED session`
+indica que el gateway recuperó la conexión; no significa que el bloqueo
+HTTP haya desaparecido.
+
+Los mensajes `[BOX] probabilidad reducida...` pertenecen a una tarea de
+base de datos que corre al iniciar y luego cada hora: no hacen peticiones
+HTTP por sí mismos. Repeticiones en la consola pueden deberse a reinicios,
+varias instancias o mensajes agrupados por el panel; ese texto por sí solo no
+identifica la causa. Esta protección no modifica la regla de decaimiento
+de Box.
 
 ### SeptSinFP
 

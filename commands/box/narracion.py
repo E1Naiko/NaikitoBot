@@ -35,6 +35,12 @@ from config import (
     BOX_COMBATE_MAX_POR_TICK,
     BOX_COMBATE_TICK_SEGUNDOS,
 )
+from core.discord_http import (
+    es_rate_limit,
+    espera_restante,
+    registrar_limite,
+    resumir_error,
+)
 from core.mensajes import crear_embed, responder, responder_error, seccion
 from core.utils import ahora
 from modules.box.combate import Plan
@@ -107,6 +113,11 @@ class NarracionMixin:
     async def narrar_combates(self):
         """Un latido: revelar diálogos, cerrar asaltos y clausurar peleas."""
 
+        # El plan queda en la base: se puede retomar el relato después de
+        # la pausa sin perder recompensas ni volver a aceptar el desafío.
+        if espera_restante() > 0:
+            return
+
         vivos = await obtener_combates_vivos(ahora())
 
         if not vivos:
@@ -115,12 +126,16 @@ class NarracionMixin:
         enviados = 0
 
         for combate in vivos[:BOX_COMBATE_MAX_POR_TICK]:
+            if espera_restante() > 0:
+                break
+
             try:
                 enviados += await self._narrar_combate(combate)
-            except discord.HTTPException as error:
+            except (discord.HTTPException, discord.RateLimited) as error:
+                registrar_limite(error, contexto="box.narracion")
                 print(
-                    f"[BOX] narración falló combate={combate['id']}: "
-                    f"{type(error).__name__}: {error}",
+                    f"[BOX] narración pausada combate={combate['id']}: "
+                    f"{type(error).__name__}: {resumir_error(error)}",
                     flush=True,
                 )
             except Exception as error:  # nunca tumbar el loop por un dato malo
@@ -196,6 +211,9 @@ class NarracionMixin:
         enviados = 0
 
         for indice in pendientes[:BOX_COMBATE_MAX_ASELLAR_POR_TICK]:
+            if espera_restante() > 0:
+                break
+
             await self._publicar_asalto(
                 canal, combate, plan, indice, cerrado=True, canticos=canticos
             )
@@ -205,6 +223,9 @@ class NarracionMixin:
             # este latido: se refresca el set para no depender de que el
             # ``reclamar_asalto`` de abajo nos cubra las espaldas.
             publicados.add(indice)
+
+        if espera_restante() > 0:
+            return enviados
 
         if terminando:
             if len(pendientes) > BOX_COMBATE_MAX_ASELLAR_POR_TICK:
@@ -299,7 +320,9 @@ class NarracionMixin:
             if miembro is None and guild is not None:
                 try:
                     miembro = await guild.fetch_member(user_id)
-                except discord.HTTPException:
+                except (discord.HTTPException, discord.RateLimited) as error:
+                    if es_rate_limit(error):
+                        raise
                     miembro = None
 
             nombres.append(nombre_visible(miembro))
@@ -620,7 +643,11 @@ class NarracionMixin:
             return await canal.fetch_message(mensaje_id)
         except discord.NotFound:
             return None
-        except discord.HTTPException:
+        except (discord.HTTPException, discord.RateLimited) as error:
+            # Un mensaje inaccesible puede volver a publicarse; un 429 no
+            # significa que haya desaparecido. Se propaga para no duplicarlo.
+            if es_rate_limit(error):
+                raise
             return None
 
 
