@@ -5,7 +5,6 @@ madrugada, entregando puntos canjeables por recompensas. Las horas de bonus y
 los valores de puntos se configuran desde ``.env``.
 
 Submódulos:
-* :mod:`models` — Modelos SQLAlchemy.
 * :mod:`database` — Inicialización de la base de datos.
 * :mod:`logic` — Cálculo de puntos y horarios.
 * :mod:`services` — Operaciones de alto nivel para los comandos.

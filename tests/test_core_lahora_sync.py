@@ -109,7 +109,9 @@ class BotFalso:
 
 
 @pytest.fixture(autouse=True)
-async def _db(base_datos_limpia):
+async def _db(base_datos_limpia, monkeypatch):
+    # Pruebas existentes cubren la opción explícita de recuperar historial.
+    monkeypatch.setattr("config.LAHORA_IMPORTAR_HISTORIAL_INICIAL", True)
     from modules.lahora.database import inicializar_db
 
     await inicializar_db()
@@ -420,3 +422,35 @@ async def test_on_ready_dispara_la_sincronizacion(monkeypatch):
         await tarea
 
     assert len(await obtener_top_lahora(GUILD_UNO)) == 1
+
+
+async def test_base_nueva_no_importa_historial_y_luego_recupera_mensajes(monkeypatch):
+    monkeypatch.setattr("config.LAHORA_IMPORTAR_HISTORIAL_INICIAL", False)
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO})
+    reloj = [local(16, 21, dia=5)]
+    monkeypatch.setattr("core.lahora_sync.ahora", lambda: reloj[0])
+    canal = CanalConHistorial([MensajeHistorial("420", local(16, 20, 3), user_id=1)])
+    bot = BotFalso([GuildFalso(GUILD_UNO, canales={CANAL_UNO: canal})])
+
+    resultado = await sincronizar_lahora(bot)
+    assert resultado[0].resumen.importados == 0
+    assert await obtener_top_lahora(GUILD_UNO) == []
+    assert await obtener_ultimo_chequeo(CANAL_UNO) == reloj[0]
+
+    canal.agregar(MensajeHistorial("420", local(4, 20, 1, dia=6), user_id=2))
+    reloj[0] = local(5, 0, dia=6)
+    resultado = await sincronizar_lahora(bot)
+    assert resultado[0].resumen.importados == 1
+    assert len(await obtener_top_lahora(GUILD_UNO)) == 1
+
+
+async def test_base_nueva_con_error_conserva_checkpoint_inicial(monkeypatch):
+    monkeypatch.setattr("config.LAHORA_IMPORTAR_HISTORIAL_INICIAL", False)
+    monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_UNO})
+    reloj = [local(16, 21, dia=5)]
+    monkeypatch.setattr("core.lahora_sync.ahora", lambda: reloj[0])
+    canal = CanalProhibido([])
+    bot = BotFalso([GuildFalso(GUILD_UNO, canales={CANAL_UNO: canal})])
+    resultado = await sincronizar_lahora(bot)
+    assert resultado[0].error
+    assert await obtener_ultimo_chequeo(CANAL_UNO) == reloj[0]

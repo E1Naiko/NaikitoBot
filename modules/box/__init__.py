@@ -6,7 +6,6 @@ combates y consigue patrocinadores.
 
 Submódulos:
 
-* :mod:`models` — Definiciones SQLAlchemy de las tablas.
 * :mod:`database` — Funciones para inicializar la base de datos.
 * :mod:`constants` — Constantes de equilibrio del juego importadas de la configuración.
 * :mod:`logic` — Cálculos estadísticos, progresión y economía.

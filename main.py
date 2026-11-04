@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,6 +9,11 @@ RUTA_ENV = Path(__file__).resolve().parent / ".env"
 load_dotenv(RUTA_ENV)
 
 from core.bot import NaikitoBot
+from core.discord_http import es_rate_limit, registrar_limite
+
+# Evita un bucle agresivo cuando Cloudflare no informa cuándo termina el bloqueo.
+ESPERA_INICIAL_ARRANQUE = 300.0
+ESPERA_MAXIMA_ARRANQUE = 3600.0
 
 
 def _leer_token():
@@ -45,8 +51,27 @@ def main():
             "No se encontró DISCORD_TOKEN en las variables de entorno."
         )
 
-    bot = NaikitoBot()
-    bot.run(token)
+    espera = ESPERA_INICIAL_ARRANQUE
+    while True:
+        # Cada intento necesita un cliente nuevo: run() cierra el anterior.
+        bot = NaikitoBot()
+        try:
+            bot.run(token)
+            return
+        except Exception as error:
+            # No repetir setup_hook ni tareas que ya pudieran haberse iniciado.
+            if bot.setup_iniciado or not es_rate_limit(error):
+                raise
+
+            indicado = registrar_limite(error, contexto="inicio de sesión")
+            demora = max(espera, indicado)
+            print(
+                f"[DISCORD] Inicio bloqueado; próximo intento en {demora:.1f}s. "
+                "Si persiste, revisá la IP de salida con el hosting.",
+                flush=True,
+            )
+            time.sleep(demora)
+            espera = min(espera * 2, ESPERA_MAXIMA_ARRANQUE)
 
 
 def _diagnostico_token() -> None:

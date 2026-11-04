@@ -62,7 +62,7 @@ El bot sigue una arquitectura en capas clara:
                     │
 ┌───────────────────▼─────────────────────┐
 │              Base de datos              │
-│  PostgreSQL (prod) / SQLite (desarrollo)│
+│  SQLite (archivo persistente)          │
 └─────────────────────────────────────────┘
 ```
 
@@ -79,7 +79,7 @@ El bot sigue una arquitectura en capas clara:
     Copia `.env.example` a `.env` y completa:
     - `DISCORD_TOKEN`: Token de tu bot de Discord
     - `GUILD_ID`: ID del servidor donde se sincronizarán los comandos (opcional para desarrollo)
-    - `DATABASE_URL`: URL de conexión a la base de datos (usa SQLite por defecto para desarrollo)
+    - `DATABASE`: ruta del archivo SQLite (por defecto `naikito-v2.db`)
     - IDs de canales y usuarios administradores
 
 3.  **Ejecutar el bot**
@@ -129,17 +129,22 @@ Comandos protegidos por ID de usuario para diagnóstico, mantenimiento, gestión
 
 ## 💾 Base de datos
 
-El bot usa **SQLAlchemy asíncrono** como ORM:
-- **Producción**: PostgreSQL con driver `asyncpg`
-- **Desarrollo/Pruebas**: SQLite con `aiosqlite` (sin necesidad de servidor)
+El bot usa **SQLite** sin ORM ni servidor externo. La ruta se configura con
+`DATABASE` (por defecto `naikito-v2.db`). El esquema está en `core/esquema.sql`
+y `core/database.py` crea las tablas faltantes al iniciar.
 
-### Características importantes:
-- Soporte de fechas con zona horaria que funciona correctamente en SQLite (tipo personalizado `TZDateTime`)
-- Sesiones asíncronas por operación
-- Creación automática de tablas al iniciar el bot
-- Función `vaciar_db()` para reiniciar la base en pruebas
+- `core/sqlite.py` abre conexiones cortas con tiempo de espera de 30 segundos.
+- Madrugue, 420 y SeptSinFP usan `aiosqlite`; Box ejecuta consultas SQLite
+  bloqueantes en hilos para no bloquear el event loop de Discord.
+- Las fechas se almacenan como texto ISO; las de hora incluyen zona horaria.
+- `vaciar_db()` se usa únicamente para las pruebas.
+- La primera sincronización 420 empieza desde el primer chequeo, salvo que se
+  configure `LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`. La importación manual sigue
+  disponible para recuperar mensajes anteriores.
 
-Los modelos se definen en cada submódulo de `modules/*/models.py` y heredan de `core.database.Base`.
+Para empezar de cero, seleccioná un archivo que no exista y no ejecutes las
+herramientas de importación o fusión de respaldos. Detené el bot para copiar
+el archivo y asegurate de usar almacenamiento persistente.
 
 ---
 
@@ -175,7 +180,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-Las pruebas usan una base de datos SQLite en memoria que se vacía entre cada test.
+Las pruebas usan un archivo SQLite temporal que se vacía entre cada test.
 
 ---
 
@@ -189,7 +194,7 @@ el formato:
 NaikitoBot<mayor>.<función>.<revisión>.<YYYYMMDD>
 ```
 
-* `<mayor>`: versión mayor del bot, fija (`1`).
+* `<mayor>`: versión mayor del bot, fija (`2`).
 * `<función>`: número de la última función/sistema implementado. Se sube a
   mano en `core/version.py` (`VERSION_FUNCION`) cada vez que se agrega un
   sistema o una función nueva importante.
@@ -209,11 +214,10 @@ Código en `core/version.py`.
 ### Añadir un nuevo comando a un sistema existente
 1.  Añade el método decorado con `@app_commands.command()` en el Cog correspondiente dentro de `commands/`
 2.  Si necesitas nueva lógica de negocio, añádela en `modules/<sistema>/logic.py` o `services.py`
-3.  Si necesitas nuevas tablas, añade el modelo en `modules/<sistema>/models.py` y asegúrate de importarlo en `core/database.py` en la función `registrar_modelos()`
+3.  Si necesitas nuevas tablas, agregá su esquema a `core/esquema.sql` y las consultas parametrizadas al módulo correspondiente.
 
 ### Añadir un nuevo sistema completo
 1.  Crea una carpeta `modules/<nombresistema>/` con:
-    - `models.py` para tus modelos SQLAlchemy
     - `database.py` con una función `inicializar_db()`
     - `logic.py` para tu lógica de negocio
     - `services.py` para operaciones de alto nivel

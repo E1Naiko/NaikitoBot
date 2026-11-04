@@ -5,7 +5,6 @@ Premia a quienes escriben "420" en el canal configurado justo a las
 configuran desde ``.env`` con variables ``LAHORA_*``.
 
 Submódulos:
-* :mod:`models` — Modelo SQLAlchemy (tabla ``lahora_registros``).
 * :mod:`database` — Consultas asíncronas.
 * :mod:`logic` — Detección del mensaje, ventanas, puntos y rachas.
 * :mod:`services` — Operaciones de alto nivel para los comandos.

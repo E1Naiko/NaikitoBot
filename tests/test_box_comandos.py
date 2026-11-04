@@ -336,7 +336,7 @@ async def test_descanso_inicia_una_accion_sin_reducir_al_instante(cog):
     assert accion[0] == "DESCANSANDO"
 
     # Igual que las otras acciones temporizadas, acusa recibo antes de tocar
-    # PostgreSQL y termina contestando con un followup.
+    # la base de datos y termina contestando con un followup.
     assert interaccion.cantidad_respuestas == 2
     assert interaccion.respuestas[0].contenido is None
     assert interaccion.respuestas[0].efimero is False

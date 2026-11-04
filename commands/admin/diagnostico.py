@@ -9,7 +9,6 @@ from time import perf_counter
 
 import discord
 from discord import app_commands
-from sqlalchemy import text
 
 from commands.admin.base import solo_admin, solo_servidor
 from config import (
@@ -21,7 +20,7 @@ from config import (
     MADRUGUE_CHANNEL_IDS,
     SSF_CANALES_ID,
 )
-from core.database import crear_sesion
+from core.sqlite import conectar
 from core.mensajes import responder
 from modules.box.services import obtener_estado_box, obtener_saldo
 from modules.madrugue.services import obtener_stats_madrugue
@@ -251,8 +250,10 @@ class DiagnosticoMixin:
         return Comprobacion("Discord", ESTADO_OK, detalle)
 
     async def _diagnosticar_base(self) -> Comprobacion:
-        async with crear_sesion() as sesion:
-            valor = (await sesion.execute(text("SELECT 1"))).scalar_one()
+        async with conectar() as conexion:
+            async with conexion.execute("SELECT 1") as cursor:
+                fila = await cursor.fetchone()
+        valor = fila[0]
 
         if valor != 1:
             raise RuntimeError(f"SELECT 1 devolvió {valor!r}")

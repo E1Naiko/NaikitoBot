@@ -20,7 +20,7 @@ def test_formato_con_git_disponible(monkeypatch):
     monkeypatch.setattr(version_module, "VERSION_FUNCION", 5)
     monkeypatch.setattr(version_module, "VERSION_REVISION", 0)
 
-    assert version_bot() == "NaikitoBot1.5.0.20260915"
+    assert version_bot() == "NaikitoBot2.5.0.20260915"
 
 
 def test_usa_la_fecha_de_hoy_si_git_falla(monkeypatch, capsys):
@@ -38,7 +38,7 @@ def test_usa_la_fecha_de_hoy_si_git_falla(monkeypatch, capsys):
     hoy = datetime.date.today().strftime("%Y%m%d")
     resultado = version_bot()
 
-    assert resultado == f"NaikitoBot1.5.0.{hoy}"
+    assert resultado == f"NaikitoBot2.5.0.{hoy}"
     assert "no se pudo leer la fecha del último commit" in capsys.readouterr().out
 
 

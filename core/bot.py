@@ -142,6 +142,9 @@ class NaikitoBot(commands.Bot):
     """Clase principal del bot."""
 
     def __init__(self):
+        # Permite distinguir fallos anteriores al setup de errores que podrían
+        # dejar tareas o cambios de estado ya iniciados.
+        self.setup_iniciado = False
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -193,6 +196,7 @@ class NaikitoBot(commands.Bot):
     async def setup_hook(self):
         """Carga módulos, sincroniza comandos e inicia tareas."""
 
+        self.setup_iniciado = True
         print("Configurando Naikito Bot...")
 
         # ====================================================

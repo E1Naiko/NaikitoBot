@@ -92,6 +92,12 @@ async def _sincronizar_canal(guild_id, canal) -> ResultadoCanalSincronizado:
 
     desde = await obtener_ultimo_chequeo(canal.id)
     momento_inicio = ahora()
+    if desde is None and not config.LAHORA_IMPORTAR_HISTORIAL_INICIAL:
+        # Base nueva: no reconstruir puntos antiguos sin una importación explícita.
+        # Se persiste antes de leer para que un error no mueva el punto de inicio
+        # y no se pierdan mensajes recibidos durante el siguiente reintento.
+        desde = momento_inicio
+        await guardar_ultimo_chequeo(guild_id, canal.id, desde)
 
     async def historial():
         async for mensaje in canal.history(
