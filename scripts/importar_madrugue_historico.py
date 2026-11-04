@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-from datetime import date
 from pathlib import Path
 import sys
 
@@ -24,10 +23,8 @@ import sys
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 
-from sqlalchemy import select  # noqa: E402
-
-from core.database import crear_sesion, inicializar_db  # noqa: E402
-from modules.madrugue.models import RegistroMadrugue  # noqa: E402
+from core.database import inicializar_db  # noqa: E402
+from modules.madrugue.database import importar_registros  # noqa: E402
 
 
 # (id de Discord, nombre mostrado, fecha, hora, puntos base, multiplicador,
@@ -83,46 +80,10 @@ def _guild_id_argument() -> int:
 
 async def importar(guild_id: int) -> tuple[int, int]:
     await inicializar_db()
-    importados = omitidos = 0
-
-    async with crear_sesion() as sesion:
-        for user_id, username, fecha_texto, hora, base, multiplicador, puntos in HISTORICO:
-            fecha = date.fromisoformat(fecha_texto)
-            existente = (await sesion.execute(
-                select(RegistroMadrugue).where(
-                    RegistroMadrugue.guild_id == guild_id,
-                    RegistroMadrugue.user_id == user_id,
-                    RegistroMadrugue.fecha == fecha,
-                )
-            )).scalar_one_or_none()
-
-            if existente:
-                datos = (existente.username, existente.hora, existente.puntos_base,
-                         existente.multiplicador, existente.puntos_finales)
-                esperados = (username, hora, base, multiplicador, puntos)
-                if datos != esperados:
-                    raise RuntimeError(
-                        f"Conflicto en {fecha_texto} para {user_id}: "
-                        f"la base ya contiene datos diferentes."
-                    )
-                omitidos += 1
-                continue
-
-            sesion.add(RegistroMadrugue(
-                guild_id=guild_id,
-                user_id=user_id,
-                username=username,
-                fecha=fecha,
-                hora=hora,
-                puntos_base=base,
-                multiplicador=multiplicador,
-                puntos_finales=puntos,
-            ))
-            importados += 1
-
-        await sesion.commit()
-
-    return importados, omitidos
+    try:
+        return await importar_registros(guild_id, HISTORICO)
+    except ValueError as error:
+        raise RuntimeError(str(error)) from error
 
 
 async def main() -> None:

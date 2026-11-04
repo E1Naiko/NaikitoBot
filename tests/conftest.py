@@ -2,8 +2,7 @@
 
 Fija la base de datos a un archivo SQLite temporal ANTES de importar
 ``config``, que arma la URL de la base en el momento de la importación.
-La capa de datos usa SQLAlchemy asíncrono: en producción corre sobre
-PostgreSQL (asyncpg) y en las pruebas sobre SQLite (aiosqlite).
+La capa de datos usa SQLite tanto en producción como en pruebas.
 """
 
 import os
@@ -16,6 +15,7 @@ sys.path.insert(0, str(RAIZ))
 
 _BASE = Path(tempfile.mkdtemp(prefix="naikito_test_"))
 os.environ["DATABASE"] = str(_BASE / "test_box.db")
+os.environ["DATABASE_URL"] = ""
 
 import pytest  # noqa: E402
 

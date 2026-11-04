@@ -375,7 +375,7 @@ def conectar_db():
     """Conexión SQLite sincrónica al mismo archivo que usa la capa async.
 
     Solo para pruebas y scripts: permite que los helpers de las pruebas
-    sigan usando SQL directo contra la misma base que los modelos ORM
+    sigan usando SQL directo contra la misma base que el bot
     (que en las pruebas corren sobre aiosqlite contra este archivo).
     """
 

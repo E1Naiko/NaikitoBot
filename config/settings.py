@@ -11,7 +11,6 @@ __all__ = [
     "PREFIX",
     "TIMEZONE",
     "DATABASE",
-    "DATABASE_URL",
     "MADRUGUE_INICIO_100",
     "MADRUGUE_INICIO_25",
     "MADRUGUE_INICIO_5",
@@ -23,6 +22,7 @@ __all__ = [
     "MADRUGUE_BONUS_MINIMO",
     "LAHORA_HORAS",
     "LAHORA_DURACION_MINUTOS",
+    "LAHORA_IMPORTAR_HISTORIAL_INICIAL",
     "LAHORA_PUNTOS_BASE",
     "LAHORA_BONUS_VELOCIDAD",
     "LAHORA_BONUS_PRIMERO",
@@ -315,43 +315,19 @@ TIMEZONE = ZoneInfo(
 # BASE DE DATOS
 # ============================================================
 
-# La base de datos se maneja con SQLAlchemy asíncrono. En producción se
-# usa PostgreSQL (driver asyncpg) configurando DATABASE_URL en el .env:
-#
-#   DATABASE_URL=postgresql+asyncpg://usuario:clave@host:5432/naikito
-#
-# Si no hay DATABASE_URL se cae al archivo SQLite de DATABASE, que sigue
-# sirviendo para desarrollo local y para las pruebas automatizadas
-# (driver aiosqlite).
+# El archivo separado evita reutilizar accidentalmente una instalación anterior.
+# DATABASE_URL ya no se usa: fallar explícitamente evita cambiar de base sin aviso.
+if os.getenv("DATABASE_URL", "").strip():
+    raise RuntimeError(
+        "DATABASE_URL ya no está soportada. Eliminá esa variable del entorno "
+        "y del .env; configurá DATABASE con la ruta del archivo SQLite."
+    )
 
-DATABASE = os.getenv("DATABASE", "naikito.db")
-
-
-def _database_url(defecto: str) -> str:
-    """Arma la URL de SQLAlchemy a partir del .env."""
-
-    url = os.getenv("DATABASE_URL", "").strip()
-
-    if url:
-        return url
-
-    return f"sqlite+aiosqlite:///{defecto}"
-
-
-DATABASE_URL = _database_url(DATABASE)
-
+DATABASE = os.getenv("DATABASE", "naikito-v2.db").strip()
 _comprobar(
-    DATABASE_URL.startswith(
-        (
-            "postgresql+asyncpg://",
-            "postgresql://",
-            "sqlite+aiosqlite://",
-            "sqlite://",
-        )
-    ),
-    "DATABASE_URL debe ser una URL de SQLAlchemy con driver asíncrono, "
-    "por ejemplo postgresql+asyncpg://usuario:clave@host:5432/naikito o "
-    f"sqlite+aiosqlite:///naikito.db, pero se recibió '{DATABASE_URL}'.",
+    bool(DATABASE) and DATABASE != ":memory:",
+    "DATABASE debe ser la ruta de un archivo SQLite persistente, no estar "
+    "vacía ni ser :memory:.",
 )
 
 
@@ -480,6 +456,12 @@ def _leer_lista_horas(nombre, defecto):
 
     return tuple(sorted(horas))
 
+
+# Por defecto una base nueva empieza desde la primera sincronización.
+# La importación manual sigue disponible para recuperar historial a elección.
+LAHORA_IMPORTAR_HISTORIAL_INICIAL = _leer_booleano(
+    "LAHORA_IMPORTAR_HISTORIAL_INICIAL", 0,
+)
 
 LAHORA_HORAS = _leer_lista_horas(
     "LAHORA_HORAS",

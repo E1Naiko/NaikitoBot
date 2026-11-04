@@ -1,484 +1,202 @@
-"""Capa de datos del módulo SeptSinFP (SQLAlchemy asíncrono).
+"""Persistencia asíncrona de SeptSinFP con SQLite directo."""
 
-Todas las funciones son asíncronas y devuelven tuplas con la misma
-forma que tenía la capa SQLite original. Las fechas se entregan como
-objetos ``date``/``datetime`` nativos en lugar de texto ISO.
-"""
+from datetime import date, datetime
 
-from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import IntegrityError
+from config import TIMEZONE
+from core.database import inicializar_db as _inicializar_db_base
+from core.sqlite import conectar
 
-from core.database import crear_sesion, inicializar_db as _inicializar_db_base
-from modules.ssf.models import (
-    SsfDesafio,
-    SsfParticipante,
-    SsfRegistro,
-    SsfRevision,
-)
-
-
-# ============================================================
-# INICIALIZACIÓN
-# ============================================================
 
 async def inicializar_db():
-    """Crea el esquema SSF (y del resto de los módulos)."""
-
     await _inicializar_db_base()
 
 
-# ============================================================
-# DESAFÍOS
-# ============================================================
-
-async def crear_desafio(
-    guild_id,
-    nombre,
-    fecha_inicio,
-    fecha_fin,
-    canal_id,
-):
-    """Crea un nuevo desafío y devuelve su id."""
-
-    async with crear_sesion() as sesion:
-        desafio = SsfDesafio(
-            guild_id=guild_id,
-            nombre=nombre,
-            fecha_inicio=fecha_inicio,
-            fecha_fin=fecha_fin,
-            canal_id=canal_id,
-            activo=1,
-        )
-        sesion.add(desafio)
-        await sesion.flush()
-        desafio_id = desafio.id
-        await sesion.commit()
-
-    return desafio_id
+def _iso(valor):
+    if isinstance(valor, datetime) and valor.tzinfo is None:
+        valor = valor.replace(tzinfo=TIMEZONE)
+    return valor.isoformat() if isinstance(valor, (date, datetime)) else valor
 
 
-_COLUMNAS_DESAFIO = (
-    SsfDesafio.id,
-    SsfDesafio.guild_id,
-    SsfDesafio.nombre,
-    SsfDesafio.fecha_inicio,
-    SsfDesafio.fecha_fin,
-    SsfDesafio.canal_id,
-    SsfDesafio.activo,
-)
+def _desafio(fila):
+    if fila is None:
+        return None
+    return (*fila[:3], date.fromisoformat(fila[3]), date.fromisoformat(fila[4]), *fila[5:])
+
+
+def _participante(fila, con_desafio=False):
+    if fila is None:
+        return None
+    datos = list(fila)
+    offset = 1 if con_desafio else 0
+    datos[2 + offset] = datetime.fromisoformat(datos[2 + offset])
+    if datos[4 + offset] is not None:
+        datos[4 + offset] = date.fromisoformat(datos[4 + offset])
+    return tuple(datos)
+
+
+async def _uno(sql, parametros=()):
+    async with conectar() as conexion:
+        async with conexion.execute(sql, parametros) as cursor:
+            return await cursor.fetchone()
+
+
+async def _todos(sql, parametros=()):
+    async with conectar() as conexion:
+        async with conexion.execute(sql, parametros) as cursor:
+            return await cursor.fetchall()
+
+
+async def _escribir(sql, parametros=()):
+    async with conectar() as conexion:
+        async with conexion.execute(sql, parametros) as cursor:
+            resultado = (cursor.rowcount, cursor.lastrowid)
+        await conexion.commit()
+        return resultado
+
+
+async def crear_desafio(guild_id, nombre, fecha_inicio, fecha_fin, canal_id):
+    _, identificador = await _escribir(
+        "INSERT INTO ssf_desafios (guild_id,nombre,fecha_inicio,fecha_fin,canal_id,activo) "
+        "VALUES (?, ?, ?, ?, ?, 1)",
+        (guild_id, nombre, _iso(fecha_inicio), _iso(fecha_fin), canal_id),
+    )
+    return identificador
+
+
+_COLUMNAS_DESAFIO = "id, guild_id, nombre, fecha_inicio, fecha_fin, canal_id, activo"
 
 
 async def obtener_desafio_activo(guild_id):
-    """Obtiene el desafío activo de un servidor."""
-
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(*_COLUMNAS_DESAFIO)
-            .where(
-                SsfDesafio.guild_id == guild_id,
-                SsfDesafio.activo == 1,
-            )
-            .order_by(SsfDesafio.id.desc())
-            .limit(1)
-        )).first()
-
-    return fila
+    return _desafio(await _uno(
+        f"SELECT {_COLUMNAS_DESAFIO} FROM ssf_desafios WHERE guild_id = ? AND activo = 1 "
+        "ORDER BY id DESC LIMIT 1", (guild_id,),
+    ))
 
 
 async def obtener_ultimo_desafio(guild_id):
-    """Obtiene el desafío más reciente de un servidor, activo o no."""
-
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(*_COLUMNAS_DESAFIO)
-            .where(SsfDesafio.guild_id == guild_id)
-            .order_by(SsfDesafio.id.desc())
-            .limit(1)
-        )).first()
-
-    return fila
+    return _desafio(await _uno(
+        f"SELECT {_COLUMNAS_DESAFIO} FROM ssf_desafios WHERE guild_id = ? ORDER BY id DESC LIMIT 1",
+        (guild_id,),
+    ))
 
 
 async def obtener_desafio_por_id(desafio_id):
-    """Obtiene un desafío por su ID."""
-
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(*_COLUMNAS_DESAFIO).where(SsfDesafio.id == desafio_id)
-        )).first()
-
-    return fila
+    return _desafio(await _uno(
+        f"SELECT {_COLUMNAS_DESAFIO} FROM ssf_desafios WHERE id = ?", (desafio_id,),
+    ))
 
 
 async def cerrar_desafio(desafio_id):
-    """Cierra un desafío. Devuelve la cantidad de filas afectadas."""
-
-    async with crear_sesion() as sesion:
-        resultado = await sesion.execute(
-            update(SsfDesafio)
-            .where(SsfDesafio.id == desafio_id)
-            .values(activo=0)
-        )
-        await sesion.commit()
-
-    return resultado.rowcount
+    return (await _escribir("UPDATE ssf_desafios SET activo = 0 WHERE id = ?", (desafio_id,)))[0]
 
 
-# ============================================================
-# PARTICIPANTES
-# ============================================================
-
-async def registrar_participante(
-    desafio_id,
-    user_id,
-    username,
-    fecha_registro,
-):
-    """Registra un usuario como participante."""
-
-    async with crear_sesion() as sesion:
-        sesion.add(
-            SsfParticipante(
-                desafio_id=desafio_id,
-                user_id=user_id,
-                username=username,
-                fecha_registro=fecha_registro,
-            )
-        )
-        await sesion.commit()
-
-
-async def obtener_participante(
-    desafio_id,
-    user_id,
-):
-    """Obtiene un participante."""
-
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(
-                SsfParticipante.desafio_id,
-                SsfParticipante.user_id,
-                SsfParticipante.username,
-                SsfParticipante.fecha_registro,
-                SsfParticipante.eliminado,
-                SsfParticipante.fecha_eliminacion,
-                SsfParticipante.racha_actual,
-                SsfParticipante.mejor_racha,
-            ).where(
-                SsfParticipante.desafio_id == desafio_id,
-                SsfParticipante.user_id == user_id,
-            )
-        )).first()
-
-    return fila
-
-
-async def actualizar_participante(
-    desafio_id,
-    user_id,
-    racha_actual,
-    mejor_racha,
-):
-    """Actualiza las rachas de un participante."""
-
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            update(SsfParticipante)
-            .where(
-                SsfParticipante.desafio_id == desafio_id,
-                SsfParticipante.user_id == user_id,
-            )
-            .values(
-                racha_actual=racha_actual,
-                mejor_racha=mejor_racha,
-            )
-        )
-        await sesion.commit()
-
-
-async def eliminar_participante(
-    desafio_id,
-    user_id,
-    fecha_eliminacion,
-):
-    """Marca a un participante como eliminado."""
-
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            update(SsfParticipante)
-            .where(
-                SsfParticipante.desafio_id == desafio_id,
-                SsfParticipante.user_id == user_id,
-            )
-            .values(
-                eliminado=1,
-                fecha_eliminacion=fecha_eliminacion,
-            )
-        )
-        await sesion.commit()
-
-
-async def obtener_participantes(
-    desafio_id,
-):
-    """Obtiene todos los participantes de un desafío."""
-
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                SsfParticipante.user_id,
-                SsfParticipante.username,
-                SsfParticipante.fecha_registro,
-                SsfParticipante.eliminado,
-                SsfParticipante.fecha_eliminacion,
-                SsfParticipante.racha_actual,
-                SsfParticipante.mejor_racha,
-            )
-            .where(SsfParticipante.desafio_id == desafio_id)
-            .order_by(SsfParticipante.fecha_registro.asc())
-        )).all()
-
-    return filas
-
-
-# ============================================================
-# REGISTROS DIARIOS
-# ============================================================
-
-async def guardar_registro(
-    desafio_id,
-    user_id,
-    fecha,
-    hora,
-):
-    """Guarda la supervivencia de un participante."""
-
-    async with crear_sesion() as sesion:
-        sesion.add(
-            SsfRegistro(
-                desafio_id=desafio_id,
-                user_id=user_id,
-                fecha=fecha,
-                hora=hora,
-            )
-        )
-        await sesion.commit()
-
-
-async def tiene_registro(
-    desafio_id,
-    user_id,
-    fecha,
-):
-    """Comprueba si un participante sobrevivió ese día."""
-
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(1).where(
-                SsfRegistro.desafio_id == desafio_id,
-                SsfRegistro.user_id == user_id,
-                SsfRegistro.fecha == fecha,
-            )
-        )).first()
-
-    return fila is not None
-
-
-async def obtener_registros_usuario(
-    desafio_id,
-    user_id,
-):
-    """Obtiene las fechas sobrevividas por un participante."""
-
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(SsfRegistro.fecha)
-            .where(
-                SsfRegistro.desafio_id == desafio_id,
-                SsfRegistro.user_id == user_id,
-            )
-            .order_by(SsfRegistro.fecha.asc())
-        )).all()
-
-    return filas
-
-
-async def eliminar_registro(
-    desafio_id,
-    user_id,
-    fecha,
-):
-    """
-    Elimina la supervivencia de un día.
-
-    Solo lo usan las herramientas administrativas de reparación manual.
-    Ningún flujo normal del juego borra registros.
-    """
-
-    async with crear_sesion() as sesion:
-        resultado = await sesion.execute(
-            delete(SsfRegistro).where(
-                SsfRegistro.desafio_id == desafio_id,
-                SsfRegistro.user_id == user_id,
-                SsfRegistro.fecha == fecha,
-            )
-        )
-        await sesion.commit()
-
-    return resultado.rowcount
-
-
-# ============================================================
-# ESTADÍSTICAS
-# ============================================================
-
-async def obtener_estadisticas_desafio(
-    desafio_id,
-):
-    """Obtiene estadísticas generales del desafío."""
-
-    async with crear_sesion() as sesion:
-
-        total = (await sesion.execute(
-            select(func.count()).where(
-                SsfParticipante.desafio_id == desafio_id
-            )
-        )).scalar_one()
-
-        activos = (await sesion.execute(
-            select(func.count()).where(
-                SsfParticipante.desafio_id == desafio_id,
-                SsfParticipante.eliminado == 0,
-            )
-        )).scalar_one()
-
-        eliminados = (await sesion.execute(
-            select(func.count()).where(
-                SsfParticipante.desafio_id == desafio_id,
-                SsfParticipante.eliminado == 1,
-            )
-        )).scalar_one()
-
-    return (
-        total,
-        activos,
-        eliminados,
+async def registrar_participante(desafio_id, user_id, username, fecha_registro):
+    await _escribir(
+        "INSERT INTO ssf_participantes (desafio_id,user_id,username,fecha_registro) VALUES (?,?,?,?)",
+        (desafio_id, user_id, username, _iso(fecha_registro)),
     )
 
 
-async def reactivar_participante(
-    desafio_id,
-    user_id,
-):
-    """Reactiva a un participante eliminado."""
+async def obtener_participante(desafio_id, user_id):
+    return _participante(await _uno(
+        "SELECT desafio_id,user_id,username,fecha_registro,eliminado,fecha_eliminacion,"
+        "racha_actual,mejor_racha FROM ssf_participantes WHERE desafio_id = ? AND user_id = ?",
+        (desafio_id, user_id),
+    ), con_desafio=True)
 
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            update(SsfParticipante)
-            .where(
-                SsfParticipante.desafio_id == desafio_id,
-                SsfParticipante.user_id == user_id,
-            )
-            .values(
-                eliminado=0,
-                fecha_eliminacion=None,
-            )
-        )
-        await sesion.commit()
+
+async def actualizar_participante(desafio_id, user_id, racha_actual, mejor_racha):
+    await _escribir(
+        "UPDATE ssf_participantes SET racha_actual = ?, mejor_racha = ? WHERE desafio_id = ? AND user_id = ?",
+        (racha_actual, mejor_racha, desafio_id, user_id),
+    )
+
+
+async def eliminar_participante(desafio_id, user_id, fecha_eliminacion):
+    await _escribir(
+        "UPDATE ssf_participantes SET eliminado = 1, fecha_eliminacion = ? WHERE desafio_id = ? AND user_id = ?",
+        (_iso(fecha_eliminacion), desafio_id, user_id),
+    )
+
+
+async def obtener_participantes(desafio_id):
+    filas = await _todos(
+        "SELECT user_id,username,fecha_registro,eliminado,fecha_eliminacion,racha_actual,mejor_racha "
+        "FROM ssf_participantes WHERE desafio_id = ? ORDER BY fecha_registro", (desafio_id,),
+    )
+    return [_participante(fila) for fila in filas]
+
+
+async def guardar_registro(desafio_id, user_id, fecha, hora):
+    await _escribir(
+        "INSERT INTO ssf_registros (desafio_id,user_id,fecha,hora) VALUES (?,?,?,?)",
+        (desafio_id, user_id, _iso(fecha), hora),
+    )
+
+
+async def tiene_registro(desafio_id, user_id, fecha):
+    return await _uno(
+        "SELECT 1 FROM ssf_registros WHERE desafio_id = ? AND user_id = ? AND fecha = ?",
+        (desafio_id, user_id, _iso(fecha)),
+    ) is not None
+
+
+async def obtener_registros_usuario(desafio_id, user_id):
+    filas = await _todos(
+        "SELECT fecha FROM ssf_registros WHERE desafio_id = ? AND user_id = ? ORDER BY fecha",
+        (desafio_id, user_id),
+    )
+    return [(date.fromisoformat(fila[0]),) for fila in filas]
+
+
+async def eliminar_registro(desafio_id, user_id, fecha):
+    return (await _escribir(
+        "DELETE FROM ssf_registros WHERE desafio_id = ? AND user_id = ? AND fecha = ?",
+        (desafio_id, user_id, _iso(fecha)),
+    ))[0]
+
+
+async def obtener_estadisticas_desafio(desafio_id):
+    return await _uno(
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN eliminado = 0 THEN 1 ELSE 0 END), 0), "
+        "COALESCE(SUM(CASE WHEN eliminado = 1 THEN 1 ELSE 0 END), 0) "
+        "FROM ssf_participantes WHERE desafio_id = ?", (desafio_id,),
+    )
+
+
+async def reactivar_participante(desafio_id, user_id):
+    await _escribir(
+        "UPDATE ssf_participantes SET eliminado = 0, fecha_eliminacion = NULL WHERE desafio_id = ? AND user_id = ?",
+        (desafio_id, user_id),
+    )
 
 
 async def obtener_desafios_activos():
-    """Obtiene todos los desafíos activos."""
+    filas = await _todos(f"SELECT {_COLUMNAS_DESAFIO} FROM ssf_desafios WHERE activo = 1 ORDER BY id")
+    return [_desafio(fila) for fila in filas]
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(*_COLUMNAS_DESAFIO)
-            .where(SsfDesafio.activo == 1)
-            .order_by(SsfDesafio.id.asc())
-        )).all()
-
-    return filas
-
-
-# ============================================================
-# CONTROL DE REVISIONES AUTOMÁTICAS
-# ============================================================
 
 async def obtener_ultima_revision_ssf(desafio_id):
-    """Obtiene la última fecha procesada automáticamente."""
-
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(SsfRevision.ultima_fecha).where(
-                SsfRevision.desafio_id == desafio_id
-            )
-        )).first()
-
-    if fila is None:
-        return None
-
-    return fila[0]
+    fila = await _uno("SELECT ultima_fecha FROM ssf_revisiones WHERE desafio_id = ?", (desafio_id,))
+    return date.fromisoformat(fila[0]) if fila else None
 
 
-async def guardar_ultima_revision_ssf(
-    desafio_id,
-    fecha,
-):
-    """Guarda la última fecha procesada automáticamente."""
-
-    async with crear_sesion() as sesion:
-        revision = await sesion.get(SsfRevision, desafio_id)
-
-        if revision is None:
-            sesion.add(
-                SsfRevision(
-                    desafio_id=desafio_id,
-                    ultima_fecha=fecha,
-                )
-            )
-        else:
-            revision.ultima_fecha = fecha
-
-        await sesion.commit()
+async def guardar_ultima_revision_ssf(desafio_id, fecha):
+    await _escribir(
+        "INSERT INTO ssf_revisiones (desafio_id, ultima_fecha) VALUES (?, ?) "
+        "ON CONFLICT(desafio_id) DO UPDATE SET ultima_fecha = excluded.ultima_fecha",
+        (desafio_id, _iso(fecha)),
+    )
 
 
 async def obtener_ranking_final(desafio_id):
-    """Obtiene el ranking final de un desafío."""
-
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                SsfParticipante.user_id,
-                SsfParticipante.username,
-                SsfParticipante.eliminado,
-                SsfParticipante.racha_actual,
-                SsfParticipante.mejor_racha,
-            )
-            .where(SsfParticipante.desafio_id == desafio_id)
-            .order_by(
-                SsfParticipante.eliminado.asc(),
-                SsfParticipante.mejor_racha.desc(),
-                # COLLATE NOCASE de SQLite equivale a ordenar por minúsculas.
-                func.lower(SsfParticipante.username).asc(),
-            )
-        )).all()
-
-    return filas
+    return await _todos(
+        "SELECT user_id,username,eliminado,racha_actual,mejor_racha FROM ssf_participantes "
+        "WHERE desafio_id = ? ORDER BY eliminado, mejor_racha DESC, lower(username)", (desafio_id,),
+    )
 
 
 async def marcar_desafio_cerrado(desafio_id):
-    """Marca un desafío como cerrado."""
-
-    async with crear_sesion() as sesion:
-        resultado = await sesion.execute(
-            update(SsfDesafio)
-            .where(
-                SsfDesafio.id == desafio_id,
-                SsfDesafio.activo == 1,
-            )
-            .values(activo=0)
-        )
-        await sesion.commit()
-
-    return resultado.rowcount
+    return (await _escribir(
+        "UPDATE ssf_desafios SET activo = 0 WHERE id = ? AND activo = 1", (desafio_id,),
+    ))[0]

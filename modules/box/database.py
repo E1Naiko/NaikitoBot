@@ -1,20 +1,15 @@
-"""Capa de datos del módulo Box (SQLAlchemy asíncrono).
+"""Persistencia SQLite de Box.
 
-Todas las funciones son asíncronas y abren su propia sesión corta.
-Las fechas se manejan como objetos ``datetime`` nativos (con zona
-horaria) en lugar de texto ISO. Las funciones que necesitan varias
-escrituras relacionadas usan una única sesión sin commit intermedio:
-si algo falla o se devuelve temprano, los cambios se descartan solos,
-igual que los viejos ``BEGIN IMMEDIATE`` + ``rollback`` de SQLite.
+Las transacciones sincronas se ejecutan en hilos mediante adaptadores async,
+para no bloquear el event loop de Discord durante operaciones del juego.
 """
 
-from collections import defaultdict
+import asyncio
 from datetime import datetime, timedelta
+from functools import wraps
 import math
 import random
-
-from sqlalchemy import case, delete, exists, func, or_, select, update
-from sqlalchemy.exc import IntegrityError
+import sqlite3
 
 from config import (
     BOX_CANSANCIO_INICIAL,
@@ -42,24 +37,14 @@ from config import (
     BOX_SPONSOR_PAGO,
     BOX_SPONSOR_PROBABILIDAD,
     BOX_VIDA_INICIAL,
+    TIMEZONE,
 )
 
-from core.database import crear_sesion, inicializar_db as _inicializar_db_base
+from core.database import inicializar_db as _crear_esquema
+from core.sqlite import conectar_sync as conectar_db
 from core.utils import ahora as _ahora
 from modules.box.fighting import planificar_pelea
 from modules.box.logic import precio_mejora, estadisticas_de_combate
-from modules.box.models import (
-    BoxAccion,
-    BoxCombate,
-    BoxCombateAsalto,
-    BoxConfigGuild,
-    BoxDesafio,
-    BoxDesafioHistorial,
-    BoxEquipo,
-    BoxMejora,
-    BoxSponsor,
-    BoxUsuario,
-)
 from modules.box.sparring import planificar_sparring
 
 
@@ -85,37 +70,25 @@ PAGO_SPONSOR = BOX_SPONSOR_PAGO
 MAX_SPONSORS = BOX_SPONSOR_MAXIMO
 
 
-async def inicializar_db():
-    """Crea el esquema de Box (y del resto de los módulos)."""
-
-    await _inicializar_db_base()
 
 
-# ============================================================
-# HELPERS DE SESIÓN
-# ============================================================
-
-async def _asegurar_usuario(sesion, guild_id: int, user_id: int):
-    """Crea la fila de ``box_usuarios`` si todavía no existe."""
-
-    if await sesion.get(BoxUsuario, (guild_id, user_id)) is None:
-        sesion.add(BoxUsuario(guild_id=guild_id, user_id=user_id))
-        await sesion.flush()
-
-
-async def _asegurar_equipo(sesion, guild_id: int, user_id: int):
-    """Crea la fila de ``box_equipo`` si todavía no existe."""
-
-    if await sesion.get(BoxEquipo, (guild_id, user_id)) is None:
-        sesion.add(BoxEquipo(guild_id=guild_id, user_id=user_id))
-        await sesion.flush()
+def _asegurar_equipo(db, guild_id, user_id):
+    """Inserta con los valores actuales de configuración, aun con una base existente."""
+    db.execute(
+        "INSERT INTO box_equipo (guild_id, user_id, vida, vida_maxima, dano, "
+        "dano_maximo, defensa, defensa_maxima, cansancio, cansancio_maximo) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(guild_id, user_id) DO NOTHING",
+        (guild_id, user_id, BOX_VIDA_INICIAL, BOX_VIDA_INICIAL, BOX_DANO_INICIAL,
+         BOX_DANO_MAXIMO, BOX_DEFENSA_INICIAL, BOX_DEFENSA_MAXIMO,
+         BOX_CANSANCIO_INICIAL, BOX_CANSANCIO_INICIAL),
+    )
 
 
 # ============================================================
 # ACCIONES
 # ============================================================
 
-async def iniciar_accion(
+def _sqlite_iniciar_accion(
     guild_id: int,
     user_id: int,
     tipo: str,
@@ -129,113 +102,112 @@ async def iniciar_accion(
     if tipo == "TRABAJANDO":
         dinero_recompensa = recompensa
 
-    async with crear_sesion() as sesion:
+    with conectar_db() as db:
         try:
-            sesion.add(
-                BoxAccion(
-                    guild_id=guild_id,
-                    user_id=user_id,
-                    tipo=tipo,
-                    iniciado_en=iniciado_en,
-                    finaliza_en=finaliza_en,
-                    recompensa=recompensa,
-                    dinero_recompensa=dinero_recompensa,
+            db.execute(
+                """
+                INSERT INTO box_acciones (
+                    guild_id, user_id, tipo, iniciado_en,
+                    finaliza_en, recompensa, dinero_recompensa
                 )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    guild_id,
+                    user_id,
+                    tipo,
+                    iniciado_en.isoformat(),
+                    finaliza_en.isoformat(),
+                    recompensa,
+                    dinero_recompensa,
+                ),
             )
-            await sesion.commit()
-        except IntegrityError:
-            await sesion.rollback()
+            db.commit()
+        except sqlite3.IntegrityError:
             return False
 
     return True
 
 
-async def obtener_accion_activa(guild_id: int, user_id: int):
+def _sqlite_obtener_accion_activa(guild_id: int, user_id: int):
     """Devuelve la acción activa del usuario, si existe."""
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(
-                BoxAccion.tipo,
-                BoxAccion.finaliza_en,
-                BoxAccion.recompensa,
-            ).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-            )
-        )).first()
-
-    return fila
+    with conectar_db() as db:
+        return db.execute(
+            """
+            SELECT tipo, finaliza_en, recompensa
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
 
 # ============================================================
 # ESTADO DEL USUARIO
 # ============================================================
 
-async def obtener_estado_box(guild_id: int, user_id: int):
+def _sqlite_obtener_estado_box(guild_id: int, user_id: int):
     """Devuelve probabilidad de lesión y fecha de recuperación."""
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(
-                BoxUsuario.probabilidad_lesion,
-                BoxUsuario.lesionado_hasta,
-            ).where(
-                BoxUsuario.guild_id == guild_id,
-                BoxUsuario.user_id == user_id,
-            )
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT probabilidad_lesion, lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
     return fila or (0.0, None)
+
+
 
 
 # ============================================================
 # DECAIMIENTO DE LA PROBABILIDAD
 # ============================================================
 
-async def reducir_probabilidad_lesion_inactivos(
+def _sqlite_reducir_probabilidad_lesion_inactivos(
     cantidad: float = BOX_LESION_DECAIMIENTO_POR_HORA,
 ) -> int:
     """
     Reduce la probabilidad de lesión de los usuarios sin acción activa.
 
-    Cada llamada representa una hora sin ninguna acción activa: baja la
+    Cada llamada representa una hora sin entrenar ni trabajar: baja la
     probabilidad en ``cantidad`` puntos porcentuales, sin pasar de 0.
     Aplica también a usuarios lesionados (una lesión no es una acción).
     """
 
-    nueva_probabilidad = case(
-        (BoxUsuario.probabilidad_lesion - cantidad < 0, 0),
-        else_=BoxUsuario.probabilidad_lesion - cantidad,
-    )
-
-    tiene_accion = exists(
-        select(1).where(
-            BoxAccion.guild_id == BoxUsuario.guild_id,
-            BoxAccion.user_id == BoxUsuario.user_id,
-        )
-    )
-
-    async with crear_sesion() as sesion:
-        resultado = await sesion.execute(
-            update(BoxUsuario)
-            .where(
-                BoxUsuario.probabilidad_lesion > 0,
-                ~tiene_accion,
+    with conectar_db() as db:
+        cursor = db.execute(
+            """
+            UPDATE box_usuarios
+            SET probabilidad_lesion = CASE
+                WHEN probabilidad_lesion - ? < 0 THEN 0
+                ELSE probabilidad_lesion - ?
+            END
+            WHERE probabilidad_lesion > 0
+            AND NOT EXISTS (
+                SELECT 1
+                FROM box_acciones
+                WHERE box_acciones.guild_id = box_usuarios.guild_id
+                AND box_acciones.user_id = box_usuarios.user_id
             )
-            .values(probabilidad_lesion=nueva_probabilidad)
-            .execution_options(synchronize_session=False)
+            """,
+            (cantidad, cantidad),
         )
-        await sesion.commit()
+        db.commit()
 
-    return resultado.rowcount
+    return cursor.rowcount
 
 
 # ============================================================
 # TRATAMIENTOS
 # ============================================================
 
-async def comprar_tratamiento(
+def _sqlite_comprar_tratamiento(
     guild_id: int,
     user_id: int,
     precio: int,
@@ -244,27 +216,59 @@ async def comprar_tratamiento(
 ):
     """Compra un tratamiento, cura la lesión y opcionalmente resetea la probabilidad."""
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
 
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
 
-        saldo = usuario.dinero
-        lesionado_hasta = usuario.lesionado_hasta
+        saldo, lesionado_hasta = db.execute(
+            """
+            SELECT dinero, lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
         if saldo < precio:
+            db.rollback()
             return "insuficiente", saldo
 
-        if lesionado_hasta is None or lesionado_hasta <= ahora:
+        if (
+            lesionado_hasta is None
+            or datetime.fromisoformat(lesionado_hasta) <= ahora
+        ):
+            db.rollback()
             return "no_lesionado", saldo
 
-        usuario.dinero = usuario.dinero - precio
-        usuario.lesionado_hasta = None
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = dinero - ?,
+                lesionado_hasta = NULL
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (precio, guild_id, user_id),
+        )
 
         if reinicia_probabilidad:
-            usuario.probabilidad_lesion = 0.0
+            db.execute(
+                """
+                UPDATE box_usuarios
+                SET probabilidad_lesion = 0
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
 
-        await sesion.commit()
+        db.commit()
 
     return "comprado", saldo - precio
 
@@ -273,7 +277,7 @@ async def comprar_tratamiento(
 # SUMINISTROS DE RECUPERACIÓN
 # ============================================================
 
-async def usar_suministro(
+def _sqlite_usar_suministro(
     guild_id: int,
     user_id: int,
     objetivo: str,
@@ -287,14 +291,40 @@ async def usar_suministro(
     curar), no descuenta dinero y devuelve el estado correspondiente.
     """
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
-        await _asegurar_equipo(sesion, guild_id, user_id)
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
 
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-        equipo = await sesion.get(BoxEquipo, (guild_id, user_id))
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
 
-        saldo = usuario.dinero
+        saldo, probabilidad_lesion, lesionado_hasta = db.execute(
+            """
+            SELECT dinero, probabilidad_lesion, lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        _asegurar_equipo(db, guild_id, user_id)
+
+        vida, vida_maxima, cansancio, cansancio_maximo, defensa, defensa_maxima = (
+            db.execute(
+                """
+                SELECT vida, vida_maxima, cansancio, cansancio_maximo,
+                       defensa, defensa_maxima
+                FROM box_equipo
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            ).fetchone()
+        )
 
         # ----------------------------------------------------
         # COMPROBAR SI LA ESTADÍSTICA NECESITA RECUPERACIÓN
@@ -303,21 +333,23 @@ async def usar_suministro(
         aplica = True
 
         if objetivo == "vida":
-            aplica = equipo.vida < equipo.vida_maxima
+            aplica = vida < vida_maxima
         elif objetivo == "cansancio":
-            aplica = equipo.cansancio < equipo.cansancio_maximo
+            aplica = cansancio < cansancio_maximo
         elif objetivo == "defensa":
-            aplica = equipo.defensa < equipo.defensa_maxima
+            aplica = defensa < defensa_maxima
         elif objetivo == "lesion":
             lesionado_activo = (
-                usuario.lesionado_hasta is not None
-                and usuario.lesionado_hasta > ahora
+                lesionado_hasta is not None
+                and datetime.fromisoformat(lesionado_hasta) > ahora
             )
-            aplica = lesionado_activo or usuario.probabilidad_lesion > 0
+            aplica = lesionado_activo or probabilidad_lesion > 0
         else:
+            db.rollback()
             return "objetivo_invalido", saldo
 
         if not aplica:
+            db.rollback()
             if objetivo == "lesion":
                 return "sin_lesion", saldo
             return "lleno", saldo
@@ -327,21 +359,57 @@ async def usar_suministro(
         # ----------------------------------------------------
 
         if saldo < precio:
+            db.rollback()
             return "insuficiente", saldo
 
-        usuario.dinero = usuario.dinero - precio
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = dinero - ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (precio, guild_id, user_id),
+        )
 
         if objetivo == "vida":
-            equipo.vida = equipo.vida_maxima
+            db.execute(
+                """
+                UPDATE box_equipo
+                SET vida = vida_maxima
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
         elif objetivo == "cansancio":
-            equipo.cansancio = equipo.cansancio_maximo
+            db.execute(
+                """
+                UPDATE box_equipo
+                SET cansancio = cansancio_maximo
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
         elif objetivo == "defensa":
-            equipo.defensa = equipo.defensa_maxima
+            db.execute(
+                """
+                UPDATE box_equipo
+                SET defensa = defensa_maxima
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
         else:
-            usuario.lesionado_hasta = None
-            usuario.probabilidad_lesion = 0.0
+            db.execute(
+                """
+                UPDATE box_usuarios
+                SET lesionado_hasta = NULL,
+                    probabilidad_lesion = 0
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (guild_id, user_id),
+            )
 
-        await sesion.commit()
+        db.commit()
 
     return "comprado", saldo - precio
 
@@ -350,78 +418,79 @@ async def usar_suministro(
 # SALDO / ESTADÍSTICAS
 # ============================================================
 
-async def obtener_saldo(guild_id: int, user_id: int):
+def _sqlite_obtener_saldo(guild_id: int, user_id: int):
     """Devuelve experiencia y dinero del usuario."""
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(
-                BoxUsuario.experiencia,
-                BoxUsuario.dinero,
-            ).where(
-                BoxUsuario.guild_id == guild_id,
-                BoxUsuario.user_id == user_id,
-            )
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT experiencia, dinero
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
     return fila or (0, 0)
 
 
-async def obtener_estadisticas_box(guild_id: int, user_id: int):
+def _sqlite_obtener_estadisticas_box(guild_id: int, user_id: int):
     """Devuelve el resumen privado de progreso y desafíos del usuario."""
 
-    experiencia, dinero = await obtener_saldo(guild_id, user_id)
+    experiencia, dinero = _sqlite_obtener_saldo(guild_id, user_id)
 
-    probabilidad_lesion, lesionado_hasta = await obtener_estado_box(
+    probabilidad_lesion, lesionado_hasta = _sqlite_obtener_estado_box(
         guild_id,
         user_id,
     )
 
     niveles = {}
 
-    async with crear_sesion() as sesion:
-        filas_mejoras = (await sesion.execute(
-            select(
-                BoxMejora.mejora,
-                BoxMejora.nivel,
-            ).where(
-                BoxMejora.guild_id == guild_id,
-                BoxMejora.user_id == user_id,
-            )
-        )).all()
-
-        for mejora, nivel in filas_mejoras:
+    with conectar_db() as db:
+        for mejora, nivel in db.execute(
+            """
+            SELECT mejora, nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchall():
             niveles[mejora] = nivel
 
-        ganadas = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafioHistorial.guild_id == guild_id,
-                BoxDesafioHistorial.ganador_id == user_id,
-            )
-        )).scalar_one()
+        ganadas = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ? AND ganador_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()[0]
 
-        participaciones = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafioHistorial.guild_id == guild_id,
-                or_(
-                    BoxDesafioHistorial.retador_id == user_id,
-                    BoxDesafioHistorial.contrincante_id == user_id,
-                ),
-            )
-        )).scalar_one()
+        participaciones = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, user_id, user_id),
+        ).fetchone()[0]
 
-        sponsors = (await sesion.execute(
-            select(
-                BoxSponsor.tipo,
-                func.count(),
-            )
-            .where(
-                BoxSponsor.guild_id == guild_id,
-                BoxSponsor.user_id == user_id,
-                BoxSponsor.expira_en > _ahora(),
-            )
-            .group_by(BoxSponsor.tipo)
-        )).all()
+        sponsors = db.execute(
+            """
+            SELECT tipo, COUNT(*)
+            FROM box_sponsors
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND expira_en > ?
+            GROUP BY tipo
+            """,
+            (
+                guild_id,
+                user_id,
+                _ahora().isoformat(),
+            ),
+        ).fetchall()
 
     sponsors_activos = {
         tipo: cantidad
@@ -448,22 +517,23 @@ async def obtener_estadisticas_box(guild_id: int, user_id: int):
 # MEJORAS
 # ============================================================
 
-async def obtener_nivel_mejora(guild_id: int, user_id: int, mejora: str):
+def _sqlite_obtener_nivel_mejora(guild_id: int, user_id: int, mejora: str):
     """Devuelve el nivel actual de una mejora."""
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(BoxMejora.nivel).where(
-                BoxMejora.guild_id == guild_id,
-                BoxMejora.user_id == user_id,
-                BoxMejora.mejora == mejora,
-            )
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id = ? AND mejora = ?
+            """,
+            (guild_id, user_id, mejora),
+        ).fetchone()
 
     return fila[0] if fila else 0
 
 
-async def comprar_mejora(
+def _sqlite_comprar_mejora(
     guild_id: int,
     user_id: int,
     mejora: str,
@@ -472,41 +542,69 @@ async def comprar_mejora(
 ):
     """Compra un nivel de mejora descontando el dinero de forma atómica."""
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
 
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-        saldo = usuario.dinero
-
-        fila_mejora = await sesion.get(
-            BoxMejora,
-            (guild_id, user_id, mejora),
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
         )
 
-        nivel = fila_mejora.nivel if fila_mejora else 0
+        saldo, = db.execute(
+            """
+            SELECT dinero
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+
+        fila = db.execute(
+            """
+            SELECT nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id = ? AND mejora = ?
+            """,
+            (guild_id, user_id, mejora),
+        ).fetchone()
+
+        nivel = fila[0] if fila else 0
         precio = precio_mejora(precio_base, nivel)
 
         if nivel >= nivel_maximo:
+            db.rollback()
             return "maximo", saldo, nivel
 
         if saldo < precio:
+            db.rollback()
             return "insuficiente", saldo, nivel
 
-        usuario.dinero = usuario.dinero - precio
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = dinero - ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (precio, guild_id, user_id),
+        )
 
-        if fila_mejora is None:
-            sesion.add(
-                BoxMejora(
-                    guild_id=guild_id,
-                    user_id=user_id,
-                    mejora=mejora,
-                    nivel=1,
-                )
+        db.execute(
+            """
+            INSERT INTO box_mejoras (
+                guild_id, user_id, mejora, nivel
             )
-        else:
-            fila_mejora.nivel = fila_mejora.nivel + 1
+            VALUES (?, ?, ?, 1)
+            ON CONFLICT(guild_id, user_id, mejora)
+            DO UPDATE SET nivel = nivel + 1
+            """,
+            (guild_id, user_id, mejora),
+        )
 
-        await sesion.commit()
+        db.commit()
 
     return "comprada", saldo - precio, nivel + 1
 
@@ -557,37 +655,45 @@ def _sortear_sponsor():
     )[0]
 
 
-async def _contar_sponsors_activos(
-    sesion,
+def _contar_sponsors_activos(
+    db,
     guild_id: int,
     user_id: int,
     tipo: str,
     ahora: datetime,
 ):
-    return (await sesion.execute(
-        select(func.count()).where(
-            BoxSponsor.guild_id == guild_id,
-            BoxSponsor.user_id == user_id,
-            BoxSponsor.tipo == tipo,
-            BoxSponsor.expira_en > ahora,
-        )
-    )).scalar_one()
+    return db.execute(
+        """
+        SELECT COUNT(*)
+        FROM box_sponsors
+        WHERE guild_id = ?
+        AND user_id = ?
+        AND tipo = ?
+        AND expira_en > ?
+        """,
+        (
+            guild_id,
+            user_id,
+            tipo,
+            ahora.isoformat(),
+        ),
+    ).fetchone()[0]
 
 
-async def _crear_sponsor(
-    sesion,
+def _crear_sponsor(
+    db,
     guild_id: int,
     user_id: int,
     tipo: str,
     ahora: datetime,
 ):
-    """Crea un sponsor individual dentro de la sesión abierta."""
+    """Crea un sponsor individual."""
 
     limite = MAX_SPONSORS.get(tipo)
 
     if limite is not None:
-        cantidad = await _contar_sponsors_activos(
-            sesion,
+        cantidad = _contar_sponsors_activos(
+            db,
             guild_id,
             user_id,
             tipo,
@@ -599,68 +705,73 @@ async def _crear_sponsor(
 
     expira_en = ahora + DURACION_SPONSOR[tipo]
 
-    sesion.add(
-        BoxSponsor(
-            guild_id=guild_id,
-            user_id=user_id,
-            tipo=tipo,
-            obtenido_en=ahora,
-            expira_en=expira_en,
-            ultimo_pago=(
-                ahora
-                if tipo in PAGO_SPONSOR
-                else None
-            ),
-            ultimo_tratamiento=(
-                ahora
-                if tipo == "medico"
-                else None
-            ),
+    db.execute(
+        """
+        INSERT INTO box_sponsors (
+            guild_id,
+            user_id,
+            tipo,
+            obtenido_en,
+            expira_en,
+            ultimo_pago,
+            ultimo_tratamiento
         )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            guild_id,
+            user_id,
+            tipo,
+            ahora.isoformat(),
+            expira_en.isoformat(),
+            ahora.isoformat()
+            if tipo in PAGO_SPONSOR
+            else None,
+            ahora.isoformat()
+            if tipo == "medico"
+            else None,
+        ),
     )
-    await sesion.flush()
 
     return True
 
 
-async def obtener_sponsors_activos(
+def _sqlite_obtener_sponsors_activos(
     guild_id: int,
     user_id: int,
     ahora: datetime,
 ):
     """Devuelve los sponsors actualmente activos."""
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxSponsor.id,
-                BoxSponsor.tipo,
-                BoxSponsor.obtenido_en,
-                BoxSponsor.expira_en,
-                BoxSponsor.ultimo_pago,
-                BoxSponsor.ultimo_tratamiento,
-            )
-            .where(
-                BoxSponsor.guild_id == guild_id,
-                BoxSponsor.user_id == user_id,
-                BoxSponsor.expira_en > ahora,
-            )
-            .order_by(BoxSponsor.expira_en.asc())
-        )).all()
-
-    return filas
+    with conectar_db() as db:
+        return db.execute(
+            """
+            SELECT id, tipo, obtenido_en, expira_en,
+                   ultimo_pago, ultimo_tratamiento
+            FROM box_sponsors
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND expira_en > ?
+            ORDER BY expira_en ASC
+            """,
+            (
+                guild_id,
+                user_id,
+                ahora.isoformat(),
+            ),
+        ).fetchall()
 
 
-async def obtener_bonus_experiencia_sponsor(
+def _sqlite_obtener_bonus_experiencia_sponsor(
     guild_id: int,
     user_id: int,
     ahora: datetime,
 ):
     """Devuelve el bonus porcentual de EXP de Equipamiento."""
 
-    async with crear_sesion() as sesion:
-        cantidad = await _contar_sponsors_activos(
-            sesion,
+    with conectar_db() as db:
+        cantidad = _contar_sponsors_activos(
+            db,
             guild_id,
             user_id,
             "equipamiento",
@@ -670,7 +781,7 @@ async def obtener_bonus_experiencia_sponsor(
     return cantidad * 10
 
 
-async def obtener_sponsor_para_promocion(
+def _sqlite_obtener_sponsor_para_promocion(
     guild_id: int,
     user_id: int,
     ahora: datetime,
@@ -682,9 +793,11 @@ async def obtener_sponsor_para_promocion(
 
     tipo = _sortear_sponsor()
 
-    async with crear_sesion() as sesion:
-        creado = await _crear_sponsor(
-            sesion,
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        creado = _crear_sponsor(
+            db,
             guild_id,
             user_id,
             tipo,
@@ -692,36 +805,36 @@ async def obtener_sponsor_para_promocion(
         )
 
         if not creado:
+            db.rollback()
             return None
 
-        await sesion.commit()
+        db.commit()
 
     return tipo
 
 
-async def procesar_pagos_sponsors(ahora: datetime):
+def _sqlite_procesar_pagos_sponsors(ahora: datetime):
     """
     Procesa los pagos diarios de Redes y Radio.
 
-    Cada sponsor tiene su propio ciclo de 24 horas.
+    Cada sponsor tiene su propio ciclo configurado.
     """
 
     pagos = []
 
-    async with crear_sesion() as sesion:
-        sponsors = (await sesion.execute(
-            select(
-                BoxSponsor.id,
-                BoxSponsor.guild_id,
-                BoxSponsor.user_id,
-                BoxSponsor.tipo,
-                BoxSponsor.ultimo_pago,
-                BoxSponsor.expira_en,
-            ).where(
-                BoxSponsor.tipo.in_(["redes", "radio"]),
-                BoxSponsor.expira_en > ahora,
-            )
-        )).all()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        sponsors = db.execute(
+            """
+            SELECT id, guild_id, user_id, tipo,
+                   ultimo_pago, expira_en
+            FROM box_sponsors
+            WHERE tipo IN ('redes', 'radio')
+            AND expira_en > ?
+            """,
+            (ahora.isoformat(),),
+        ).fetchall()
 
         for (
             sponsor_id,
@@ -735,41 +848,69 @@ async def procesar_pagos_sponsors(ahora: datetime):
             if ultimo_pago is None:
                 ultimo_pago_dt = ahora
             else:
-                ultimo_pago_dt = ultimo_pago
+                ultimo_pago_dt = datetime.fromisoformat(
+                    ultimo_pago
+                )
 
             horas_transcurridas = (
                 ahora - ultimo_pago_dt
             ).total_seconds() / 3600
 
-            ciclo_horas = BOX_SPONSOR_CICLO_PAGO_HORAS
-
-            pagos_pendientes = int(horas_transcurridas // ciclo_horas)
+            pagos_pendientes = int(horas_transcurridas // BOX_SPONSOR_CICLO_PAGO_HORAS)
 
             if pagos_pendientes <= 0:
                 continue
 
             pago = PAGO_SPONSOR[tipo] * pagos_pendientes
 
-            await _asegurar_usuario(sesion, guild_id, user_id)
-
-            usuario = await sesion.get(
-                BoxUsuario,
+            db.execute(
+                """
+                INSERT INTO box_usuarios (
+                    guild_id,
+                    user_id
+                )
+                VALUES (?, ?)
+                ON CONFLICT(guild_id, user_id) DO NOTHING
+                """,
                 (guild_id, user_id),
             )
-            usuario.dinero = usuario.dinero + pago
+
+            db.execute(
+                """
+                UPDATE box_usuarios
+                SET dinero = dinero + ?
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (
+                    pago,
+                    guild_id,
+                    user_id,
+                ),
+            )
 
             nuevo_ultimo_pago = (
                 ultimo_pago_dt
-                + timedelta(hours=ciclo_horas * pagos_pendientes)
+                + timedelta(hours=BOX_SPONSOR_CICLO_PAGO_HORAS * pagos_pendientes)
             )
 
             # No permitir que el siguiente pago quede programado
             # después de la fecha de vencimiento.
-            if nuevo_ultimo_pago > expira_en:
-                nuevo_ultimo_pago = expira_en
+            expira_dt = datetime.fromisoformat(expira_en)
 
-            sponsor = await sesion.get(BoxSponsor, sponsor_id)
-            sponsor.ultimo_pago = nuevo_ultimo_pago
+            if nuevo_ultimo_pago > expira_dt:
+                nuevo_ultimo_pago = expira_dt
+
+            db.execute(
+                """
+                UPDATE box_sponsors
+                SET ultimo_pago = ?
+                WHERE id = ?
+                """,
+                (
+                    nuevo_ultimo_pago.isoformat(),
+                    sponsor_id,
+                ),
+            )
 
             pagos.append(
                 (
@@ -780,32 +921,32 @@ async def procesar_pagos_sponsors(ahora: datetime):
                 )
             )
 
-        await sesion.commit()
+        db.commit()
 
     return pagos
 
 
-async def procesar_sponsors_medicos(ahora: datetime):
+def _sqlite_procesar_sponsors_medicos(ahora: datetime):
     """
     Aplica una reducción del 50% a la probabilidad de lesión
-    una vez cada 24 horas por sponsor médico.
+    según el ciclo configurado para cada sponsor médico.
     """
 
     procesados = []
 
-    async with crear_sesion() as sesion:
-        sponsors = (await sesion.execute(
-            select(
-                BoxSponsor.id,
-                BoxSponsor.guild_id,
-                BoxSponsor.user_id,
-                BoxSponsor.ultimo_tratamiento,
-                BoxSponsor.expira_en,
-            ).where(
-                BoxSponsor.tipo == "medico",
-                BoxSponsor.expira_en > ahora,
-            )
-        )).all()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        sponsors = db.execute(
+            """
+            SELECT id, guild_id, user_id,
+                   ultimo_tratamiento, expira_en
+            FROM box_sponsors
+            WHERE tipo = 'medico'
+            AND expira_en > ?
+            """,
+            (ahora.isoformat(),),
+        ).fetchall()
 
         for (
             sponsor_id,
@@ -820,7 +961,9 @@ async def procesar_sponsors_medicos(ahora: datetime):
                     ahora - timedelta(hours=BOX_MEDICO_CICLO_HORAS)
                 )
             else:
-                ultimo_tratamiento_dt = ultimo_tratamiento
+                ultimo_tratamiento_dt = datetime.fromisoformat(
+                    ultimo_tratamiento
+                )
 
             horas_transcurridas = (
                 ahora - ultimo_tratamiento_dt
@@ -833,41 +976,71 @@ async def procesar_sponsors_medicos(ahora: datetime):
             if tratamientos_pendientes <= 0:
                 continue
 
-            usuario = await sesion.get(
-                BoxUsuario,
+            fila = db.execute(
+                """
+                SELECT probabilidad_lesion
+                FROM box_usuarios
+                WHERE guild_id = ? AND user_id = ?
+                """,
                 (guild_id, user_id),
-            )
+            ).fetchone()
 
-            if usuario is None:
+            if fila is None:
                 probabilidad = 0.0
             else:
-                probabilidad = float(usuario.probabilidad_lesion)
+                probabilidad = float(fila[0])
 
             for _ in range(tratamientos_pendientes):
                 probabilidad *= (
                     1 - BOX_MEDICO_REDUCCION / 100
                 )
 
-            await _asegurar_usuario(sesion, guild_id, user_id)
-
-            usuario = await sesion.get(
-                BoxUsuario,
+            db.execute(
+                """
+                INSERT INTO box_usuarios (
+                    guild_id,
+                    user_id
+                )
+                VALUES (?, ?)
+                ON CONFLICT(guild_id, user_id) DO NOTHING
+                """,
                 (guild_id, user_id),
             )
-            usuario.probabilidad_lesion = probabilidad
+
+            db.execute(
+                """
+                UPDATE box_usuarios
+                SET probabilidad_lesion = ?
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (
+                    probabilidad,
+                    guild_id,
+                    user_id,
+                ),
+            )
 
             nuevo_ultimo_tratamiento = (
                 ultimo_tratamiento_dt
-                + timedelta(
-                    hours=BOX_MEDICO_CICLO_HORAS * tratamientos_pendientes
-                )
+                + timedelta(hours=BOX_MEDICO_CICLO_HORAS * tratamientos_pendientes)
             )
 
-            if nuevo_ultimo_tratamiento > expira_en:
-                nuevo_ultimo_tratamiento = expira_en
+            expira_dt = datetime.fromisoformat(expira_en)
 
-            sponsor = await sesion.get(BoxSponsor, sponsor_id)
-            sponsor.ultimo_tratamiento = nuevo_ultimo_tratamiento
+            if nuevo_ultimo_tratamiento > expira_dt:
+                nuevo_ultimo_tratamiento = expira_dt
+
+            db.execute(
+                """
+                UPDATE box_sponsors
+                SET ultimo_tratamiento = ?
+                WHERE id = ?
+                """,
+                (
+                    nuevo_ultimo_tratamiento.isoformat(),
+                    sponsor_id,
+                ),
+            )
 
             procesados.append(
                 (
@@ -877,7 +1050,7 @@ async def procesar_sponsors_medicos(ahora: datetime):
                 )
             )
 
-        await sesion.commit()
+        db.commit()
 
     return procesados
 
@@ -886,13 +1059,14 @@ async def procesar_sponsors_medicos(ahora: datetime):
 # COMPLETAR ACCIONES
 # ============================================================
 
-async def _liquidar_accion(sesion, fila, ahora: datetime):
+def _liquidar_accion(db, fila, ahora: datetime):
     """Liquida una única acción vencida y devuelve sus datos para notificar.
 
-    Las acciones especiales no usan la liquidación normal:
-
-    - ``PROMOVIENDO`` busca un sponsor sin recompensas ni riesgo de lesión.
-    - ``DESCANSANDO`` reduce la probabilidad de lesión sin curar al usuario.
+    PROMOVIENDO es una acción especial:
+    - No da EXP.
+    - No da dinero.
+    - No genera lesión.
+    - Tiene una probabilidad de conseguir sponsor.
     """
 
     (
@@ -907,47 +1081,39 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
     ) = fila
 
     duracion_horas = (
-        finaliza_en - iniciado_en
+        datetime.fromisoformat(finaliza_en)
+        - datetime.fromisoformat(iniciado_en)
     ).total_seconds() / 3600
 
-    await sesion.execute(
-        delete(BoxAccion).where(BoxAccion.id == accion_id)
+    db.execute(
+        "DELETE FROM box_acciones WHERE id = ?",
+        (accion_id,),
     )
 
-    await _asegurar_usuario(sesion, guild_id, user_id)
-
-    # =================================================
-    # DESCANSO
-    # =================================================
-
-    if tipo == "DESCANSANDO":
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-        probabilidad_anterior = usuario.probabilidad_lesion
-        reduccion_programada = (
-            duracion_horas * BOX_DESCANSO_REDUCCION_POR_HORA
-        )
-        probabilidad_nueva = max(
-            0.0,
-            probabilidad_anterior - reduccion_programada,
-        )
-        reduccion_efectiva = probabilidad_anterior - probabilidad_nueva
-
-        usuario.probabilidad_lesion = probabilidad_nueva
-
-        # Descansar no cura una lesión, no da recompensas y tampoco puede
-        # provocar una lesión nueva. El cuarto campo comunica cuánto se redujo
-        # realmente para que los avisos automáticos y administrativos puedan
-        # mostrarlo sin cambiar el contrato de la tupla de liquidación.
-        return (
+    db.execute(
+        """
+        INSERT INTO box_usuarios (
             guild_id,
-            user_id,
-            tipo,
-            reduccion_efectiva,
-            0,
-            False,
-            None,
-            None,
+            user_id
         )
+        VALUES (?, ?)
+        ON CONFLICT(guild_id, user_id) DO NOTHING
+        """,
+        (guild_id, user_id),
+    )
+
+    # El descanso reduce el riesgo sin generar recompensas ni curar lesiones.
+    if tipo == "DESCANSANDO":
+        anterior = db.execute(
+            "SELECT probabilidad_lesion FROM box_usuarios WHERE guild_id = ? AND user_id = ?",
+            (guild_id, user_id),
+        ).fetchone()[0]
+        nueva = max(0.0, anterior - duracion_horas * BOX_DESCANSO_REDUCCION_POR_HORA)
+        db.execute(
+            "UPDATE box_usuarios SET probabilidad_lesion = ? WHERE guild_id = ? AND user_id = ?",
+            (nueva, guild_id, user_id),
+        )
+        return guild_id, user_id, tipo, anterior - nueva, 0, False, None, None
 
     # =================================================
     # PROMOCIÓN
@@ -969,8 +1135,8 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
         if consiguio_sponsor:
             sponsor = _sortear_sponsor()
 
-            creado = await _crear_sponsor(
-                sesion,
+            creado = _crear_sponsor(
+                db,
                 guild_id,
                 user_id,
                 sponsor,
@@ -995,15 +1161,20 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
     # ACCIONES NORMALES
     # =================================================
 
-    usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-
-    probabilidad_anterior = usuario.probabilidad_lesion
-    lesionado_hasta = usuario.lesionado_hasta
+    probabilidad_anterior, lesionado_hasta = db.execute(
+        """
+        SELECT
+            probabilidad_lesion,
+            lesionado_hasta
+        FROM box_usuarios
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (guild_id, user_id),
+    ).fetchone()
 
     probabilidad = min(
         BOX_LESION_PROBABILIDAD_MAXIMA,
-        probabilidad_anterior
-        + duracion_horas * BOX_LESION_PROBABILIDAD_POR_HORA,
+        probabilidad_anterior + duracion_horas * BOX_LESION_PROBABILIDAD_POR_HORA,
     )
 
     se_lesiona = random.random() < (
@@ -1011,14 +1182,29 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
     )
 
     if se_lesiona:
-        lesionado_hasta = ahora + timedelta(hours=BOX_LESION_HORAS)
+        lesionado_hasta = (
+            ahora + timedelta(hours=BOX_LESION_HORAS)
+        ).isoformat()
 
-    usuario.probabilidad_lesion = probabilidad
-    usuario.lesionado_hasta = lesionado_hasta
+    db.execute(
+        """
+        UPDATE box_usuarios
+        SET
+            probabilidad_lesion = ?,
+            lesionado_hasta = ?
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (
+            probabilidad,
+            lesionado_hasta,
+            guild_id,
+            user_id,
+        ),
+    )
 
     # Bonus de Equipamiento.
-    bonus_exp = await _contar_sponsors_activos(
-        sesion,
+    bonus_exp = _contar_sponsors_activos(
+        db,
         guild_id,
         user_id,
         "equipamiento",
@@ -1033,10 +1219,23 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
             * (1 + (bonus_exp * BOX_SPONSOR_EQUIPAMIENTO_BONUS / 100))
         )
 
-    if tipo != "TRABAJANDO":
-        usuario.experiencia = usuario.experiencia + recompensa_final
-
-    usuario.dinero = usuario.dinero + dinero_recompensa
+    db.execute(
+        """
+        UPDATE box_usuarios
+        SET
+            experiencia = experiencia + ?,
+            dinero = dinero + ?
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (
+            recompensa_final
+            if tipo != "TRABAJANDO"
+            else 0,
+            dinero_recompensa,
+            guild_id,
+            user_id,
+        ),
+    )
 
     return (
         guild_id,
@@ -1050,53 +1249,57 @@ async def _liquidar_accion(sesion, fila, ahora: datetime):
     )
 
 
-_COLUMNAS_ACCION_VENCIDA = (
-    BoxAccion.id,
-    BoxAccion.guild_id,
-    BoxAccion.user_id,
-    BoxAccion.tipo,
-    BoxAccion.recompensa,
-    BoxAccion.dinero_recompensa,
-    BoxAccion.iniciado_en,
-    BoxAccion.finaliza_en,
-)
+def _sqlite_completar_acciones_vencidas(ahora: datetime):
+    """
+    Liquida acciones vencidas y devuelve sus datos para notificar.
 
-
-async def completar_acciones_vencidas(ahora: datetime):
-    """Liquida acciones vencidas y devuelve sus datos para notificar.
-
-    La liquidación contempla las reglas especiales de promoción y descanso;
-    las acciones normales entregan recompensas y sortean una posible lesión.
+    PROMOVIENDO es una acción especial:
+    - No da EXP.
+    - No da dinero.
+    - No genera lesión.
+    - Tiene una probabilidad de conseguir sponsor.
     """
 
     completadas = []
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(*_COLUMNAS_ACCION_VENCIDA).where(
-                BoxAccion.finaliza_en <= ahora
-            )
-        )).all()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        filas = db.execute(
+            """
+            SELECT
+                id,
+                guild_id,
+                user_id,
+                tipo,
+                recompensa,
+                dinero_recompensa,
+                iniciado_en,
+                finaliza_en
+            FROM box_acciones
+            WHERE finaliza_en <= ?
+            """,
+            (ahora.isoformat(),),
+        ).fetchall()
 
         for fila in filas:
             completadas.append(
-                await _liquidar_accion(sesion, fila, ahora)
+                _liquidar_accion(db, fila, ahora)
             )
 
-        await sesion.commit()
+        db.commit()
 
     # Los sponsors se procesan cada vez que el sistema
     # comprueba acciones vencidas.
     #
     # Esto permite que los pagos y tratamientos sigan
     # funcionando aunque el bot haya estado reiniciado.
-    await procesar_pagos_sponsors(ahora)
-    await procesar_sponsors_medicos(ahora)
+    _sqlite_procesar_pagos_sponsors(ahora)
+    _sqlite_procesar_sponsors_medicos(ahora)
 
     return completadas
 
 
-async def admin_completar_acciones_vencidas(guild_id: int, ahora: datetime):
+def _sqlite_admin_completar_acciones_vencidas(guild_id: int, ahora: datetime):
     """
     Liquida las acciones vencidas de un único servidor.
 
@@ -1106,30 +1309,42 @@ async def admin_completar_acciones_vencidas(guild_id: int, ahora: datetime):
 
     completadas = []
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(*_COLUMNAS_ACCION_VENCIDA).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.finaliza_en <= ahora,
-            )
-        )).all()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        filas = db.execute(
+            """
+            SELECT
+                id,
+                guild_id,
+                user_id,
+                tipo,
+                recompensa,
+                dinero_recompensa,
+                iniciado_en,
+                finaliza_en
+            FROM box_acciones
+            WHERE guild_id = ?
+            AND finaliza_en <= ?
+            """,
+            (guild_id, ahora.isoformat()),
+        ).fetchall()
 
         for fila in filas:
             completadas.append(
-                await _liquidar_accion(sesion, fila, ahora)
+                _liquidar_accion(db, fila, ahora)
             )
 
-        await sesion.commit()
+        db.commit()
 
     # Igual que la versión global, los sponsors se procesan
     # siempre: sus ciclos internos evitan pagos duplicados.
-    await procesar_pagos_sponsors(ahora)
-    await procesar_sponsors_medicos(ahora)
+    _sqlite_procesar_pagos_sponsors(ahora)
+    _sqlite_procesar_sponsors_medicos(ahora)
 
     return completadas
 
 
-async def admin_finalizar_accion(
+def _sqlite_admin_finalizar_accion(
     guild_id: int,
     user_id: int,
     ahora: datetime,
@@ -1140,27 +1355,38 @@ async def admin_finalizar_accion(
     si el usuario no tiene una acción vencida pendiente.
     """
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(*_COLUMNAS_ACCION_VENCIDA)
-            .where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-                BoxAccion.finaliza_en <= ahora,
-            )
-            .order_by(BoxAccion.finaliza_en.asc())
-            .limit(1)
-        )).first()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        fila = db.execute(
+            """
+            SELECT
+                id,
+                guild_id,
+                user_id,
+                tipo,
+                recompensa,
+                dinero_recompensa,
+                iniciado_en,
+                finaliza_en
+            FROM box_acciones
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND finaliza_en <= ?
+            ORDER BY finaliza_en ASC
+            LIMIT 1
+            """,
+            (guild_id, user_id, ahora.isoformat()),
+        ).fetchone()
 
         if fila is None:
             return None
 
-        completada = await _liquidar_accion(sesion, fila, ahora)
+        completada = _liquidar_accion(db, fila, ahora)
 
-        await sesion.commit()
+        db.commit()
 
-    await procesar_pagos_sponsors(ahora)
-    await procesar_sponsors_medicos(ahora)
+    _sqlite_procesar_pagos_sponsors(ahora)
+    _sqlite_procesar_sponsors_medicos(ahora)
 
     return completada
 
@@ -1169,7 +1395,7 @@ async def admin_finalizar_accion(
 # DESAFÍOS
 # ============================================================
 
-async def crear_desafio(
+def _sqlite_crear_desafio(
     guild_id: int,
     retador_id: int,
     contrincante_id: int,
@@ -1186,96 +1412,108 @@ async def crear_desafio(
     botón, que se pierde con cada reinicio del bot.
     """
 
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            delete(BoxDesafio).where(BoxDesafio.expira_en <= ahora)
-        )
-
-        desafio = BoxDesafio(
-            guild_id=guild_id,
-            retador_id=retador_id,
-            contrincante_id=contrincante_id,
-            expira_en=expira_en,
-            tipo=tipo,
-            canal_id=canal_id,
-        )
-        sesion.add(desafio)
-
+    with conectar_db() as db:
         try:
-            await sesion.flush()
-        except IntegrityError:
-            await sesion.rollback()
+            db.execute(
+                """
+                DELETE FROM box_desafios
+                WHERE expira_en <= ?
+                """,
+                (ahora.isoformat(),),
+            )
+
+            db.execute(
+                """
+                INSERT INTO box_desafios (
+                    guild_id,
+                    retador_id,
+                    contrincante_id,
+                    expira_en,
+                    tipo,
+                    canal_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    guild_id,
+                    retador_id,
+                    contrincante_id,
+                    expira_en.isoformat(),
+                    tipo,
+                    canal_id,
+                ),
+            )
+
+            db.commit()
+
+        except sqlite3.IntegrityError:
             return None
 
-        desafio_id = desafio.id
-        await sesion.commit()
+        return db.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
 
-    return desafio_id
 
-
-async def registrar_mensaje_desafio(desafio_id: int, mensaje_id: int):
-    """Guarda el id de la tarjeta publicada, para poder retirarla después."""
-
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            update(BoxDesafio)
-            .where(BoxDesafio.id == desafio_id)
-            .values(mensaje_id=mensaje_id)
-            .execution_options(synchronize_session=False)
-        )
-        await sesion.commit()
+_COLUMNAS_DESAFIO = """
+    id,
+    retador_id,
+    contrincante_id,
+    tipo,
+    expira_en,
+    canal_id,
+    mensaje_id
+"""
 
 
 def _fila_desafio(fila) -> dict:
-    """Diccionario de una fila de ``box_desafios``."""
+    """Diccionario de una fila de ``box_desafios``, con la fecha parseada."""
 
     return {
         "id": fila[0],
         "retador_id": fila[1],
         "contrincante_id": fila[2],
         "tipo": fila[3],
-        "expira_en": fila[4],
+        "expira_en": datetime.fromisoformat(fila[4]),
         "canal_id": fila[5],
         "mensaje_id": fila[6],
     }
 
 
-_COLUMNAS_DESAFIO = (
-    BoxDesafio.id,
-    BoxDesafio.retador_id,
-    BoxDesafio.contrincante_id,
-    BoxDesafio.tipo,
-    BoxDesafio.expira_en,
-    BoxDesafio.canal_id,
-    BoxDesafio.mensaje_id,
-)
+def _sqlite_registrar_mensaje_desafio(desafio_id: int, mensaje_id: int):
+    """Guarda el id de la tarjeta publicada, para poder retirarla después."""
+
+    with conectar_db() as db:
+        db.execute(
+            "UPDATE box_desafios SET mensaje_id = ? WHERE id = ?",
+            (mensaje_id, desafio_id),
+        )
+        db.commit()
 
 
-async def desafios_pendientes(guild_id: int, user_id: int, ahora: datetime):
+def _sqlite_desafios_pendientes(guild_id: int, user_id: int, ahora: datetime):
     """Solicitudes vigentes en las que participa el usuario, en cualquier rol.
 
     Sirve a ``/box cancelar``: el que propuso puede retirar su solicitud y el
     desafiado puede rechazarla, que en la base es el mismo borrado.
     """
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(*_COLUMNAS_DESAFIO)
-            .where(
-                BoxDesafio.guild_id == guild_id,
-                or_(
-                    BoxDesafio.retador_id == user_id,
-                    BoxDesafio.contrincante_id == user_id,
-                ),
-                BoxDesafio.expira_en > ahora,
-            )
-            .order_by(BoxDesafio.id.asc())
-        )).all()
+    with conectar_db() as db:
+        filas = db.execute(
+            f"""
+            SELECT {_COLUMNAS_DESAFIO}
+            FROM box_desafios
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            AND expira_en > ?
+            ORDER BY id ASC
+            """,
+            (guild_id, user_id, user_id, ahora.isoformat()),
+        ).fetchall()
 
     return [_fila_desafio(fila) for fila in filas]
 
 
-async def desafio_registrado(desafio_id: int) -> bool:
+def _sqlite_desafio_registrado(desafio_id: int) -> bool:
     """Si la solicitud sigue escrita en la base, vigente o no.
 
     Lo mira la view del botón antes de anunciar "expirado" en su timeout: la
@@ -1284,15 +1522,20 @@ async def desafio_registrado(desafio_id: int) -> bool:
     está contando otra cosa y no hay que pisarla.
     """
 
-    async with crear_sesion() as sesion:
-        cantidad = (await sesion.execute(
-            select(func.count()).where(BoxDesafio.id == desafio_id)
-        )).scalar_one()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios
+            WHERE id = ?
+            """,
+            (desafio_id,),
+        ).fetchone()
 
-    return bool(cantidad)
+    return bool(fila[0])
 
 
-async def cancelar_desafio(
+def _sqlite_cancelar_desafio(
     desafio_id: int,
     guild_id: int,
     user_id: int,
@@ -1301,38 +1544,39 @@ async def cancelar_desafio(
     """Borra una solicitud pendiente y devuelve lo que se borró, o ``None``.
 
     Solo puede cancelarla quien participa (el que propuso o el desafiado) y
-    solo mientras siga vigente. Todo ocurre en una única transacción para no
-    pisarse con una aceptación simultánea: si el botón gana la carrera, la
-    fila ya no está y acá devuelve ``None``.
+    solo mientras siga vigente. Se hace dentro de una transacción con
+    ``BEGIN IMMEDIATE`` para no pisarse con una aceptación simultánea: si el
+    botón gana la carrera, la fila ya no está y acá devuelve ``None``.
     """
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(*_COLUMNAS_DESAFIO)
-            .where(
-                BoxDesafio.id == desafio_id,
-                BoxDesafio.guild_id == guild_id,
-                or_(
-                    BoxDesafio.retador_id == user_id,
-                    BoxDesafio.contrincante_id == user_id,
-                ),
-                BoxDesafio.expira_en > ahora,
-            )
-            .with_for_update()
-        )).first()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        fila = db.execute(
+            f"""
+            SELECT {_COLUMNAS_DESAFIO}
+            FROM box_desafios
+            WHERE id = ?
+            AND guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            AND expira_en > ?
+            """,
+            (desafio_id, guild_id, user_id, user_id, ahora.isoformat()),
+        ).fetchone()
 
         if fila is None:
             return None
 
-        await sesion.execute(
-            delete(BoxDesafio).where(BoxDesafio.id == desafio_id)
+        db.execute(
+            "DELETE FROM box_desafios WHERE id = ?",
+            (desafio_id,),
         )
-        await sesion.commit()
+        db.commit()
 
     return _fila_desafio(fila)
 
 
-async def aceptar_desafio(
+def _sqlite_aceptar_desafio(
     desafio_id: int,
     guild_id: int,
     contrincante_id: int,
@@ -1354,29 +1598,35 @@ async def aceptar_desafio(
     defecto) de lo que pagaría la misma pelea contra otro jugador.
     """
 
-    async with crear_sesion() as sesion:
-        desafio = (await sesion.execute(
-            select(
-                BoxDesafio.retador_id,
-                BoxDesafio.expira_en,
-            ).where(
-                BoxDesafio.id == desafio_id,
-                BoxDesafio.guild_id == guild_id,
-                BoxDesafio.contrincante_id == contrincante_id,
-            )
-            .with_for_update()
-        )).first()
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        desafio = db.execute(
+            """
+            SELECT retador_id, expira_en
+            FROM box_desafios
+            WHERE id = ?
+            AND guild_id = ?
+            AND contrincante_id = ?
+            """,
+            (
+                desafio_id,
+                guild_id,
+                contrincante_id,
+            ),
+        ).fetchone()
 
         if desafio is None:
             return {"estado": "invalido"}
 
         retador_id, expira_en = desafio
 
-        if expira_en <= ahora:
-            await sesion.execute(
-                delete(BoxDesafio).where(BoxDesafio.id == desafio_id)
+        if datetime.fromisoformat(expira_en) <= ahora:
+            db.execute(
+                "DELETE FROM box_desafios WHERE id = ?",
+                (desafio_id,),
             )
-            await sesion.commit()
+            db.commit()
             return {"estado": "expirado"}
 
         # Un solo combate a la vez. Se comprueba acá, dentro de la misma
@@ -1384,8 +1634,8 @@ async def aceptar_desafio(
         # aceptaciones simultáneas podrían pasar las dos por el candado
         # "amable" del comando. El desafío NO se borra: queda pendiente y se
         # puede aceptar cuando termine la pelea que estorbaba.
-        en_curso = await _hay_combate_vivo(
-            sesion,
+        en_curso = _hay_combate_vivo(
+            db,
             None if BOX_COMBATE_UNICO_GLOBAL else guild_id,
         )
 
@@ -1401,38 +1651,51 @@ async def aceptar_desafio(
                 },
             }
 
-        usuarios = (await sesion.execute(
-            select(BoxAccion.user_id).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id.in_(
-                    [retador_id, contrincante_id]
-                ),
-            )
-        )).all()
+        usuarios = db.execute(
+            """
+            SELECT user_id
+            FROM box_acciones
+            WHERE guild_id = ?
+            AND user_id IN (?, ?)
+            """,
+            (
+                guild_id,
+                retador_id,
+                contrincante_id,
+            ),
+        ).fetchall()
 
         if usuarios:
-            await sesion.execute(
-                delete(BoxDesafio).where(BoxDesafio.id == desafio_id)
+            db.execute(
+                "DELETE FROM box_desafios WHERE id = ?",
+                (desafio_id,),
             )
-            await sesion.commit()
+            db.commit()
             return {"estado": "ocupado"}
 
-        lesionados = (await sesion.execute(
-            select(BoxUsuario.user_id).where(
-                BoxUsuario.guild_id == guild_id,
-                BoxUsuario.user_id.in_(
-                    [retador_id, contrincante_id]
-                ),
-                BoxUsuario.lesionado_hasta.is_not(None),
-                BoxUsuario.lesionado_hasta > ahora,
-            )
-        )).all()
+        lesionados = db.execute(
+            """
+            SELECT user_id
+            FROM box_usuarios
+            WHERE guild_id = ?
+            AND user_id IN (?, ?)
+            AND lesionado_hasta IS NOT NULL
+            AND lesionado_hasta > ?
+            """,
+            (
+                guild_id,
+                retador_id,
+                contrincante_id,
+                ahora.isoformat(),
+            ),
+        ).fetchall()
 
         if lesionados:
-            await sesion.execute(
-                delete(BoxDesafio).where(BoxDesafio.id == desafio_id)
+            db.execute(
+                "DELETE FROM box_desafios WHERE id = ?",
+                (desafio_id,),
             )
-            await sesion.commit()
+            db.commit()
             return {"estado": "lesionado"}
 
         experiencias = {}
@@ -1442,26 +1705,35 @@ async def aceptar_desafio(
             retador_id,
             contrincante_id,
         ):
-            fila = (await sesion.execute(
-                select(
-                    func.coalesce(BoxUsuario.experiencia, 0)
-                ).where(
-                    BoxUsuario.guild_id == guild_id,
-                    BoxUsuario.user_id == user_id,
-                )
-            )).first()
+            fila = db.execute(
+                """
+                SELECT COALESCE(experiencia, 0)
+                FROM box_usuarios
+                WHERE guild_id = ? AND user_id = ?
+                """,
+                (
+                    guild_id,
+                    user_id,
+                ),
+            ).fetchone()
 
             experiencias[user_id] = (
                 fila[0] if fila else 0
             )
 
-            mejora = (await sesion.execute(
-                select(BoxMejora.nivel).where(
-                    BoxMejora.guild_id == guild_id,
-                    BoxMejora.user_id == user_id,
-                    BoxMejora.mejora == "entrenamiento",
-                )
-            )).first()
+            mejora = db.execute(
+                """
+                SELECT nivel
+                FROM box_mejoras
+                WHERE guild_id = ?
+                AND user_id = ?
+                AND mejora = 'entrenamiento'
+                """,
+                (
+                    guild_id,
+                    user_id,
+                ),
+            ).fetchone()
 
             niveles_entrenamiento[user_id] = (
                 mejora[0] if mejora else 0
@@ -1505,16 +1777,25 @@ async def aceptar_desafio(
                     math.floor(premio_dinero * BOX_DESAFIO_PREMIO_VS_BOT),
                 )
 
-            sesion.add(
-                BoxDesafioHistorial(
-                    guild_id=guild_id,
-                    retador_id=retador_id,
-                    contrincante_id=contrincante_id,
-                    ganador_id=ganador_id,
-                    creado_en=ahora,
+            db.execute(
+                """
+                INSERT INTO box_desafios_historial (
+                    guild_id,
+                    retador_id,
+                    contrincante_id,
+                    ganador_id,
+                    creado_en
                 )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    guild_id,
+                    retador_id,
+                    contrincante_id,
+                    ganador_id,
+                    ahora.isoformat(),
+                ),
             )
-            await sesion.flush()
 
         finaliza_en = ahora + timedelta(hours=BOX_DESAFIO_DURACION_HORAS)
 
@@ -1541,28 +1822,39 @@ async def aceptar_desafio(
                     * multiplicador_experiencia
                 )
 
-            sesion.add(
-                BoxAccion(
-                    guild_id=guild_id,
-                    user_id=user_id,
-                    tipo=tipo,
-                    iniciado_en=ahora,
-                    finaliza_en=finaliza_en,
-                    recompensa=recompensa_usuario,
-                    dinero_recompensa=(
-                        premio_dinero
-                        if user_id == ganador_id
-                        else 0
-                    ),
+            db.execute(
+                """
+                INSERT INTO box_acciones (
+                    guild_id,
+                    user_id,
+                    tipo,
+                    iniciado_en,
+                    finaliza_en,
+                    recompensa,
+                    dinero_recompensa
                 )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    guild_id,
+                    user_id,
+                    tipo,
+                    ahora.isoformat(),
+                    finaliza_en.isoformat(),
+                    recompensa_usuario,
+                    premio_dinero
+                    if user_id == ganador_id
+                    else 0,
+                ),
             )
 
-        await sesion.execute(
-            delete(BoxDesafio).where(BoxDesafio.id == desafio_id)
+        db.execute(
+            "DELETE FROM box_desafios WHERE id = ?",
+            (desafio_id,),
         )
 
-        combate_id = await _crear_combate(
-            sesion,
+        combate_id = _crear_combate(
+            db,
             guild_id,
             modo=tipo,
             retador_id=retador_id,
@@ -1573,7 +1865,7 @@ async def aceptar_desafio(
             canal_id=canal_id,
         )
 
-        await sesion.commit()
+        db.commit()
 
         return {
             "estado": "aceptado",
@@ -1587,7 +1879,7 @@ async def aceptar_desafio(
 # RANKING DE DESAFÍOS
 # ============================================================
 
-async def obtener_top_desafios(
+def _sqlite_obtener_top_desafios(
     guild_id: int,
     limite: int = 10,
 ):
@@ -1595,14 +1887,18 @@ async def obtener_top_desafios(
 
     resultados = {}
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxDesafioHistorial.retador_id,
-                BoxDesafioHistorial.contrincante_id,
-                BoxDesafioHistorial.ganador_id,
-            ).where(BoxDesafioHistorial.guild_id == guild_id)
-        )).all()
+    with conectar_db() as db:
+        filas = db.execute(
+            """
+            SELECT
+                retador_id,
+                contrincante_id,
+                ganador_id
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchall()
 
     for (
         retador_id,
@@ -1660,7 +1956,7 @@ async def obtener_top_desafios(
 # BOT COMO CONTRINCANTE
 # ============================================================
 
-async def preparar_bot_para_desafio(
+def _sqlite_preparar_bot_para_desafio(
     guild_id: int,
     bot_id: int,
 ) -> dict:
@@ -1680,33 +1976,40 @@ async def preparar_bot_para_desafio(
     usados, útil para mostrar en el embed de aceptación.
     """
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, bot_id)
-        await _asegurar_equipo(sesion, guild_id, bot_id)
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
 
-        # Bot siempre disponible: limpiar acción, lesión y desafíos viejos
-        await sesion.execute(
-            delete(BoxAccion).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == bot_id,
-            )
-        )
-
-        bot_usuario = await sesion.get(
-            BoxUsuario,
+        # Asegurar filas del bot
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
             (guild_id, bot_id),
         )
-        bot_usuario.lesionado_hasta = None
-        bot_usuario.probabilidad_lesion = 0.0
+        _asegurar_equipo(db, guild_id, bot_id)
 
-        await sesion.execute(
-            delete(BoxDesafio).where(
-                BoxDesafio.guild_id == guild_id,
-                or_(
-                    BoxDesafio.retador_id == bot_id,
-                    BoxDesafio.contrincante_id == bot_id,
-                ),
-            )
+        # Bot siempre disponible: limpiar acción, lesión y desafíos viejos
+        db.execute(
+            "DELETE FROM box_acciones WHERE guild_id = ? AND user_id = ?",
+            (guild_id, bot_id),
+        )
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET lesionado_hasta = NULL, probabilidad_lesion = 0
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, bot_id),
+        )
+        db.execute(
+            """
+            DELETE FROM box_desafios
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, bot_id, bot_id),
         )
 
         # ---------- RANGOS DE EQUIPO ----------
@@ -1727,14 +2030,14 @@ async def preparar_bot_para_desafio(
             "botas",
         ]
 
-        filas = (await sesion.execute(
-            select(
-                *(getattr(BoxEquipo, col) for col in columnas_equipo)
-            ).where(
-                BoxEquipo.guild_id == guild_id,
-                BoxEquipo.user_id != bot_id,
-            )
-        )).all()
+        filas = db.execute(
+            f"""
+            SELECT {", ".join(columnas_equipo)}
+            FROM box_equipo
+            WHERE guild_id = ? AND user_id != ?
+            """,
+            (guild_id, bot_id),
+        ).fetchall()
 
         rangos_equipo: dict[str, tuple[int, int]] = {}
         valores: dict[str, int] = {}
@@ -1780,23 +2083,46 @@ async def preparar_bot_para_desafio(
             if valores["dano"] > valores["dano_maximo"]:
                 valores["dano"] = valores["dano_maximo"]
 
-        bot_equipo = await sesion.get(BoxEquipo, (guild_id, bot_id))
-
-        for col in columnas_equipo:
-            setattr(bot_equipo, col, valores[col])
+        db.execute(
+            """
+            UPDATE box_equipo
+            SET vida = ?, vida_maxima = ?, dano = ?, dano_maximo = ?,
+                defensa = ?, defensa_maxima = ?, cansancio = ?, cansancio_maximo = ?,
+                puntos_habilidad = ?, casco = ?, guantes = ?, protector_bucal = ?, short = ?, botas = ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (
+                valores["vida"],
+                valores["vida_maxima"],
+                valores["dano"],
+                valores["dano_maximo"],
+                valores["defensa"],
+                valores["defensa_maxima"],
+                valores["cansancio"],
+                valores["cansancio_maximo"],
+                valores["puntos_habilidad"],
+                valores["casco"],
+                valores["guantes"],
+                valores["protector_bucal"],
+                valores["short"],
+                valores["botas"],
+                guild_id,
+                bot_id,
+            ),
+        )
 
         # ---------- RANGO DE EXPERIENCIA ----------
-        exps = (await sesion.execute(
-            select(
-                func.coalesce(BoxUsuario.experiencia, 0)
-            ).where(
-                BoxUsuario.guild_id == guild_id,
-                BoxUsuario.user_id != bot_id,
-            )
-        )).all()
+        exps = db.execute(
+            """
+            SELECT COALESCE(experiencia, 0)
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id != ?
+            """,
+            (guild_id, bot_id),
+        ).fetchall()
 
         if exps:
-            vals_exp = [fila[0] for fila in exps]
+            vals_exp = [r[0] for r in exps]
             min_exp = min(vals_exp)
             max_exp = max(vals_exp)
             bot_exp = random.randint(min_exp, max_exp)
@@ -1805,18 +2131,22 @@ async def preparar_bot_para_desafio(
             bot_exp = 0
             rango_exp = (0, 0)
 
-        bot_usuario.experiencia = bot_exp
+        db.execute(
+            "UPDATE box_usuarios SET experiencia = ? WHERE guild_id = ? AND user_id = ?",
+            (bot_exp, guild_id, bot_id),
+        )
 
         # ---------- RANGO DE MEJORAS ----------
-        filas_mejoras = (await sesion.execute(
-            select(
-                BoxMejora.mejora,
-                BoxMejora.nivel,
-            ).where(
-                BoxMejora.guild_id == guild_id,
-                BoxMejora.user_id != bot_id,
-            )
-        )).all()
+        filas_mejoras = db.execute(
+            """
+            SELECT mejora, nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id != ?
+            """,
+            (guild_id, bot_id),
+        ).fetchall()
+
+        from collections import defaultdict
 
         grupos: dict[str, list[int]] = defaultdict(list)
         for mejora, nivel in filas_mejoras:
@@ -1836,24 +2166,20 @@ async def preparar_bot_para_desafio(
                 rangos_mejoras[mejora_tipo] = (0, 0)
                 niveles_bot[mejora_tipo] = 0
 
-            await sesion.execute(
-                delete(BoxMejora).where(
-                    BoxMejora.guild_id == guild_id,
-                    BoxMejora.user_id == bot_id,
-                    BoxMejora.mejora == mejora_tipo,
-                )
+            db.execute(
+                "DELETE FROM box_mejoras WHERE guild_id = ? AND user_id = ? AND mejora = ?",
+                (guild_id, bot_id, mejora_tipo),
             )
             if niveles_bot[mejora_tipo] > 0:
-                sesion.add(
-                    BoxMejora(
-                        guild_id=guild_id,
-                        user_id=bot_id,
-                        mejora=mejora_tipo,
-                        nivel=niveles_bot[mejora_tipo],
-                    )
+                db.execute(
+                    """
+                    INSERT INTO box_mejoras (guild_id, user_id, mejora, nivel)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (guild_id, bot_id, mejora_tipo, niveles_bot[mejora_tipo]),
                 )
 
-        await sesion.commit()
+        db.commit()
 
         return {
             "valores": valores,
@@ -1865,38 +2191,45 @@ async def preparar_bot_para_desafio(
         }
 
 
-async def obtener_equipo(guild_id: int, user_id: int):
+def _sqlite_obtener_equipo(guild_id: int, user_id: int):
     """Devuelve el equipo del usuario, inicializando si es necesario."""
 
-    async with crear_sesion() as sesion:
-        await _asegurar_equipo(sesion, guild_id, user_id)
+    with conectar_db() as db:
+        _asegurar_equipo(db, guild_id, user_id)
+        fila = db.execute(
+            """
+            SELECT vida, vida_maxima, dano, dano_maximo, defensa,
+                   defensa_maxima, cansancio, cansancio_maximo,
+                   puntos_habilidad, casco, guantes, protector_bucal,
+                   short, botas
+            FROM box_equipo
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
+        db.commit()
 
-        equipo = await sesion.get(BoxEquipo, (guild_id, user_id))
-
-        await sesion.commit()
-
-        if equipo is None:
-            return None
-
+    if fila:
         return {
-            "vida": equipo.vida,
-            "vida_maxima": equipo.vida_maxima,
-            "dano": equipo.dano,
-            "dano_maximo": equipo.dano_maximo,
-            "defensa": equipo.defensa,
-            "defensa_maxima": equipo.defensa_maxima,
-            "cansancio": equipo.cansancio,
-            "cansancio_maximo": equipo.cansancio_maximo,
-            "puntos_habilidad": equipo.puntos_habilidad,
-            "casco": equipo.casco,
-            "guantes": equipo.guantes,
-            "protector_bucal": equipo.protector_bucal,
-            "short": equipo.short,
-            "botas": equipo.botas,
+            "vida": fila[0],
+            "vida_maxima": fila[1],
+            "dano": fila[2],
+            "dano_maximo": fila[3],
+            "defensa": fila[4],
+            "defensa_maxima": fila[5],
+            "cansancio": fila[6],
+            "cansancio_maximo": fila[7],
+            "puntos_habilidad": fila[8],
+            "casco": fila[9],
+            "guantes": fila[10],
+            "protector_bucal": fila[11],
+            "short": fila[12],
+            "botas": fila[13],
         }
+    return None
 
 
-async def actualizar_equipo(
+def _sqlite_actualizar_equipo(
     guild_id: int,
     user_id: int,
     vida: int | None = None,
@@ -1912,42 +2245,60 @@ async def actualizar_equipo(
 ):
     """Actualiza estadísticas o equipamiento del usuario."""
 
-    valores = {}
+    actualizaciones = []
+    valores = []
 
-    for nombre, valor in (
-        ("vida", vida),
-        ("dano", dano),
-        ("defensa", defensa),
-        ("cansancio", cansancio),
-        ("puntos_habilidad", puntos_habilidad),
-        ("casco", casco),
-        ("guantes", guantes),
-        ("protector_bucal", protector_bucal),
-        ("short", short),
-        ("botas", botas),
-    ):
-        if valor is not None:
-            valores[nombre] = valor
+    if vida is not None:
+        actualizaciones.append("vida = ?")
+        valores.append(vida)
+    if dano is not None:
+        actualizaciones.append("dano = ?")
+        valores.append(dano)
+    if defensa is not None:
+        actualizaciones.append("defensa = ?")
+        valores.append(defensa)
+    if cansancio is not None:
+        actualizaciones.append("cansancio = ?")
+        valores.append(cansancio)
+    if puntos_habilidad is not None:
+        actualizaciones.append("puntos_habilidad = ?")
+        valores.append(puntos_habilidad)
+    if casco is not None:
+        actualizaciones.append("casco = ?")
+        valores.append(casco)
+    if guantes is not None:
+        actualizaciones.append("guantes = ?")
+        valores.append(guantes)
+    if protector_bucal is not None:
+        actualizaciones.append("protector_bucal = ?")
+        valores.append(protector_bucal)
+    if short is not None:
+        actualizaciones.append("short = ?")
+        valores.append(short)
+    if botas is not None:
+        actualizaciones.append("botas = ?")
+        valores.append(botas)
 
-    if not valores:
+    if not actualizaciones:
         return False
 
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            update(BoxEquipo)
-            .where(
-                BoxEquipo.guild_id == guild_id,
-                BoxEquipo.user_id == user_id,
-            )
-            .values(**valores)
-            .execution_options(synchronize_session=False)
+    valores.extend([guild_id, user_id])
+
+    with conectar_db() as db:
+        db.execute(
+            f"""
+            UPDATE box_equipo
+            SET {", ".join(actualizaciones)}
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            valores,
         )
-        await sesion.commit()
+        db.commit()
 
     return True
 
 
-async def comprar_equipamiento_progresivo(
+def _sqlite_comprar_equipamiento_progresivo(
     guild_id: int,
     user_id: int,
     tipo_equipo: str,
@@ -1956,231 +2307,342 @@ async def comprar_equipamiento_progresivo(
 ):
     """Compra un nivel de equipamiento progresivamente (cada mejora cuesta el doble)."""
 
-    if not hasattr(BoxEquipo, tipo_equipo):
-        return "objetivo_invalido", 0, 0
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
+        saldo, = db.execute(
+            "SELECT dinero FROM box_usuarios WHERE guild_id = ? AND user_id = ?",
+            (guild_id, user_id),
+        ).fetchone()
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
-        await _asegurar_equipo(sesion, guild_id, user_id)
+        _asegurar_equipo(db, guild_id, user_id)
 
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-        equipo = await sesion.get(BoxEquipo, (guild_id, user_id))
-
-        saldo = usuario.dinero
-        nivel_actual = getattr(equipo, tipo_equipo)
+        nivel_actual, = db.execute(
+            f"""
+            SELECT {tipo_equipo} FROM box_equipo
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
         # Calcular precio: precio_base * 2^nivel
         precio = precio_base * (2 ** nivel_actual)
 
         if nivel_actual >= nivel_maximo:
+            db.rollback()
             return "maximo", saldo, nivel_actual
 
         if saldo < precio:
+            db.rollback()
             return "insuficiente", saldo, nivel_actual
 
-        usuario.dinero = usuario.dinero - precio
-        setattr(equipo, tipo_equipo, nivel_actual + 1)
-
-        await sesion.commit()
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = dinero - ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (precio, guild_id, user_id),
+        )
+        db.execute(
+            f"""
+            UPDATE box_equipo
+            SET {tipo_equipo} = {tipo_equipo} + 1
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        )
+        db.commit()
 
     return "comprado", saldo - precio, nivel_actual + 1
-
 
 # ============================================================
 # ADMINISTRACIÓN
 # ============================================================
 
-async def admin_obtener_info_usuario(
+def _sqlite_admin_obtener_info_usuario(
     guild_id: int,
     user_id: int,
 ):
     """Devuelve toda la información administrativa del Box."""
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
-        await sesion.commit()
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
 
-    async with crear_sesion() as sesion:
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
+        usuario = db.execute(
+            """
+            SELECT experiencia,
+                   dinero,
+                   probabilidad_lesion,
+                   lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
-        filas_mejoras = (await sesion.execute(
-            select(
-                BoxMejora.mejora,
-                BoxMejora.nivel,
-            )
-            .where(
-                BoxMejora.guild_id == guild_id,
-                BoxMejora.user_id == user_id,
-            )
-            .order_by(BoxMejora.mejora)
-        )).all()
+        mejoras = db.execute(
+            """
+            SELECT mejora, nivel
+            FROM box_mejoras
+            WHERE guild_id = ? AND user_id = ?
+            ORDER BY mejora
+            """,
+            (guild_id, user_id),
+        ).fetchall()
 
-        accion = (await sesion.execute(
-            select(
-                BoxAccion.tipo,
-                BoxAccion.iniciado_en,
-                BoxAccion.finaliza_en,
-                BoxAccion.recompensa,
-                BoxAccion.dinero_recompensa,
-            ).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-            )
-        )).first()
+        accion = db.execute(
+            """
+            SELECT tipo,
+                   iniciado_en,
+                   finaliza_en,
+                   recompensa,
+                   dinero_recompensa
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
-        sponsors = (await sesion.execute(
-            select(
-                BoxSponsor.id,
-                BoxSponsor.tipo,
-                BoxSponsor.obtenido_en,
-                BoxSponsor.expira_en,
-                BoxSponsor.ultimo_pago,
-                BoxSponsor.ultimo_tratamiento,
-            )
-            .where(
-                BoxSponsor.guild_id == guild_id,
-                BoxSponsor.user_id == user_id,
-                BoxSponsor.expira_en > _ahora(),
-            )
-            .order_by(BoxSponsor.expira_en.asc())
-        )).all()
+        sponsors = db.execute(
+            """
+            SELECT id,
+                   tipo,
+                   obtenido_en,
+                   expira_en,
+                   ultimo_pago,
+                   ultimo_tratamiento
+            FROM box_sponsors
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND expira_en > ?
+            ORDER BY expira_en ASC
+            """,
+            (
+                guild_id,
+                user_id,
+                _ahora().isoformat(),
+            ),
+        ).fetchall()
 
-        fila_equipo = (await sesion.execute(
-            select(
-                BoxEquipo.vida,
-                BoxEquipo.vida_maxima,
-                BoxEquipo.dano,
-                BoxEquipo.dano_maximo,
-                BoxEquipo.defensa,
-                BoxEquipo.defensa_maxima,
-                BoxEquipo.cansancio,
-                BoxEquipo.cansancio_maximo,
-                BoxEquipo.puntos_habilidad,
-                BoxEquipo.casco,
-                BoxEquipo.guantes,
-                BoxEquipo.protector_bucal,
-                BoxEquipo.short,
-                BoxEquipo.botas,
-            ).where(
-                BoxEquipo.guild_id == guild_id,
-                BoxEquipo.user_id == user_id,
-            )
-        )).first()
+        equipo = db.execute(
+            """
+            SELECT vida,
+                   vida_maxima,
+                   dano,
+                   dano_maximo,
+                   defensa,
+                   defensa_maxima,
+                   cansancio,
+                   cansancio_maximo,
+                   puntos_habilidad,
+                   casco,
+                   guantes,
+                   protector_bucal,
+                   short,
+                   botas
+            FROM box_equipo
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
-        desafios_pendientes = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafio.guild_id == guild_id,
-                or_(
-                    BoxDesafio.retador_id == user_id,
-                    BoxDesafio.contrincante_id == user_id,
-                ),
-            )
-        )).scalar_one()
+        desafios_pendientes = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, user_id, user_id),
+        ).fetchone()[0]
 
-        participaciones = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafioHistorial.guild_id == guild_id,
-                or_(
-                    BoxDesafioHistorial.retador_id == user_id,
-                    BoxDesafioHistorial.contrincante_id == user_id,
-                ),
-            )
-        )).scalar_one()
+        participaciones = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            """,
+            (guild_id, user_id, user_id),
+        ).fetchone()[0]
 
-        victorias = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafioHistorial.guild_id == guild_id,
-                BoxDesafioHistorial.ganador_id == user_id,
-            )
-        )).scalar_one()
+        victorias = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND ganador_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()[0]
+
+        db.commit()
 
     return {
-        "experiencia": usuario.experiencia,
-        "dinero": usuario.dinero,
-        "probabilidad_lesion": usuario.probabilidad_lesion,
-        "lesionado_hasta": usuario.lesionado_hasta,
-        "mejoras": dict(filas_mejoras),
+        "experiencia": usuario[0],
+        "dinero": usuario[1],
+        "probabilidad_lesion": usuario[2],
+        "lesionado_hasta": usuario[3],
+        "mejoras": dict(mejoras),
         "accion": accion,
         "sponsors": sponsors,
-        "equipo": fila_equipo,
+        "equipo": equipo,
         "desafios_pendientes": desafios_pendientes,
         "participaciones": participaciones,
         "victorias": victorias,
     }
 
 
-async def admin_modificar_dinero(
+def _sqlite_admin_modificar_dinero(
     guild_id: int,
     user_id: int,
     cantidad: int,
 ):
     """Modifica el dinero de un usuario."""
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
 
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-        saldo_actual = usuario.dinero
+        saldo_actual, = db.execute(
+            """
+            SELECT dinero
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
         nuevo_saldo = saldo_actual + cantidad
 
         if nuevo_saldo < 0:
+            db.rollback()
             return False, saldo_actual
 
-        usuario.dinero = nuevo_saldo
-        await sesion.commit()
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET dinero = ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (nuevo_saldo, guild_id, user_id),
+        )
+
+        db.commit()
 
     return True, nuevo_saldo
 
 
-async def admin_modificar_experiencia(
+def _sqlite_admin_modificar_experiencia(
     guild_id: int,
     user_id: int,
     cantidad: int,
 ):
     """Modifica la experiencia de un usuario."""
 
-    async with crear_sesion() as sesion:
-        await _asegurar_usuario(sesion, guild_id, user_id)
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (guild_id, user_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id, user_id) DO NOTHING
+            """,
+            (guild_id, user_id),
+        )
 
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-        experiencia_actual = usuario.experiencia
+        experiencia_actual, = db.execute(
+            """
+            SELECT experiencia
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
         nueva_experiencia = experiencia_actual + cantidad
 
         if nueva_experiencia < 0:
+            db.rollback()
             return False, experiencia_actual
 
-        usuario.experiencia = nueva_experiencia
-        await sesion.commit()
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET experiencia = ?
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (
+                nueva_experiencia,
+                guild_id,
+                user_id,
+            ),
+        )
+
+        db.commit()
 
     return True, nueva_experiencia
 
 
-async def admin_curar_usuario(
+def _sqlite_admin_curar_usuario(
     guild_id: int,
     user_id: int,
 ):
     """Elimina la lesión activa de un usuario."""
 
-    async with crear_sesion() as sesion:
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
-        if usuario is None:
+        if fila is None:
             return False, None
 
-        lesionado_hasta = usuario.lesionado_hasta
+        lesionado_hasta = fila[0]
 
         if lesionado_hasta is None:
             return False, None
 
-        usuario.lesionado_hasta = None
-        await sesion.commit()
+        db.execute(
+            """
+            UPDATE box_usuarios
+            SET lesionado_hasta = NULL
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        )
+
+        db.commit()
 
     return True, lesionado_hasta
 
 
-async def admin_modificar_probabilidad_lesion(
+def _sqlite_admin_modificar_probabilidad_lesion(
     guild_id: int,
     user_id: int,
     probabilidad: float,
@@ -2190,61 +2652,67 @@ async def admin_modificar_probabilidad_lesion(
     if not 0 <= probabilidad <= BOX_LESION_PROBABILIDAD_MAXIMA:
         return False, None
 
-    async with crear_sesion() as sesion:
-        usuario = await sesion.get(BoxUsuario, (guild_id, user_id))
-
-        if usuario is None:
-            sesion.add(
-                BoxUsuario(
-                    guild_id=guild_id,
-                    user_id=user_id,
-                    probabilidad_lesion=probabilidad,
-                )
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_usuarios (
+                guild_id,
+                user_id,
+                probabilidad_lesion
             )
-        else:
-            usuario.probabilidad_lesion = probabilidad
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, user_id)
+            DO UPDATE SET probabilidad_lesion = excluded.probabilidad_lesion
+            """,
+            (
+                guild_id,
+                user_id,
+                probabilidad,
+            ),
+        )
 
-        await sesion.commit()
+        db.commit()
 
     return True, probabilidad
 
 
-async def admin_cancelar_accion(
+def _sqlite_admin_cancelar_accion(
     guild_id: int,
     user_id: int,
 ):
     """Cancela la acción activa de un usuario."""
 
-    async with crear_sesion() as sesion:
-        accion = (await sesion.execute(
-            select(
-                BoxAccion.tipo,
-                BoxAccion.iniciado_en,
-                BoxAccion.finaliza_en,
-                BoxAccion.recompensa,
-                BoxAccion.dinero_recompensa,
-            ).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-            )
-        )).first()
+    with conectar_db() as db:
+        accion = db.execute(
+            """
+            SELECT tipo,
+                   iniciado_en,
+                   finaliza_en,
+                   recompensa,
+                   dinero_recompensa
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
         if accion is None:
             return None
 
-        await sesion.execute(
-            delete(BoxAccion).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-            )
+        db.execute(
+            """
+            DELETE FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
         )
 
-        await sesion.commit()
+        db.commit()
 
     return accion
 
 
-async def admin_dar_sponsor(
+def _sqlite_admin_dar_sponsor(
     guild_id: int,
     user_id: int,
     tipo: str,
@@ -2255,9 +2723,11 @@ async def admin_dar_sponsor(
     if tipo not in DURACION_SPONSOR:
         return False, "tipo_invalido"
 
-    async with crear_sesion() as sesion:
-        creado = await _crear_sponsor(
-            sesion,
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        creado = _crear_sponsor(
+            db,
             guild_id,
             user_id,
             tipo,
@@ -2265,45 +2735,54 @@ async def admin_dar_sponsor(
         )
 
         if not creado:
+            db.rollback()
             return False, "limite"
 
-        await sesion.commit()
+        db.commit()
 
     return True, None
 
 
-async def admin_quitar_sponsor(
+def _sqlite_admin_quitar_sponsor(
     guild_id: int,
     user_id: int,
     sponsor_id: int,
 ):
     """Elimina un sponsor específico."""
 
-    async with crear_sesion() as sesion:
-        sponsor = (await sesion.execute(
-            select(
-                BoxSponsor.id,
-                BoxSponsor.tipo,
-            ).where(
-                BoxSponsor.id == sponsor_id,
-                BoxSponsor.guild_id == guild_id,
-                BoxSponsor.user_id == user_id,
-            )
-        )).first()
+    with conectar_db() as db:
+        sponsor = db.execute(
+            """
+            SELECT id, tipo
+            FROM box_sponsors
+            WHERE id = ?
+            AND guild_id = ?
+            AND user_id = ?
+            """,
+            (
+                sponsor_id,
+                guild_id,
+                user_id,
+            ),
+        ).fetchone()
 
         if sponsor is None:
             return None
 
-        await sesion.execute(
-            delete(BoxSponsor).where(BoxSponsor.id == sponsor_id)
+        db.execute(
+            """
+            DELETE FROM box_sponsors
+            WHERE id = ?
+            """,
+            (sponsor_id,),
         )
 
-        await sesion.commit()
+        db.commit()
 
     return sponsor
 
 
-async def admin_reset_usuario(
+def _sqlite_admin_reset_usuario(
     guild_id: int,
     user_id: int,
 ):
@@ -2313,157 +2792,170 @@ async def admin_reset_usuario(
     No modifica ningún dato de Madrugue ni SSF.
     """
 
-    async with crear_sesion() as sesion:
+    with conectar_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+
+        tablas = (
+            "box_acciones",
+            "box_desafios",
+            "box_mejoras",
+            "box_sponsors",
+            "box_desafios_historial",
+            "box_equipo",
+            "box_usuarios",
+        )
+
         eliminados = {}
 
-        resultado = await sesion.execute(
-            delete(BoxAccion).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-            )
-        )
-        eliminados["box_acciones"] = resultado.rowcount
+        for tabla in tablas:
+            if tabla == "box_desafios":
+                cursor = db.execute(
+                    """
+                    DELETE FROM box_desafios
+                    WHERE guild_id = ?
+                    AND (retador_id = ? OR contrincante_id = ?)
+                    """,
+                    (guild_id, user_id, user_id),
+                )
+            elif tabla == "box_desafios_historial":
+                cursor = db.execute(
+                    """
+                    DELETE FROM box_desafios_historial
+                    WHERE guild_id = ?
+                    AND (retador_id = ?
+                    OR contrincante_id = ?
+                    OR ganador_id = ?)
+                    """,
+                    (
+                        guild_id,
+                        user_id,
+                        user_id,
+                        user_id,
+                    ),
+                )
+            else:
+                cursor = db.execute(
+                    f"""
+                    DELETE FROM {tabla}
+                    WHERE guild_id = ?
+                    AND user_id = ?
+                    """,
+                    (guild_id, user_id),
+                )
 
-        resultado = await sesion.execute(
-            delete(BoxDesafio).where(
-                BoxDesafio.guild_id == guild_id,
-                or_(
-                    BoxDesafio.retador_id == user_id,
-                    BoxDesafio.contrincante_id == user_id,
-                ),
-            )
-        )
-        eliminados["box_desafios"] = resultado.rowcount
+            eliminados[tabla] = cursor.rowcount
 
-        resultado = await sesion.execute(
-            delete(BoxMejora).where(
-                BoxMejora.guild_id == guild_id,
-                BoxMejora.user_id == user_id,
-            )
-        )
-        eliminados["box_mejoras"] = resultado.rowcount
-
-        resultado = await sesion.execute(
-            delete(BoxSponsor).where(
-                BoxSponsor.guild_id == guild_id,
-                BoxSponsor.user_id == user_id,
-            )
-        )
-        eliminados["box_sponsors"] = resultado.rowcount
-
-        resultado = await sesion.execute(
-            delete(BoxDesafioHistorial).where(
-                BoxDesafioHistorial.guild_id == guild_id,
-                or_(
-                    BoxDesafioHistorial.retador_id == user_id,
-                    BoxDesafioHistorial.contrincante_id == user_id,
-                    BoxDesafioHistorial.ganador_id == user_id,
-                ),
-            )
-        )
-        eliminados["box_desafios_historial"] = resultado.rowcount
-
-        resultado = await sesion.execute(
-            delete(BoxEquipo).where(
-                BoxEquipo.guild_id == guild_id,
-                BoxEquipo.user_id == user_id,
-            )
-        )
-        eliminados["box_equipo"] = resultado.rowcount
-
-        resultado = await sesion.execute(
-            delete(BoxUsuario).where(
-                BoxUsuario.guild_id == guild_id,
-                BoxUsuario.user_id == user_id,
-            )
-        )
-        eliminados["box_usuarios"] = resultado.rowcount
-
-        await sesion.commit()
+        db.commit()
 
     return eliminados
-
 
 # ============================================================
 # CONSULTAS GLOBALES (SOLO ADMINISTRADORES)
 # ============================================================
 
-async def admin_obtener_top_box(
+def _sqlite_admin_obtener_top_box(
     guild_id: int,
     limite: int = 10,
 ):
     """Devuelve el ranking del servidor por experiencia y dinero."""
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxUsuario.user_id,
-                BoxUsuario.experiencia,
-                BoxUsuario.dinero,
-            )
-            .where(BoxUsuario.guild_id == guild_id)
-            .order_by(
-                BoxUsuario.experiencia.desc(),
-                BoxUsuario.dinero.desc(),
-            )
-            .limit(limite)
-        )).all()
+    with conectar_db() as db:
 
-    return filas
+        return db.execute(
+            """
+            SELECT
+                user_id,
+                experiencia,
+                dinero
+            FROM box_usuarios
+            WHERE guild_id = ?
+            ORDER BY
+                experiencia DESC,
+                dinero DESC
+            LIMIT ?
+            """,
+            (guild_id, limite),
+        ).fetchall()
 
 
-async def admin_obtener_estadisticas_box(guild_id: int):
+def _sqlite_admin_obtener_estadisticas_box(guild_id: int):
     """Devuelve estadísticas globales de Box del servidor."""
 
-    ahora = _ahora()
+    with conectar_db() as db:
 
-    async with crear_sesion() as sesion:
+        jugadores = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_usuarios
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
 
-        jugadores = (await sesion.execute(
-            select(func.count()).where(
-                BoxUsuario.guild_id == guild_id
-            )
-        )).scalar_one()
+        experiencia, dinero = db.execute(
+            """
+            SELECT
+                COALESCE(SUM(experiencia), 0),
+                COALESCE(SUM(dinero), 0)
+            FROM box_usuarios
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()
 
-        experiencia, dinero = (await sesion.execute(
-            select(
-                func.coalesce(func.sum(BoxUsuario.experiencia), 0),
-                func.coalesce(func.sum(BoxUsuario.dinero), 0),
-            ).where(BoxUsuario.guild_id == guild_id)
-        )).one()
+        acciones_activas = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_acciones
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
 
-        acciones_activas = (await sesion.execute(
-            select(func.count()).where(
-                BoxAccion.guild_id == guild_id
-            )
-        )).scalar_one()
+        sponsors_activos = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_sponsors
+            WHERE guild_id = ?
+            AND expira_en > ?
+            """,
+            (
+                guild_id,
+                _ahora().isoformat(),
+            ),
+        ).fetchone()[0]
 
-        sponsors_activos = (await sesion.execute(
-            select(func.count()).where(
-                BoxSponsor.guild_id == guild_id,
-                BoxSponsor.expira_en > ahora,
-            )
-        )).scalar_one()
+        combates = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
 
-        combates = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafioHistorial.guild_id == guild_id
-            )
-        )).scalar_one()
+        pendientes = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_desafios
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        ).fetchone()[0]
 
-        pendientes = (await sesion.execute(
-            select(func.count()).where(
-                BoxDesafio.guild_id == guild_id
-            )
-        )).scalar_one()
-
-        lesionados = (await sesion.execute(
-            select(func.count()).where(
-                BoxUsuario.guild_id == guild_id,
-                BoxUsuario.lesionado_hasta.is_not(None),
-                BoxUsuario.lesionado_hasta > ahora,
-            )
-        )).scalar_one()
+        lesionados = db.execute(
+            """
+            SELECT COUNT(*)
+            FROM box_usuarios
+            WHERE guild_id = ?
+            AND lesionado_hasta IS NOT NULL
+            AND lesionado_hasta > ?
+            """,
+            (
+                guild_id,
+                _ahora().isoformat(),
+            ),
+        ).fetchone()[0]
 
     return {
         "jugadores": jugadores,
@@ -2477,65 +2969,64 @@ async def admin_obtener_estadisticas_box(guild_id: int):
     }
 
 
-async def admin_obtener_historial_desafios(
+def _sqlite_admin_obtener_historial_desafios(
     guild_id: int,
     user_id: int,
     limite: int = 10,
 ):
     """Devuelve los últimos combates de un usuario."""
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxDesafioHistorial.creado_en,
-                BoxDesafioHistorial.retador_id,
-                BoxDesafioHistorial.contrincante_id,
-                BoxDesafioHistorial.ganador_id,
-            )
-            .where(
-                BoxDesafioHistorial.guild_id == guild_id,
-                or_(
-                    BoxDesafioHistorial.retador_id == user_id,
-                    BoxDesafioHistorial.contrincante_id == user_id,
-                ),
-            )
-            .order_by(BoxDesafioHistorial.creado_en.desc())
-            .limit(limite)
-        )).all()
+    with conectar_db() as db:
 
-    return filas
+        return db.execute(
+            """
+            SELECT
+                creado_en,
+                retador_id,
+                contrincante_id,
+                ganador_id
+            FROM box_desafios_historial
+            WHERE guild_id = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            ORDER BY creado_en DESC
+            LIMIT ?
+            """,
+            (guild_id, user_id, user_id, limite),
+        ).fetchall()
 
 
-async def admin_obtener_lesionados(
+def _sqlite_admin_obtener_lesionados(
     guild_id: int,
     ahora: datetime,
 ):
     """Devuelve los usuarios con lesión activa o probabilidad acumulada."""
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxUsuario.user_id,
-                BoxUsuario.probabilidad_lesion,
-                BoxUsuario.lesionado_hasta,
-            )
-            .where(
-                BoxUsuario.guild_id == guild_id,
-                or_(
-                    BoxUsuario.probabilidad_lesion > 0,
-                    (
-                        BoxUsuario.lesionado_hasta.is_not(None)
-                        & (BoxUsuario.lesionado_hasta > ahora)
-                    ),
-                ),
-            )
-            .order_by(
-                BoxUsuario.lesionado_hasta.desc(),
-                BoxUsuario.probabilidad_lesion.desc(),
-            )
-        )).all()
+    with conectar_db() as db:
 
-    return filas
+        return db.execute(
+            """
+            SELECT
+                user_id,
+                probabilidad_lesion,
+                lesionado_hasta
+            FROM box_usuarios
+            WHERE guild_id = ?
+            AND (
+                probabilidad_lesion > 0
+                OR (
+                    lesionado_hasta IS NOT NULL
+                    AND lesionado_hasta > ?
+                )
+            )
+            ORDER BY
+                lesionado_hasta DESC,
+                probabilidad_lesion DESC
+            """,
+            (
+                guild_id,
+                ahora.isoformat(),
+            ),
+        ).fetchall()
 
 
 # ============================================================
@@ -2553,7 +3044,7 @@ ESTADO_TERMINADO = "TERMINADO"
 ESTADO_CANCELADO = "CANCELADO"
 
 
-async def _fila_estadisticas_combate(sesion, guild_id: int, user_id: int) -> dict:
+def _fila_estadisticas_combate(db, guild_id: int, user_id: int) -> dict:
     """Vida, daño, defensa y equipamiento de un peleador, listos para simular.
 
     ``box_equipo`` guardaba los niveles de casco, guantes, bucal, short y botas
@@ -2567,21 +3058,22 @@ async def _fila_estadisticas_combate(sesion, guild_id: int, user_id: int) -> dic
     desgaste la fila, ahí vale la pena.
     """
 
-    fila = (await sesion.execute(
-        select(
-            BoxEquipo.vida_maxima,
-            BoxEquipo.dano,
-            BoxEquipo.defensa,
-            BoxEquipo.casco,
-            BoxEquipo.guantes,
-            BoxEquipo.protector_bucal,
-            BoxEquipo.short,
-            BoxEquipo.botas,
-        ).where(
-            BoxEquipo.guild_id == guild_id,
-            BoxEquipo.user_id == user_id,
-        )
-    )).first()
+    fila = db.execute(
+        """
+        SELECT
+            vida_maxima,
+            dano,
+            defensa,
+            casco,
+            guantes,
+            protector_bucal,
+            short,
+            botas
+        FROM box_equipo
+        WHERE guild_id = ? AND user_id = ?
+        """,
+        (guild_id, user_id),
+    ).fetchone()
 
     base = {
         "vida_maxima": BOX_VIDA_INICIAL,
@@ -2606,8 +3098,8 @@ async def _fila_estadisticas_combate(sesion, guild_id: int, user_id: int) -> dic
     return estadisticas_de_combate(base, niveles)
 
 
-async def _crear_combate(
-    sesion,
+def _crear_combate(
+    db,
     guild_id: int,
     *,
     modo: str,
@@ -2630,7 +3122,7 @@ async def _crear_combate(
         return None
 
     equipos = {
-        user_id: await _fila_estadisticas_combate(sesion, guild_id, user_id)
+        user_id: _fila_estadisticas_combate(db, guild_id, user_id)
         for user_id in (retador_id, contrincante_id)
     }
 
@@ -2676,51 +3168,73 @@ async def _crear_combate(
 
     latidos = max(1, plan.latidos)
 
-    combate = BoxCombate(
-        guild_id=guild_id,
-        canal_id=canal_id,
-        modo=modo,
-        retador_id=retador_id,
-        contrincante_id=contrincante_id,
-        semilla=semilla,
-        plan=plan.a_json(),
-        iniciado_en=ahora,
-        latido_segundos=BOX_COMBATE_TICK_SEGUNDOS,
-        latidos_totales=latidos,
-        fin_narracion_en=(
-            ahora + timedelta(seconds=latidos * BOX_COMBATE_TICK_SEGUNDOS)
+    fila = db.execute(
+        """
+        INSERT INTO box_combates (
+            guild_id,
+            canal_id,
+            modo,
+            retador_id,
+            contrincante_id,
+            semilla,
+            plan,
+            iniciado_en,
+            latido_segundos,
+            latidos_totales,
+            fin_narracion_en,
+            estado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            guild_id,
+            canal_id,
+            modo,
+            retador_id,
+            contrincante_id,
+            semilla,
+            plan.a_json(),
+            ahora.isoformat(),
+            BOX_COMBATE_TICK_SEGUNDOS,
+            latidos,
+            (
+                ahora + timedelta(seconds=latidos * BOX_COMBATE_TICK_SEGUNDOS)
+            ).isoformat(),
+            ESTADO_VIVO,
         ),
-        estado=ESTADO_VIVO,
     )
-    sesion.add(combate)
-    await sesion.flush()
 
-    return combate.id
+    return fila.lastrowid
 
 
-async def _hay_combate_vivo(sesion, guild_id: int | None):
+def _hay_combate_vivo(db, guild_id: int | None):
     """Fila del combate en curso, leída dentro de una transacción abierta."""
 
-    condiciones = [BoxCombate.estado == ESTADO_VIVO]
+    if guild_id is None:
+        return db.execute(
+            """
+            SELECT id, guild_id, retador_id, contrincante_id, modo
+            FROM box_combates
+            WHERE estado = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (ESTADO_VIVO,),
+        ).fetchone()
 
-    if guild_id is not None:
-        condiciones.append(BoxCombate.guild_id == guild_id)
-
-    return (await sesion.execute(
-        select(
-            BoxCombate.id,
-            BoxCombate.guild_id,
-            BoxCombate.retador_id,
-            BoxCombate.contrincante_id,
-            BoxCombate.modo,
-        )
-        .where(*condiciones)
-        .order_by(BoxCombate.id.desc())
-        .limit(1)
-    )).first()
+    return db.execute(
+        """
+        SELECT id, guild_id, retador_id, contrincante_id, modo
+        FROM box_combates
+        WHERE estado = ?
+        AND guild_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (ESTADO_VIVO, guild_id),
+    ).fetchone()
 
 
-async def combate_en_curso(guild_id: int | None = None):
+def _sqlite_combate_en_curso(guild_id: int | None = None):
     """El único combate que puede haber a la vez, o ``None``.
 
     El candado existe porque el canal de Box es uno: dos peleas narrándose
@@ -2730,9 +3244,9 @@ async def combate_en_curso(guild_id: int | None = None):
     por servidor.
     """
 
-    async with crear_sesion() as sesion:
-        fila = await _hay_combate_vivo(
-            sesion,
+    with conectar_db() as db:
+        fila = _hay_combate_vivo(
+            db,
             None if BOX_COMBATE_UNICO_GLOBAL else guild_id,
         )
 
@@ -2748,7 +3262,7 @@ async def combate_en_curso(guild_id: int | None = None):
     }
 
 
-async def obtener_canticos(guild_id: int):
+def _sqlite_obtener_canticos(guild_id: int):
     """Si el servidor consintió los cánticos que nombran miembros reales.
 
     ``None`` significa "nadie decidió todavía", y el narrador cae al valor de
@@ -2758,12 +3272,11 @@ async def obtener_canticos(guild_id: int):
     cuatrocientos, no.
     """
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(BoxConfigGuild.canticos).where(
-                BoxConfigGuild.guild_id == guild_id
-            )
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            "SELECT canticos FROM box_config_guild WHERE guild_id = ?",
+            (guild_id,),
+        ).fetchone()
 
     if fila is None or fila[0] is None:
         return None
@@ -2771,7 +3284,7 @@ async def obtener_canticos(guild_id: int):
     return bool(fila[0])
 
 
-async def fijar_canticos(
+def _sqlite_fijar_canticos(
     guild_id: int,
     activado: bool,
     moderador_id: int,
@@ -2779,58 +3292,65 @@ async def fijar_canticos(
 ) -> None:
     """Guarda la decisión del servidor sobre los cánticos."""
 
-    async with crear_sesion() as sesion:
-        config = await sesion.get(BoxConfigGuild, guild_id)
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_config_guild (
+                guild_id,
+                canticos,
+                actualizado_en,
+                actualizado_por
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                canticos = excluded.canticos,
+                actualizado_en = excluded.actualizado_en,
+                actualizado_por = excluded.actualizado_por
+            """,
+            (
+                guild_id,
+                int(bool(activado)),
+                ahora.isoformat(),
+                moderador_id,
+            ),
+        )
+        db.commit()
 
-        if config is None:
-            sesion.add(
-                BoxConfigGuild(
-                    guild_id=guild_id,
-                    canticos=int(bool(activado)),
-                    actualizado_en=ahora,
-                    actualizado_por=moderador_id,
-                )
-            )
-        else:
-            config.canticos = int(bool(activado))
-            config.actualizado_en = ahora
-            config.actualizado_por = moderador_id
 
-        await sesion.commit()
-
-
-async def obtener_combates_vivos(ahora: datetime, guild_id: int | None = None):
+def _sqlite_obtener_combates_vivos(ahora: datetime, guild_id: int | None = None):
     """Combates en vivo, listos para el latido del narrador.
 
     Se devuelven también los que ya vencieron: hay que cerrarlos y asentar el
     resultado, si no quedarían marcados como vivos para siempre.
     """
 
-    condiciones = [BoxCombate.estado == ESTADO_VIVO]
+    consulta = """
+        SELECT
+            id,
+            guild_id,
+            canal_id,
+            modo,
+            retador_id,
+            contrincante_id,
+            plan,
+            iniciado_en,
+            latido_segundos,
+            latidos_totales,
+            fin_narracion_en,
+            estado,
+            mensaje_id
+        FROM box_combates
+        WHERE estado = ?
+    """
+    parametros: list = [ESTADO_VIVO]
 
     if guild_id is not None:
-        condiciones.append(BoxCombate.guild_id == guild_id)
+        consulta += " AND guild_id = ?"
+        parametros.append(guild_id)
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxCombate.id,
-                BoxCombate.guild_id,
-                BoxCombate.canal_id,
-                BoxCombate.modo,
-                BoxCombate.retador_id,
-                BoxCombate.contrincante_id,
-                BoxCombate.plan,
-                BoxCombate.iniciado_en,
-                BoxCombate.latido_segundos,
-                BoxCombate.latidos_totales,
-                BoxCombate.fin_narracion_en,
-                BoxCombate.estado,
-                BoxCombate.mensaje_id,
-            )
-            .where(*condiciones)
-            .order_by(BoxCombate.iniciado_en)
-        )).all()
+    consulta += " ORDER BY iniciado_en"
+
+    with conectar_db() as db:
+        filas = db.execute(consulta, parametros).fetchall()
 
     combatientes = []
 
@@ -2844,10 +3364,10 @@ async def obtener_combates_vivos(ahora: datetime, guild_id: int | None = None):
                 "retador_id": fila[4],
                 "contrincante_id": fila[5],
                 "plan": fila[6],
-                "iniciado_en": fila[7],
+                "iniciado_en": datetime.fromisoformat(fila[7]),
                 "latido_segundos": fila[8],
                 "latidos_totales": fila[9],
-                "fin_narracion_en": fila[10],
+                "fin_narracion_en": datetime.fromisoformat(fila[10]),
                 "estado": fila[11],
                 "mensaje_id": fila[12],
             }
@@ -2856,7 +3376,7 @@ async def obtener_combates_vivos(ahora: datetime, guild_id: int | None = None):
     return combatientes
 
 
-def latido_de(combate: dict, ahora: datetime) -> int:
+def _sqlite_latido_de(combate: dict, ahora: datetime) -> int:
     """Cuántos latidos pasaron desde que empezó el combate."""
 
     segundos = (ahora - combate["iniciado_en"]).total_seconds()
@@ -2866,34 +3386,36 @@ def latido_de(combate: dict, ahora: datetime) -> int:
     return max(0, int(segundos // max(1, combate["latido_segundos"])))
 
 
-async def asaltos_publicados(combate_id: int) -> set:
+def _sqlite_asaltos_publicados(combate_id: int) -> set:
     """Asaltos que ya tienen su mensaje en el canal."""
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(BoxCombateAsalto.asalto).where(
-                BoxCombateAsalto.combate_id == combate_id
+    with conectar_db() as db:
+        return {
+            fila[0]
+            for fila in db.execute(
+                "SELECT asalto FROM box_combates_asaltos WHERE combate_id = ?",
+                (combate_id,),
             )
-        )).all()
-
-    return {fila[0] for fila in filas}
+        }
 
 
-async def mensaje_de_asalto(combate_id: int, asalto: int):
+def _sqlite_mensaje_de_asalto(combate_id: int, asalto: int):
     """Mensaje del asalto, si ya fue publicado."""
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(BoxCombateAsalto.mensaje_id).where(
-                BoxCombateAsalto.combate_id == combate_id,
-                BoxCombateAsalto.asalto == asalto,
-            )
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT mensaje_id
+            FROM box_combates_asaltos
+            WHERE combate_id = ? AND asalto = ?
+            """,
+            (combate_id, asalto),
+        ).fetchone()
 
     return fila[0] if fila else None
 
 
-async def reclamar_asalto(combate_id: int, asalto: int, ahora: datetime) -> bool:
+def _sqlite_reclamar_asalto(combate_id: int, asalto: int, ahora: datetime) -> bool:
     """Marca el asalto como propio; ``False`` si ya lo estaba publicando otro.
 
     Es el seguro contra dobles envíos: el tick, un retry de Discord o el
@@ -2901,25 +3423,23 @@ async def reclamar_asalto(combate_id: int, asalto: int, ahora: datetime) -> bool
     de los tres gana la carrera.
     """
 
-    async with crear_sesion() as sesion:
-        sesion.add(
-            BoxCombateAsalto(
-                combate_id=combate_id,
-                asalto=asalto,
-                publicado_en=ahora,
-            )
+    with conectar_db() as db:
+        cursor = db.execute(
+            """
+            INSERT OR IGNORE INTO box_combates_asaltos (
+                combate_id,
+                asalto,
+                publicado_en
+            ) VALUES (?, ?, ?)
+            """,
+            (combate_id, asalto, ahora.isoformat()),
         )
+        db.commit()
 
-        try:
-            await sesion.commit()
-        except IntegrityError:
-            await sesion.rollback()
-            return False
-
-    return True
+        return cursor.rowcount == 1
 
 
-async def registrar_mensaje_asalto(
+def _sqlite_registrar_mensaje_asalto(
     combate_id: int,
     asalto: int,
     mensaje_id: int,
@@ -2927,42 +3447,36 @@ async def registrar_mensaje_asalto(
 ):
     """Guarda el mensaje de un asalto (o lo reemplaza si fue borrado)."""
 
-    async with crear_sesion() as sesion:
-        fila = await sesion.get(
-            BoxCombateAsalto,
-            (combate_id, asalto),
+    with conectar_db() as db:
+        db.execute(
+            """
+            INSERT INTO box_combates_asaltos (
+                combate_id,
+                asalto,
+                mensaje_id,
+                publicado_en
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(combate_id, asalto) DO UPDATE SET
+                mensaje_id = excluded.mensaje_id,
+                publicado_en = excluded.publicado_en
+            """,
+            (combate_id, asalto, mensaje_id, ahora.isoformat()),
         )
-
-        if fila is None:
-            sesion.add(
-                BoxCombateAsalto(
-                    combate_id=combate_id,
-                    asalto=asalto,
-                    mensaje_id=mensaje_id,
-                    publicado_en=ahora,
-                )
-            )
-        else:
-            fila.mensaje_id = mensaje_id
-            fila.publicado_en = ahora
-
-        await sesion.commit()
+        db.commit()
 
 
-async def actualizar_mensaje_combate(combate_id: int, mensaje_id: int):
+def _sqlite_actualizar_mensaje_combate(combate_id: int, mensaje_id: int):
     """Recuerda el último mensaje del combate, para poder editarlo."""
 
-    async with crear_sesion() as sesion:
-        await sesion.execute(
-            update(BoxCombate)
-            .where(BoxCombate.id == combate_id)
-            .values(mensaje_id=mensaje_id)
-            .execution_options(synchronize_session=False)
+    with conectar_db() as db:
+        db.execute(
+            "UPDATE box_combates SET mensaje_id = ? WHERE id = ?",
+            (mensaje_id, combate_id),
         )
-        await sesion.commit()
+        db.commit()
 
 
-async def cerrar_combate(
+def _sqlite_cerrar_combate(
     combate_id: int,
     estado: str,
     ahora: datetime,
@@ -2970,20 +3484,21 @@ async def cerrar_combate(
 ):
     """Cierra un combate: ya no se narra más."""
 
-    async with crear_sesion() as sesion:
-        combate = await sesion.get(BoxCombate, combate_id)
+    with conectar_db() as db:
+        db.execute(
+            """
+            UPDATE box_combates
+            SET estado = ?,
+                terminado_en = ?,
+                resumen = COALESCE(?, resumen)
+            WHERE id = ?
+            """,
+            (estado, ahora.isoformat(), resumen, combate_id),
+        )
+        db.commit()
 
-        if combate is not None:
-            combate.estado = estado
-            combate.terminado_en = ahora
 
-            if resumen is not None:
-                combate.resumen = resumen
-
-            await sesion.commit()
-
-
-async def tiene_accion_activa(guild_id: int, user_id: int) -> bool:
+def _sqlite_tiene_accion_activa(guild_id: int, user_id: int) -> bool:
     """Indica si el usuario sigue con la acción del desafío en curso.
 
     El narrador lo consulta en cada latido: si un administrador finalizó o
@@ -2991,44 +3506,44 @@ async def tiene_accion_activa(guild_id: int, user_id: int) -> bool:
     para siempre una pelea que ya no existe.
     """
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(1).where(
-                BoxAccion.guild_id == guild_id,
-                BoxAccion.user_id == user_id,
-            )
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT 1
+            FROM box_acciones
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id),
+        ).fetchone()
 
     return fila is not None
 
 
-async def obtener_combate_en_curso(guild_id: int, user_id: int):
+def _sqlite_obtener_combate_en_curso(guild_id: int, user_id: int):
     """Combate vivo en el que participa el usuario, para /box combate."""
 
-    async with crear_sesion() as sesion:
-        fila = (await sesion.execute(
-            select(
-                BoxCombate.id,
-                BoxCombate.plan,
-                BoxCombate.iniciado_en,
-                BoxCombate.latido_segundos,
-                BoxCombate.latidos_totales,
-                BoxCombate.modo,
-                BoxCombate.retador_id,
-                BoxCombate.contrincante_id,
-                BoxCombate.fin_narracion_en,
-            )
-            .where(
-                BoxCombate.guild_id == guild_id,
-                BoxCombate.estado == ESTADO_VIVO,
-                or_(
-                    BoxCombate.retador_id == user_id,
-                    BoxCombate.contrincante_id == user_id,
-                ),
-            )
-            .order_by(BoxCombate.iniciado_en.desc())
-            .limit(1)
-        )).first()
+    with conectar_db() as db:
+        fila = db.execute(
+            """
+            SELECT
+                id,
+                plan,
+                iniciado_en,
+                latido_segundos,
+                latidos_totales,
+                modo,
+                retador_id,
+                contrincante_id,
+                fin_narracion_en
+            FROM box_combates
+            WHERE guild_id = ?
+            AND estado = ?
+            AND (retador_id = ? OR contrincante_id = ?)
+            ORDER BY iniciado_en DESC
+            LIMIT 1
+            """,
+            (guild_id, ESTADO_VIVO, user_id, user_id),
+        ).fetchone()
 
     if fila is None:
         return None
@@ -3036,7 +3551,7 @@ async def obtener_combate_en_curso(guild_id: int, user_id: int):
     return {
         "id": fila[0],
         "plan": fila[1],
-        "iniciado_en": fila[2],
+        "iniciado_en": datetime.fromisoformat(fila[2]),
         "latido_segundos": fila[3],
         "latidos_totales": fila[4],
         "modo": fila[5],
@@ -3046,28 +3561,31 @@ async def obtener_combate_en_curso(guild_id: int, user_id: int):
         "guild_id": guild_id,
         "retador_id": fila[6],
         "contrincante_id": fila[7],
-        "fin_narracion_en": fila[8],
+        "fin_narracion_en": datetime.fromisoformat(fila[8]),
     }
 
 
-async def ultimos_combates(guild_id: int, limite: int = 5):
+def _sqlite_ultimos_combates(guild_id: int, limite: int = 5):
     """Últimos combates narrados del servidor, para el historial."""
 
-    async with crear_sesion() as sesion:
-        filas = (await sesion.execute(
-            select(
-                BoxCombate.id,
-                BoxCombate.modo,
-                BoxCombate.retador_id,
-                BoxCombate.contrincante_id,
-                BoxCombate.estado,
-                BoxCombate.resumen,
-                BoxCombate.fin_narracion_en,
-            )
-            .where(BoxCombate.guild_id == guild_id)
-            .order_by(BoxCombate.id.desc())
-            .limit(limite)
-        )).all()
+    with conectar_db() as db:
+        filas = db.execute(
+            """
+            SELECT
+                id,
+                modo,
+                retador_id,
+                contrincante_id,
+                estado,
+                resumen,
+                fin_narracion_en
+            FROM box_combates
+            WHERE guild_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (guild_id, limite),
+        ).fetchall()
 
     return [
         {
@@ -3081,3 +3599,269 @@ async def ultimos_combates(guild_id: int, limite: int = 5):
         }
         for fila in filas
     ]
+
+
+# Adaptadores async: el SQLite sincrónico se ejecuta fuera del event loop.
+
+def _fechas_con_zona(valor):
+    if isinstance(valor, datetime) and valor.tzinfo is None:
+        return valor.replace(tzinfo=TIMEZONE)
+    return valor
+
+
+async def _ejecutar_sqlite(funcion, *args, **kwargs):
+    # Las fechas ingenuas se interpretan en la zona configurada, como antes.
+    return await asyncio.to_thread(
+        funcion,
+        *(_fechas_con_zona(valor) for valor in args),
+        **{clave: _fechas_con_zona(valor) for clave, valor in kwargs.items()},
+    )
+
+
+async def inicializar_db():
+    await _crear_esquema()
+
+@wraps(_sqlite_iniciar_accion)
+async def iniciar_accion(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_iniciar_accion, *args, **kwargs)
+
+@wraps(_sqlite_reducir_probabilidad_lesion_inactivos)
+async def reducir_probabilidad_lesion_inactivos(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_reducir_probabilidad_lesion_inactivos, *args, **kwargs)
+
+@wraps(_sqlite_comprar_tratamiento)
+async def comprar_tratamiento(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_comprar_tratamiento, *args, **kwargs)
+
+@wraps(_sqlite_usar_suministro)
+async def usar_suministro(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_usar_suministro, *args, **kwargs)
+
+@wraps(_sqlite_obtener_saldo)
+async def obtener_saldo(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_saldo, *args, **kwargs)
+
+@wraps(_sqlite_obtener_estadisticas_box)
+async def obtener_estadisticas_box(*args, **kwargs):
+    resultado = await _ejecutar_sqlite(_sqlite_obtener_estadisticas_box, *args, **kwargs)
+    resultado["lesionado_hasta"] = _dt(resultado["lesionado_hasta"])
+    return resultado
+
+@wraps(_sqlite_obtener_nivel_mejora)
+async def obtener_nivel_mejora(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_nivel_mejora, *args, **kwargs)
+
+@wraps(_sqlite_comprar_mejora)
+async def comprar_mejora(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_comprar_mejora, *args, **kwargs)
+
+@wraps(_sqlite_obtener_bonus_experiencia_sponsor)
+async def obtener_bonus_experiencia_sponsor(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_bonus_experiencia_sponsor, *args, **kwargs)
+
+@wraps(_sqlite_obtener_sponsor_para_promocion)
+async def obtener_sponsor_para_promocion(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_sponsor_para_promocion, *args, **kwargs)
+
+@wraps(_sqlite_procesar_pagos_sponsors)
+async def procesar_pagos_sponsors(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_procesar_pagos_sponsors, *args, **kwargs)
+
+@wraps(_sqlite_procesar_sponsors_medicos)
+async def procesar_sponsors_medicos(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_procesar_sponsors_medicos, *args, **kwargs)
+
+@wraps(_sqlite_completar_acciones_vencidas)
+async def completar_acciones_vencidas(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_completar_acciones_vencidas, *args, **kwargs)
+
+@wraps(_sqlite_admin_completar_acciones_vencidas)
+async def admin_completar_acciones_vencidas(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_completar_acciones_vencidas, *args, **kwargs)
+
+@wraps(_sqlite_admin_finalizar_accion)
+async def admin_finalizar_accion(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_finalizar_accion, *args, **kwargs)
+
+@wraps(_sqlite_crear_desafio)
+async def crear_desafio(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_crear_desafio, *args, **kwargs)
+
+@wraps(_sqlite_registrar_mensaje_desafio)
+async def registrar_mensaje_desafio(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_registrar_mensaje_desafio, *args, **kwargs)
+
+@wraps(_sqlite_desafios_pendientes)
+async def desafios_pendientes(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_desafios_pendientes, *args, **kwargs)
+
+@wraps(_sqlite_desafio_registrado)
+async def desafio_registrado(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_desafio_registrado, *args, **kwargs)
+
+@wraps(_sqlite_cancelar_desafio)
+async def cancelar_desafio(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_cancelar_desafio, *args, **kwargs)
+
+@wraps(_sqlite_aceptar_desafio)
+async def aceptar_desafio(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_aceptar_desafio, *args, **kwargs)
+
+@wraps(_sqlite_obtener_top_desafios)
+async def obtener_top_desafios(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_top_desafios, *args, **kwargs)
+
+@wraps(_sqlite_preparar_bot_para_desafio)
+async def preparar_bot_para_desafio(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_preparar_bot_para_desafio, *args, **kwargs)
+
+@wraps(_sqlite_obtener_equipo)
+async def obtener_equipo(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_equipo, *args, **kwargs)
+
+@wraps(_sqlite_actualizar_equipo)
+async def actualizar_equipo(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_actualizar_equipo, *args, **kwargs)
+
+@wraps(_sqlite_comprar_equipamiento_progresivo)
+async def comprar_equipamiento_progresivo(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_comprar_equipamiento_progresivo, *args, **kwargs)
+
+@wraps(_sqlite_admin_modificar_dinero)
+async def admin_modificar_dinero(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_modificar_dinero, *args, **kwargs)
+
+@wraps(_sqlite_admin_modificar_experiencia)
+async def admin_modificar_experiencia(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_modificar_experiencia, *args, **kwargs)
+
+@wraps(_sqlite_admin_modificar_probabilidad_lesion)
+async def admin_modificar_probabilidad_lesion(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_modificar_probabilidad_lesion, *args, **kwargs)
+
+@wraps(_sqlite_admin_dar_sponsor)
+async def admin_dar_sponsor(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_dar_sponsor, *args, **kwargs)
+
+@wraps(_sqlite_admin_quitar_sponsor)
+async def admin_quitar_sponsor(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_quitar_sponsor, *args, **kwargs)
+
+@wraps(_sqlite_admin_reset_usuario)
+async def admin_reset_usuario(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_reset_usuario, *args, **kwargs)
+
+@wraps(_sqlite_admin_obtener_top_box)
+async def admin_obtener_top_box(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_obtener_top_box, *args, **kwargs)
+
+@wraps(_sqlite_admin_obtener_estadisticas_box)
+async def admin_obtener_estadisticas_box(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_admin_obtener_estadisticas_box, *args, **kwargs)
+
+@wraps(_sqlite_combate_en_curso)
+async def combate_en_curso(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_combate_en_curso, *args, **kwargs)
+
+@wraps(_sqlite_obtener_canticos)
+async def obtener_canticos(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_canticos, *args, **kwargs)
+
+@wraps(_sqlite_fijar_canticos)
+async def fijar_canticos(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_fijar_canticos, *args, **kwargs)
+
+@wraps(_sqlite_obtener_combates_vivos)
+async def obtener_combates_vivos(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_combates_vivos, *args, **kwargs)
+
+latido_de = _sqlite_latido_de
+
+@wraps(_sqlite_asaltos_publicados)
+async def asaltos_publicados(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_asaltos_publicados, *args, **kwargs)
+
+@wraps(_sqlite_mensaje_de_asalto)
+async def mensaje_de_asalto(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_mensaje_de_asalto, *args, **kwargs)
+
+@wraps(_sqlite_reclamar_asalto)
+async def reclamar_asalto(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_reclamar_asalto, *args, **kwargs)
+
+@wraps(_sqlite_registrar_mensaje_asalto)
+async def registrar_mensaje_asalto(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_registrar_mensaje_asalto, *args, **kwargs)
+
+@wraps(_sqlite_actualizar_mensaje_combate)
+async def actualizar_mensaje_combate(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_actualizar_mensaje_combate, *args, **kwargs)
+
+@wraps(_sqlite_cerrar_combate)
+async def cerrar_combate(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_cerrar_combate, *args, **kwargs)
+
+@wraps(_sqlite_tiene_accion_activa)
+async def tiene_accion_activa(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_tiene_accion_activa, *args, **kwargs)
+
+@wraps(_sqlite_obtener_combate_en_curso)
+async def obtener_combate_en_curso(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_obtener_combate_en_curso, *args, **kwargs)
+
+@wraps(_sqlite_ultimos_combates)
+async def ultimos_combates(*args, **kwargs):
+    return await _ejecutar_sqlite(_sqlite_ultimos_combates, *args, **kwargs)
+
+
+def _dt(valor):
+    return _fechas_con_zona(datetime.fromisoformat(valor)) if isinstance(valor, str) else valor
+
+
+def _fila_fechas(fila, indices):
+    if fila is None:
+        return None
+    valores = list(fila)
+    for indice in indices:
+        valores[indice] = _dt(valores[indice])
+    return tuple(valores)
+
+
+async def obtener_accion_activa(*args, **kwargs):
+    return _fila_fechas(await _ejecutar_sqlite(_sqlite_obtener_accion_activa, *args, **kwargs), (1,))
+
+
+async def obtener_estado_box(*args, **kwargs):
+    return _fila_fechas(await _ejecutar_sqlite(_sqlite_obtener_estado_box, *args, **kwargs), (1,))
+
+
+async def obtener_sponsors_activos(*args, **kwargs):
+    filas = await _ejecutar_sqlite(_sqlite_obtener_sponsors_activos, *args, **kwargs)
+    return [_fila_fechas(fila, (2, 3, 4, 5)) for fila in filas]
+
+
+async def admin_obtener_info_usuario(*args, **kwargs):
+    info = await _ejecutar_sqlite(_sqlite_admin_obtener_info_usuario, *args, **kwargs)
+    info["lesionado_hasta"] = _dt(info["lesionado_hasta"])
+    info["accion"] = _fila_fechas(info["accion"], (1, 2))
+    info["sponsors"] = [_fila_fechas(fila, (2, 3, 4, 5)) for fila in info["sponsors"]]
+    return info
+
+
+async def admin_curar_usuario(*args, **kwargs):
+    resultado = await _ejecutar_sqlite(_sqlite_admin_curar_usuario, *args, **kwargs)
+    return _fila_fechas(resultado, (1,))
+
+
+async def admin_cancelar_accion(*args, **kwargs):
+    return _fila_fechas(await _ejecutar_sqlite(_sqlite_admin_cancelar_accion, *args, **kwargs), (1, 2))
+
+
+async def admin_obtener_historial_desafios(*args, **kwargs):
+    filas = await _ejecutar_sqlite(_sqlite_admin_obtener_historial_desafios, *args, **kwargs)
+    return [_fila_fechas(fila, (0,)) for fila in filas]
+
+
+async def admin_obtener_lesionados(*args, **kwargs):
+    filas = await _ejecutar_sqlite(_sqlite_admin_obtener_lesionados, *args, **kwargs)
+    return [_fila_fechas(fila, (2,)) for fila in filas]

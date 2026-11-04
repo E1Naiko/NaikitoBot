@@ -409,6 +409,7 @@ class BotFalso:
 
 
 async def test_sincronizar_carga_lo_perdido_en_todos_los_canales(cog, monkeypatch):
+    monkeypatch.setattr("config.LAHORA_IMPORTAR_HISTORIAL_INICIAL", True)
     monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
 
     canal = CanalConHistorial([
@@ -428,6 +429,7 @@ async def test_sincronizar_carga_lo_perdido_en_todos_los_canales(cog, monkeypatc
 
 
 async def test_sincronizar_dos_veces_no_repite_lo_ya_visto(cog, monkeypatch):
+    monkeypatch.setattr("config.LAHORA_IMPORTAR_HISTORIAL_INICIAL", True)
     monkeypatch.setattr("config.LAHORA_CANALES_ID", {CANAL_420})
 
     canal = CanalConHistorial([

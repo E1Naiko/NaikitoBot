@@ -27,34 +27,25 @@ ese paquete el bot falla al arrancar con
 
 ## Base de datos
 
-La capa de datos usa SQLAlchemy asíncrono con modelos ORM declarativos
-(`modules/*/models.py`): el esquema lo crea el bot al arrancar con
-`Base.metadata.create_all`, sin migraciones manuales.
+El bot usa un archivo **SQLite**. Por defecto es `naikito-v2.db`; podés
+cambiar la ruta con `DATABASE` en el `.env`. La ruta debe apuntar a un
+almacenamiento persistente y escribible. Se crea un esquema nuevo al iniciar;
+no se importan automáticamente los datos anteriores. Si el archivo indicado
+ya existe, se reutiliza: elegí un archivo nuevo para empezar de cero.
+En una base nueva, la sincronización 420 empieza desde el primer chequeo y
+no recupera automáticamente mensajes anteriores. Para recuperarlos a pedido,
+usá `/admin 420 importar`; también podés configurar
+`LAHORA_IMPORTAR_HISTORIAL_INICIAL=1` antes del primer chequeo.
 
-- **Producción**: PostgreSQL vía `asyncpg`. Se configura con `DATABASE_URL`
-  en el `.env`:
+Eliminá `DATABASE_URL` del panel y del `.env`: si tiene un valor, el bot se
+detendrá con un mensaje claro para evitar conectarse silenciosamente a una
+base distinta. Mantené respaldos del archivo SQLite y usá una sola instancia
+del bot con ese archivo. Detené el bot antes de copiar o restaurar la base;
+asegurate de que Wispbyte conserve el archivo entre reinicios y despliegues.
 
-  ```dotenv
-  DATABASE_URL=postgresql+asyncpg://usuario:clave@host:5432/naikito
-  ```
-
-- **Desarrollo y pruebas**: sin `DATABASE_URL` el bot cae a SQLite
-  (`sqlite+aiosqlite:///{DATABASE}`), que es lo que usan las pruebas.
-
-Para pasar una instalación vieja (el archivo `naikito.db` de SQLite) a la
-base nueva:
-
-```text
-# 1. Simular para ver qué se copiaría
-python -m scripts.migrar_sqlite_a_postgres naikito.db --solo-ver
-
-# 2. Migrar (DATABASE_URL apunta a la base nueva)
-python -m scripts.migrar_sqlite_a_postgres naikito.db
-```
-
-El script copia tabla por tabla en orden de dependencias, convierte las
-fechas guardadas como texto a tipos nativos, aplica los defaults del modelo a
-columnas que la base vieja no tenía, y verifica las cuentas al terminar.
+La persistencia usa consultas SQLite directas sin SQLAlchemy. El esquema está
+en `core/esquema.sql`; Madrugue, 420 y SeptSinFP usan `aiosqlite`, y las
+operaciones SQLite de Box se ejecutan fuera del event loop.
 
 ## Pruebas
 
@@ -269,14 +260,30 @@ canal 420 configurado, en todos los servidores donde está, desde el último
 momento que se chequeó (en vivo o por una sincronización anterior) y carga
 lo que se haya perdido, con las mismas reglas que el registro en vivo.
 `/admin 420 sincronizar` dispara manualmente esa misma recuperación sin
-esperar a un reinicio. Es más liviana que `importar`: salvo la primera
-revisión de un canal, no vuelve a recorrer todo el historial.
+esperar a un reinicio. Es más liviana que `importar`: por defecto empieza desde el primer
+chequeo y después revisa solo lo ocurrido desde el checkpoint. Si se configura
+`LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`, la primera revisión recorre todo el
+historial.
 
 #### Límites de Discord y Cloudflare (HTTP 429)
 
-Un `429` cuya respuesta contiene HTML y `Cloudflare Error 1015` es un
-bloqueo temporal de la IP de salida, distinto de un error de permisos o de
-la base de datos. El registro de un 420 se guarda **antes** de reaccionar:
+Un `429` cuya respuesta contiene HTML y `Cloudflare Error 1015` indica un
+bloqueo temporal al acceder a Discord, posiblemente relacionado con la IP de
+salida compartida, distinto de un error de permisos o de la base de datos.
+Si ocurre antes de iniciar la configuración del bot, se cierra el cliente y
+se vuelve a intentar con uno nuevo: se espera al menos 5 minutos, duplicando
+la espera en cada fallo hasta una hora y respetando esperas mayores indicadas
+por el servidor. El bot permanece offline mientras espera. Reiniciarlo durante
+la espera comienza otro intento inmediatamente y puede prolongar el bloqueo.
+Los errores posteriores al inicio de la configuración no se reintentan de esta
+forma para no repetir tareas que ya podrían estar activas.
+
+En Wispbyte, detené el bot y evitá los reinicios automáticos mientras esperás
+que termine el bloqueo. Luego iniciá una sola instancia. Si sigue ocurriendo,
+pedile al hosting que revise la IP de salida compartida; podés proporcionarles
+el Ray ID y la hora del error. El tiempo de espera no garantiza el desbloqueo.
+
+El registro de un 420 se guarda **antes** de reaccionar:
 si falta la reacción 🌿, sus puntos pueden estar guardados igualmente.
 Consultalos con `/420_stats`; no hace falta borrar ni volver a agregar el
 registro. Un `ya_registrado` con posición y puntos en cero informa que se

@@ -221,7 +221,7 @@ class AccionesMixin:
 
         # Validar y registrar una acción requiere varias operaciones de base.
         # Se confirma primero para no perder la ventana de 3 segundos de
-        # Discord si PostgreSQL está lento. También cubre descanso.
+        # Discord si la base de datos está lenta. También cubre descanso.
         if not interaction.response.is_done():
             await interaction.response.defer()
 

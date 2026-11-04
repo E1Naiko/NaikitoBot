@@ -2,12 +2,10 @@
 
 Formato: ``NaikitoBot{mayor}.{funcion}.{revision}.{YYYYMMDD}``
 
-* ``{mayor}``: versión mayor del bot, fija (``1``).
+* ``{mayor}``: versión mayor del bot, fija (``2``).
 * ``{funcion}``: número de la última función/sistema implementado. Se
   sube a mano (``VERSION_FUNCION`` abajo) cada vez que se agrega un
-  sistema o una función nueva importante. Ahora mismo es la 5ª: la
-  sincronización automática del canal 420 al reconectar
-  (``core/lahora_sync.py``).
+  sistema o una función nueva importante. Se reinicia al comenzar una nueva versión mayor.
 * ``{revision}``: ajustes sobre esa misma función. Arranca en ``0`` y se
   sube a mano (``VERSION_REVISION``) con cada corrección o retoque menor
   que no agregue una función nueva; vuelve a ``0`` cuando se sube
@@ -26,12 +24,12 @@ __all__ = ["version_bot"]
 
 # Subir a mano con cada función/sistema nuevo importante (y resetear
 # VERSION_REVISION a 0 al subir este número).
-VERSION_FUNCION = 5
+VERSION_FUNCION = 0
 
 # Subir a mano con cada ajuste menor sobre la última función.
-VERSION_REVISION = 1
+VERSION_REVISION = 0
 
-_VERSION_MAYOR = 1
+_VERSION_MAYOR = 2
 _RAIZ_PROYECTO = Path(__file__).resolve().parent.parent
 
 

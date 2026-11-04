@@ -6,14 +6,12 @@ import io
 
 import discord
 from discord import app_commands
-from sqlalchemy import select
 
 from core.mensajes import responder, responder_texto
-from core.database import crear_sesion
 from commands.admin.base import solo_admin, solo_servidor
 from config import MADRUGUE_PUNTOS_100, MADRUGUE_PUNTOS_25
 from core.utils import ahora
-from modules.madrugue.models import RegistroMadrugue
+from modules.madrugue.database import importar_registros
 from modules.madrugue.services import (
     calcular_multiplicador_horario,
     calcular_racha_para_nuevo_registro,
@@ -766,28 +764,7 @@ class MadrugueAdminMixin:
             if len(filas) > 500:
                 raise ValueError("el archivo no puede contener más de 500 registros")
 
-            nuevos = repetidos = 0
-            async with crear_sesion() as sesion:
-                for user_id, username, fecha, hora, base, multiplicador, puntos in filas:
-                    existente = (await sesion.execute(select(RegistroMadrugue).where(
-                        RegistroMadrugue.guild_id == interaction.guild.id,
-                        RegistroMadrugue.user_id == user_id,
-                        RegistroMadrugue.fecha == fecha,
-                    ))).scalar_one_or_none()
-                    if existente:
-                        valores = (existente.username, existente.hora, existente.puntos_base, existente.multiplicador, existente.puntos_finales)
-                        esperados = (username, hora, base, multiplicador, puntos)
-                        if valores != esperados:
-                            raise ValueError(f"conflicto con el registro existente de {user_id} del {fecha}")
-                        repetidos += 1
-                        continue
-                    sesion.add(RegistroMadrugue(
-                        guild_id=interaction.guild.id, user_id=user_id, username=username,
-                        fecha=fecha, hora=hora, puntos_base=base,
-                        multiplicador=multiplicador, puntos_finales=puntos,
-                    ))
-                    nuevos += 1
-                await sesion.commit()
+            nuevos, repetidos = await importar_registros(interaction.guild.id, filas)
         except (UnicodeDecodeError, ValueError) as error:
             await responder_texto(interaction, f"❌ No se importó nada: {error}", ephemeral=True)
             return

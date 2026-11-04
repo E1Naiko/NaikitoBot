@@ -1,6 +1,6 @@
 """Desafíos entre usuarios: sparring y pelea, con su vista de botones."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import discord
 from discord import app_commands
@@ -438,20 +438,15 @@ class DesafiosMixin:
             # Asegurar que no quede un desafío pendiente duplicado previo
             # (preparar_bot ya limpia, pero reforzamos para el par exacto)
             try:
-                from sqlalchemy import delete
+                from core.sqlite import conectar
 
-                from core.database import crear_sesion
-                from modules.box.models import BoxDesafio
-
-                async with crear_sesion() as _sesion:
-                    await _sesion.execute(
-                        delete(BoxDesafio).where(
-                            BoxDesafio.guild_id == interaction.guild.id,
-                            BoxDesafio.retador_id == interaction.user.id,
-                            BoxDesafio.contrincante_id == contrincante.id,
-                        )
+                async with conectar() as conexion:
+                    await conexion.execute(
+                        "DELETE FROM box_desafios WHERE guild_id = ? "
+                        "AND retador_id = ? AND contrincante_id = ?",
+                        (interaction.guild.id, interaction.user.id, contrincante.id),
                     )
-                    await _sesion.commit()
+                    await conexion.commit()
             except Exception:
                 pass
 

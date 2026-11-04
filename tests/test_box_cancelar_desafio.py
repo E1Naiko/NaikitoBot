@@ -465,12 +465,7 @@ async def test_registrar_la_tarjeta_deja_anotado_donde_quedo(base):
 
 
 async def test_inicializar_db_es_idempotente_y_recrea_tablas(base_datos_limpia):
-    """El esquema lo maneja el ORM: ``inicializar_db`` crea lo que falta.
-
-    El viejo sistema de ``ALTER TABLE`` desapareció con la migración a
-    SQLAlchemy; una base que arranca de cero o a la que le falta una tabla
-    se pone al día con ``create_all``, y lo que ya existe queda intacto.
-    """
+    """Inicializar recrea tablas faltantes sin borrar los datos existentes."""
 
     await crear_desafio(
         GUILD, RETADOR, CONTRINCANTE, ahora(), ahora() + timedelta(hours=1)
