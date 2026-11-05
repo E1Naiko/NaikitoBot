@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from config import TIMEZONE
+from core.temporada import inicio_temporada
 from modules.lahora.database import (
     contar_registros_ventana,
     eliminar_registros,
@@ -106,6 +107,9 @@ async def registrar_lahora(
     momento = _a_hora_local(momento)
     fecha = momento.date()
     ventana = ventana_activa(momento.time())
+
+    if momento < inicio_temporada():
+        return ResultadoLaHora(exitoso=False, motivo="temporada_anterior", momento=momento)
 
     if ventana is None:
         return ResultadoLaHora(
@@ -331,6 +335,7 @@ class ResumenImportacion:
     importados: int = 0
     repetidos: int = 0
     fuera_de_horario: int = 0
+    anteriores: int = 0
     editados: int = 0
     primero: datetime | None = None
     ultimo: datetime | None = None
@@ -391,6 +396,9 @@ async def importar_mensajes(
 
         resumen.detectados += 1
         momento = _a_hora_local(mensaje.created_at)
+        if momento < inicio_temporada():
+            resumen.anteriores += 1
+            continue
         ventana = ventana_activa(momento.time())
 
         if ventana is None:
@@ -408,6 +416,11 @@ async def importar_mensajes(
             momento=momento,
             mensaje_id=mensaje.id,
         )
+
+        # El corte puede producirse mientras se recorre el historial.
+        if resultado.motivo == "temporada_anterior":
+            resumen.anteriores += 1
+            continue
 
         # Aunque sea repetido, la ventana se reordena: puede haber un
         # registro en vivo con posición calculada sin los mensajes viejos.

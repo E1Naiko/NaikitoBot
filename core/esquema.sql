@@ -204,3 +204,9 @@ CREATE TABLE IF NOT EXISTS ssf_revisiones (
 	PRIMARY KEY (desafio_id),
 	FOREIGN KEY(desafio_id) REFERENCES ssf_desafios (id) ON DELETE CASCADE
 );
+
+-- Solo se escribe después de completar atómicamente el corte de temporada.
+CREATE TABLE IF NOT EXISTS temporada (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    inicio DATE NOT NULL
+);

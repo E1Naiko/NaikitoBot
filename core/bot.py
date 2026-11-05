@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 
 import discord
 
@@ -7,6 +8,7 @@ from discord.ext import commands
 
 from config import (
     BOX_CHANNEL_IDS,
+    BOX_COMBATE_ACTIVO,
     GENERAL_CHANNEL_IDS,
     GUILD_ID,
     LAHORA_CANALES_ID,
@@ -19,6 +21,7 @@ from core.discord_http import espera_restante
 from core.lahora_sync import sincronizar_lahora
 from core.mensajes import responder
 from core.permissions import es_admin
+from core.temporada import inicio_temporada, verificar_temporada
 from core.version import version_bot
 from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
@@ -26,6 +29,16 @@ from modules.madrugue.database import (
 
 from modules.ssf.database import (
     inicializar_db as inicializar_db_ssf,
+)
+
+# Área, extensión, cog, comando raíz y canales habilitados (None para admin).
+_SISTEMAS = (
+    ("General", "commands.general", "General", "ping", GENERAL_CHANNEL_IDS),
+    ("Madrugue", "commands.madrugue", "Madrugue", "madrugue", MADRUGUE_CHANNEL_IDS),
+    ("420", "commands.lahora", "LaHora", "420_stats", LAHORA_CANALES_ID),
+    ("Administración", "commands.admin", "Admin", "admin", None),
+    ("SeptSinFP", "commands.ssf", "Ssf", "ssf", SSF_CANALES_ID),
+    ("Box", "commands.box", "Box", "box", BOX_CHANNEL_IDS),
 )
 
 
@@ -145,6 +158,9 @@ class NaikitoBot(commands.Bot):
         # Permite distinguir fallos anteriores al setup de errores que podrían
         # dejar tareas o cambios de estado ya iniciados.
         self.setup_iniciado = False
+        self._base_inicializada = False
+        self._sincronizacion_comandos = None
+        self._tarea_temporada = None
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -194,214 +210,126 @@ class NaikitoBot(commands.Bot):
     # ========================================================
 
     async def setup_hook(self):
-        """Carga módulos, sincroniza comandos e inicia tareas."""
+        """Carga módulos y sincroniza comandos sin volcar el árbol completo."""
 
         self.setup_iniciado = True
-        print("Configurando Naikito Bot...")
+        try:
+            await inicializar_db_madrugue()
+            await inicializar_db_ssf()
+        except Exception as error:
+            print(f"[INICIO] Error al inicializar SQLite: {type(error).__name__}", flush=True)
+            raise
+        self._base_inicializada = True
 
-        # ====================================================
-        # BASE DE DATOS SSF
-        # ====================================================
+        for nombre, extension, _cog, _comando, _canales in _SISTEMAS:
+            try:
+                await self.load_extension(extension)
+            except Exception as error:
+                print(f"[INICIO] Error al cargar {nombre}: {type(error).__name__}", flush=True)
+                raise
 
-        await inicializar_db_madrugue()
-        print("Base de datos Madrugue inicializada.")
-
-        await inicializar_db_ssf()
-        print("Base de datos SSF inicializada.")
-        
-        # ====================================================
-        # CARGAR COMANDOS
-        # ====================================================
-
-        await self.load_extension(
-            "commands.general"
-        )
-
-        await self.load_extension(
-            "commands.madrugue"
-        )
-
-        await self.load_extension(
-            "commands.lahora"
-        )
-
-        await self.load_extension(
-            "commands.admin"
-        )
-        
-        admin_cog = self.get_cog("Admin")
-
-        print()
-        print("========== ADMIN LOCAL ==========")
-        
-        if admin_cog:
-            print("Admin encontrado:", admin_cog)
-        
-            print("App commands del Admin:")
-        
-            for comando in admin_cog.walk_app_commands():
-                print(
-                    f"- {comando.qualified_name} | "
-                    f"tipo={type(comando).__name__}"
-                )
-        
-        print("=================================")
-        print()
-
-        await self.load_extension(
-            "commands.ssf"
-        )
-        print("========== DEBUG CARGA BOX ==========")
-        print("Cogs antes de cargar Box:", list(self.cogs.keys()))
-        print("Box existente:", self.get_cog("Box"))
-        print("====================================")
-
-        await self.load_extension(
-            "commands.box"
-        )
-
-        print("Box cargado correctamente:", self.get_cog("Box"))
-
-        # ====================================================
-        # SINCRONIZAR COMANDOS
-        # ====================================================
-
-        if GUILD_ID:
-
-            guild = discord.Object(
-                id=GUILD_ID
-            )
-
-            # Reemplaza también comandos antiguos que Discord pueda conservar
-            # con una firma diferente (por ejemplo, /admin manualadd). Sin
-            # limpiar el árbol local, discord.py puede dejar la definición vieja
-            # registrada y producir CommandSignatureMismatch al invocarla.
-            self.tree.clear_commands(guild=guild)
-            self.tree.copy_global_to(
-                guild=guild
-            )
-
-            print()
-            comandos = await self.tree.sync(
-                guild=guild
-            )
-
-            print("COMANDOS REGISTRADOS EN DISCORD:")
-            print("=" * 60)
-
-            for comando in comandos:
-                print(f"- {comando.name}")
-
-                if isinstance(comando, app_commands.Group):
-                    for subcomando in comando.commands:
-                        print(f"  └── {subcomando.name}")
-
-                        if isinstance(subcomando, app_commands.Command):
-                            print("      OPCIONES:")
-
-                            for opcion in subcomando.parameters:
-                                print(
-                                    f"      - {opcion.name} | "
-                                    f"tipo={opcion.type} | "
-                                    f"requerido={opcion.required}"
-                                )
-
-                        if isinstance(subcomando, app_commands.Group):
-                            for subsubcomando in subcomando.commands:
-                                print(f"      └── {subsubcomando.name}")
-
-                                if isinstance(
-                                    subsubcomando,
-                                    app_commands.Command,
-                                ):
-                                    print("          OPCIONES:")
-
-                                    for opcion in subsubcomando.parameters:
-                                        print(
-                                            f"          - {opcion.name} | "
-                                            f"tipo={opcion.type} | "
-                                            f"requerido={opcion.required}"
-                                        )
-
-            print("=" * 60)
-
+        try:
+            if GUILD_ID:
+                guild = discord.Object(id=GUILD_ID)
+                # Reemplaza firmas antiguas sin borrar el árbol local.
+                self.tree.clear_commands(guild=guild)
+                self.tree.copy_global_to(guild=guild)
+                comandos = await self.tree.sync(guild=guild)
+                alcance = f"servidor {GUILD_ID}"
+            else:
+                comandos = await self.tree.sync()
+                alcance = "global"
+        except Exception as error:
             print(
-                "Comandos sincronizados en GUILD_ID: "
-                f"{GUILD_ID} ({len(comandos)} comandos)"
+                f"[INICIO] Error al sincronizar comandos: {type(error).__name__}",
+                flush=True,
             )
+            raise
+        self._sincronizacion_comandos = (alcance, len(comandos))
+        self._tarea_temporada = asyncio.create_task(self._vigilar_temporada())
 
+    async def _vigilar_temporada(self):
+        """Aplica el corte incluso si el bot permanece encendido sin actividad."""
+        while True:
+            actual = datetime.now(inicio_temporada().tzinfo)
+            inicio = inicio_temporada(actual)
+            siguiente = datetime(inicio.year + 1, 10, 3, tzinfo=inicio.tzinfo)
+            demora = siguiente.timestamp() - actual.timestamp()
+            await asyncio.sleep(max(0, demora))
+            while True:
+                try:
+                    await asyncio.to_thread(verificar_temporada)
+                    break
+                except Exception as error:
+                    print(f"[TEMPORADA] Error al reiniciar: {error}; reintento en 60 s.", flush=True)
+                    await asyncio.sleep(60)
+
+    async def close(self):
+        if self._tarea_temporada is not None:
+            self._tarea_temporada.cancel()
+            await asyncio.gather(self._tarea_temporada, return_exceptions=True)
+            self._tarea_temporada = None
+        await super().close()
+
+    def _estado_sistema(self, extension, nombre_cog, comando, canales):
+        """Describe lo comprobado localmente, sin afirmar que pasó pruebas."""
+        if extension not in self.extensions or self.get_cog(nombre_cog) is None:
+            return "no cargado"
+        if self.tree.get_command(comando) is None:
+            return "sin comando principal"
+        if canales is not None and not canales:
+            return "cargado; sin canales configurados"
+        return "cargado"
+
+    @staticmethod
+    def _estado_tarea(cog, nombre, *, habilitada=True):
+        """Estado actual del loop; no implica que haya completado su trabajo."""
+        tarea = getattr(cog, nombre, None) if cog is not None else None
+        if tarea is None:
+            return "no disponible"
+        if tarea.is_running() and not tarea.is_being_cancelled():
+            return "activa"
+        return "detenida" if habilitada else "desactivada por configuración"
+
+    def _imprimir_resumen_inicio(self):
+        """Muestra versión, carga local y servidores, sin enumerar comandos."""
+        print(f"\n=== {version_bot()} ===", flush=True)
+        print(f"Conectado como: {self.user or 'desconocido'}", flush=True)
+        print(
+            f"Base de datos: {'inicializada' if self._base_inicializada else 'no inicializada'}",
+            flush=True,
+        )
+        print("Funciones (estado de carga local):", flush=True)
+        for nombre, extension, cog, comando, canales in _SISTEMAS:
+            estado = self._estado_sistema(extension, cog, comando, canales)
+            print(f"  {nombre}: {estado}", flush=True)
+
+        box = self.get_cog("Box")
+        ssf = self.get_cog("Ssf")
+        print(
+            "Tareas: "
+            f"Box acciones={self._estado_tarea(box, 'comprobar_acciones')}, "
+            f"lesiones={self._estado_tarea(box, 'reducir_probabilidad_lesion')}, "
+            f"narración={self._estado_tarea(box, 'narrar_combates', habilitada=BOX_COMBATE_ACTIVO)}; "
+            f"SSF revisión={self._estado_tarea(ssf, 'procesar_ssf_automatico')}",
+            flush=True,
+        )
+
+        if self._sincronizacion_comandos is None:
+            print("Comandos en Discord: sincronización no confirmada", flush=True)
         else:
+            alcance, cantidad = self._sincronizacion_comandos
+            print(f"Comandos en Discord: sincronizados ({alcance}, {cantidad} de primer nivel)", flush=True)
 
-            comandos = await self.tree.sync()
-
-            print(
-                "Comandos sincronizados globalmente: "
-                f"{len(comandos)}"
-            )
-
-            print()
-            print("COMANDOS REGISTRADOS:")
-            print("=" * 60)
-
-            for comando in comandos:
-
-                print(
-                    f"- {comando.name} | "
-                    f"tipo={type(comando).__name__}"
-                )
-
-                if isinstance(
-                    comando,
-                    app_commands.Group,
-                ):
-
-                    for subcomando in comando.commands:
-
-                        print(
-                            f"    └── {subcomando.name} | "
-                            f"tipo={type(subcomando).__name__}"
-                        )
-
-                        if isinstance(
-                            subcomando,
-                            app_commands.Group,
-                        ):
-
-                            for subsubcomando in subcomando.commands:
-
-                                print(
-                                    f"        └── "
-                                    f"{subsubcomando.name} | "
-                                    f"tipo={type(subsubcomando).__name__}"
-                                )
-
-            print("=" * 60)
-            print()
-
-    # ========================================================
-    # READY
-    # ========================================================
+        servidores = sorted(self.guilds, key=lambda guild: (guild.name.casefold(), guild.id))
+        print(f"Servidores conectados: {len(servidores)}", flush=True)
+        for guild in servidores:
+            print(f"  - {guild.name} (ID: {guild.id})", flush=True)
 
     async def on_ready(self):
+        self._imprimir_resumen_inicio()
 
-        print(
-            f"Naikito Bot conectado como {self.user}"
-        )
-
-        if self.user is not None:
-            print(
-                f"ID: {self.user.id}"
-            )
-
-        # Última línea del arranque: versión del bot en uso.
-        print(version_bot(), flush=True)
-
-        # Mientras el bot estuvo offline (caída, reinicio, deploy) se
-        # perdió cualquier "420" dicho en ese lapso: on_message no se
-        # dispara retroactivamente. Al reconectar se repasa el historial
-        # de cada canal 420 configurado, en todos los servidores, para
-        # cargar lo que falte. Se dispara en una tarea aparte para no
-        # demorar on_ready ni bloquear el resto del arranque.
+        # Al reconectar se recuperan los 420 pendientes en una tarea aparte.
         asyncio.create_task(self._sincronizar_lahora_al_conectar())
 
     async def _sincronizar_lahora_al_conectar(self) -> None:

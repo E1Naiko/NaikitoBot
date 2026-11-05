@@ -1,4 +1,4 @@
-"""Versión de Naikito Bot, impresa al final del arranque.
+"""Versión de Naikito Bot, incluida en el resumen de arranque.
 
 Formato: ``NaikitoBot{mayor}.{funcion}.{revision}.{YYYYMMDD}``
 
@@ -24,7 +24,7 @@ __all__ = ["version_bot"]
 
 # Subir a mano con cada función/sistema nuevo importante (y resetear
 # VERSION_REVISION a 0 al subir este número).
-VERSION_FUNCION = 0
+VERSION_FUNCION = 1
 
 # Subir a mano con cada ajuste menor sobre la última función.
 VERSION_REVISION = 0

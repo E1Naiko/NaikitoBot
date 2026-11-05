@@ -11,6 +11,7 @@ from commands.admin.base import solo_admin, solo_servidor
 from core.discord_http import espera_restante, registrar_limite, resumir_error
 from core.lahora_sync import candado_sincronizacion, sincronizar_lahora
 from core.mensajes import crear_embed, responder, responder_texto
+from core.temporada import inicio_temporada
 from core.utils import ahora
 from modules.lahora.logic import texto_ventanas
 from modules.lahora.services import (
@@ -23,8 +24,8 @@ from modules.lahora.services import (
     obtener_registros_usuario,
 )
 
-# Una importación recorre todo el historial del canal y puede tardar
-# minutos: se comparte el candado con la sincronización automática para
+# Una importación puede recorrer toda la temporada y tardar minutos:
+# se comparte el candado con la sincronización automática para
 # que no corran las dos a la vez sobre el mismo canal.
 _importando = candado_sincronizacion
 
@@ -149,7 +150,7 @@ class LaHoraAdminMixin:
     )
     @app_commands.describe(
         canal="Canal a recorrer (por defecto, los de LAHORA_CANALES_ID).",
-        desde="Solo mensajes desde esta fecha (YYYY-MM-DD). Por defecto, todo.",
+        desde="Desde esta fecha (YYYY-MM-DD), sin pasar el inicio de temporada.",
     )
     async def lahora_importar(
         self,
@@ -193,6 +194,10 @@ class LaHoraAdminMixin:
                 time(0, 0),
                 tzinfo=config.TIMEZONE,
             )
+
+        limite = inicio_temporada()
+        if desde_dt is None or desde_dt < limite:
+            desde_dt = limite
 
         if canal is not None:
             canales = [canal]
@@ -350,10 +355,7 @@ class LaHoraAdminMixin:
 
     @lahora.command(
         name="sincronizar",
-        description=(
-            "Revisa los canales 420 de todos los servidores y carga los "
-            "420 que se perdieron mientras el bot estaba offline."
-        ),
+        description="Recupera los 420 perdidos mientras el bot estaba desconectado.",
     )
     async def lahora_sincronizar(
         self,
@@ -409,9 +411,9 @@ class LaHoraAdminMixin:
             )
             return
 
-        # La primera sincronización de un canal nunca chequeado repasa
-        # todo su historial y puede superar los 15 minutos del token de
-        # la interacción: si ya no se puede responder, el resumen llega
+        # Si se habilita la importación inicial, el historial de la
+        # temporada puede superar los 15 minutos del token de la interacción.
+        # Si ya no se puede responder, el resumen llega
         # por MD (igual que en /admin 420 importar).
         try:
             await responder_texto(
@@ -504,6 +506,14 @@ class LaHoraAdminMixin:
             usuario.display_name,
             momento,
         )
+
+        if resultado.motivo == "temporada_anterior":
+            await responder_texto(
+                interaction,
+                "❌ Esa fecha es anterior al inicio de la temporada actual.",
+                ephemeral=True,
+            )
+            return
 
         if resultado.motivo == "fuera_de_horario":
             await responder(

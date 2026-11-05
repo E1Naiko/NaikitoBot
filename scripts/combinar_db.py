@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import DATABASE  # noqa: E402
 from core.database import esquema_sql  # noqa: E402
+from core.temporada import inicio_temporada  # noqa: E402
 
 IDENTIDAD: dict[str, tuple[list[str], dict[str, str], str]] = {
     "box_usuarios": (["guild_id", "user_id"], {}, "estado"),
@@ -105,6 +106,32 @@ def leer_origen(ruta):
     return datos
 
 
+def verificar_origen_temporada(ruta):
+    """Rechaza copias antiguas y registros anteriores al corte actual."""
+    limite = inicio_temporada().date().isoformat()
+    with closing(_abrir_lectura(ruta)) as db:
+        existe = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='temporada'"
+        ).fetchone()
+        temporada = db.execute("SELECT inicio FROM temporada WHERE id=1").fetchone() if existe else None
+        if not temporada or temporada[0] != limite:
+            raise SystemExit("La copia no pertenece a la temporada actual; no se puede combinar.")
+        for tabla, columna in (("registros", "fecha"), ("lahora_registros", "fecha"),
+                               ("ssf_desafios", "fecha_inicio"),
+                               ("ssf_registros", "fecha"),
+                               ("box_acciones", "iniciado_en"),
+                               ("box_desafios_historial", "creado_en"),
+                               ("box_combates", "iniciado_en"),
+                               ("box_sponsors", "obtenido_en")):
+            existe = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (tabla,)
+            ).fetchone()
+            if existe and db.execute(
+                f'SELECT 1 FROM "{tabla}" WHERE "{columna}" < ? LIMIT 1', (limite,)
+            ).fetchone():
+                raise SystemExit(f"La copia contiene datos de una temporada anterior: {tabla}.")
+
+
 def respaldar_destino_sqlite():
     destino = Path(DATABASE)
     if not destino.exists():
@@ -136,6 +163,10 @@ def combinar(ruta: Path, aplicar: bool, estado: str):
     destino = Path(DATABASE)
     if ruta.resolve() == destino.resolve():
         raise SystemExit("El origen y el destino deben ser archivos distintos.")
+    if not destino.is_file():
+        raise SystemExit("Inicializá la base destino con el bot antes de combinar.")
+    verificar_origen_temporada(ruta)
+    verificar_origen_temporada(destino)
     print(f"Backup (origen): {ruta}\nDestino:         {destino}")
     print(f"Modo:            {'APLICAR' if aplicar else 'SIMULACIÓN'}\nConflictos estado: {estado}\n")
     origen = leer_origen(ruta)

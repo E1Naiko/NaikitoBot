@@ -8,6 +8,7 @@ from discord import app_commands
 from config import SSF_FECHA_FIN, SSF_FECHA_INICIO
 from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
+from core.temporada import inicio_temporada
 from core.utils import ahora
 from modules.ssf.services import (
     agregar_dia,
@@ -169,6 +170,13 @@ class SsfAdminMixin:
             await responder_texto(interaction, "⚠️ Las fechas no son válidas.\n"
                 "Utiliza el formato **YYYY-MM-DD**.\n"
                 "Ejemplo: `2026-09-01`.",
+                ephemeral=True,
+            )
+            return
+
+        if inicio_obj < inicio_temporada().date():
+            await responder_texto(
+                interaction, "❌ El inicio del desafío es anterior a la temporada actual.",
                 ephemeral=True,
             )
             return
