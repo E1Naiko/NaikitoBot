@@ -29,6 +29,7 @@ from core.discord_http import (
     resumir_error,
 )
 from core.utils import ahora
+from core.temporada import inicio_temporada
 from modules.lahora.database import guardar_ultimo_chequeo, obtener_ultimo_chequeo
 from modules.lahora.services import ResumenImportacion, importar_mensajes
 
@@ -98,6 +99,11 @@ async def _sincronizar_canal(guild_id, canal) -> ResultadoCanalSincronizado:
         # y no se pierdan mensajes recibidos durante el siguiente reintento.
         desde = momento_inicio
         await guardar_ultimo_chequeo(guild_id, canal.id, desde)
+
+    # Ni la importación inicial ni un checkpoint antiguo cruzan la temporada.
+    limite = inicio_temporada(momento_inicio)
+    if desde is None or desde < limite:
+        desde = limite
 
     async def historial():
         async for mensaje in canal.history(

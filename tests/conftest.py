@@ -30,6 +30,29 @@ def _pausa_http_aislada(monkeypatch):
     monkeypatch.setattr(discord_http, "pausa_discord", PausaDiscord())
 
 
+@pytest.fixture(autouse=True)
+def _temporada_en_pruebas_historicas(request, monkeypatch):
+    """Los ejemplos históricos de estas pruebas ocurren durante septiembre de 2026.
+
+    Los límites reales y los reinicios se prueban sin este reloj en
+    test_temporada.py; aquí se conservan los escenarios originales de 2026.
+    """
+    archivos = {
+        "test_admin_comandos.py", "test_admin_lahora.py", "test_admin_ssf_ampliado.py",
+        "test_core_lahora_sync.py", "test_lahora_comandos.py", "test_sqlite_configuracion.py",
+    }
+    if request.path.name not in archivos:
+        return
+    from datetime import datetime
+    from config import TIMEZONE
+    corte = datetime(2025, 10, 3, tzinfo=TIMEZONE)
+    for modulo in (
+        "commands.admin.lahora", "commands.admin.madrugue", "commands.admin.ssf",
+        "modules.lahora.services", "modules.madrugue.database", "core.lahora_sync",
+    ):
+        monkeypatch.setattr(f"{modulo}.inicio_temporada", lambda *_args: corte)
+
+
 @pytest.fixture
 async def base_datos_limpia():
     """Deja la base de datos vacía y con el esquema completo creado."""

@@ -1,10 +1,12 @@
 """Esquema y utilidades para el archivo SQLite del bot."""
 
+import asyncio
 from pathlib import Path
 import re
 
 import config
 from core.sqlite import conectar
+from core.temporada import verificar_temporada
 
 _RUTA_ESQUEMA = Path(__file__).with_name("esquema.sql")
 
@@ -26,6 +28,8 @@ async def inicializar_db():
     async with conectar() as conexion:
         await conexion.executescript(esquema_sql())
         await conexion.commit()
+    # Si la tabla de temporada no existía, el primer conectar no podía cortar.
+    await asyncio.to_thread(verificar_temporada)
 
 
 async def vaciar_db():
@@ -39,3 +43,4 @@ async def vaciar_db():
         await conexion.commit()
         await conexion.executescript(esquema)
         await conexion.commit()
+    await asyncio.to_thread(verificar_temporada)

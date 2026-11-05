@@ -86,8 +86,9 @@ El bot sigue una arquitectura en capas clara:
     ```bash
     python main.py
     ```
-    Al terminar de conectarse a Discord, la última línea del arranque es
-    la versión en uso (ver [Versión](#versión-del-bot)).
+    Al conectarse, la consola muestra la versión, la carga de los sistemas,
+    sus tareas principales, la sincronización de comandos y los servidores.
+    Para un diagnóstico operativo más completo usá `/admin test`.
 
 ---
 
@@ -139,8 +140,16 @@ y `core/database.py` crea las tablas faltantes al iniciar.
 - Las fechas se almacenan como texto ISO; las de hora incluyen zona horaria.
 - `vaciar_db()` se usa únicamente para las pruebas.
 - La primera sincronización 420 empieza desde el primer chequeo, salvo que se
-  configure `LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`. La importación manual sigue
-  disponible para recuperar mensajes anteriores.
+  configure `LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`. Tanto esa opción como la
+  importación manual se limitan a la temporada actual.
+- Cada 3 de octubre a las 00:00 en `TIMEZONE` comienza una nueva temporada:
+  se eliminan los datos anteriores de todos los sistemas y se conserva la
+  configuración de cada servidor. La transición SQLite es transaccional y se
+  ejecuta también cuando el bot arranca después de esa fecha.
+- Al activar por primera vez el corte en una base existente se eliminan todos
+  los datos de Box, porque su progreso no tiene fecha de origen; los registros
+  de Madrugue y 420 de la temporada actual y los desafíos SSF iniciados en ella
+  se conservan. No se crean archivos históricos automáticos.
 
 Para empezar de cero, seleccioná un archivo que no exista y no ejecutes las
 herramientas de importación o fusión de respaldos. Detené el bot para copiar
@@ -186,9 +195,10 @@ Las pruebas usan un archivo SQLite temporal que se vacía entre cada test.
 
 ## 🔖 Versión del bot
 
-Al terminar de conectarse a Discord (último paso de `on_ready`, después de
-`Naikito Bot conectado como ...`), el bot imprime en consola su versión con
-el formato:
+Al conectarse a Discord, el resumen de arranque muestra la versión, el estado
+local de los sistemas y los servidores conectados. El estado de carga no
+sustituye las pruebas automatizadas ni una revisión de permisos. La versión
+usa el formato:
 
 ```
 NaikitoBot<mayor>.<función>.<revisión>.<YYYYMMDD>

@@ -94,11 +94,12 @@ def test_combinar_sqlite_respalda_y_fusiona(tmp_path):
     for ruta in (origen, destino):
         resultado = ejecutar_con_configuracion(codigo, DATABASE_URL="", DATABASE=str(ruta))
         assert resultado.returncode == 0, resultado.stderr
+    from core.temporada import inicio_temporada
     with sqlite3.connect(origen) as db:
         db.execute(
             "INSERT INTO registros (guild_id,user_id,username,fecha,hora,puntos_base,"
-            "multiplicador,puntos_finales) VALUES (1,2,'Usuario','2026-01-01',"
-            "'06:00',100,1.0,100)"
+            "multiplicador,puntos_finales) VALUES (1,2,'Usuario',?,"
+            "'06:00',100,1.0,100)", (inicio_temporada().date().isoformat(),)
         )
 
     entorno = os.environ.copy()

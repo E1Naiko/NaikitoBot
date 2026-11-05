@@ -10,6 +10,7 @@ from discord import app_commands
 from core.mensajes import responder, responder_texto
 from commands.admin.base import solo_admin, solo_servidor
 from config import MADRUGUE_PUNTOS_100, MADRUGUE_PUNTOS_25
+from core.temporada import inicio_temporada
 from core.utils import ahora
 from modules.madrugue.database import importar_registros
 from modules.madrugue.services import (
@@ -550,6 +551,13 @@ class MadrugueAdminMixin:
         # ----------------------------------------------------
 
         fecha_actual = ahora().date()
+
+        if fecha_obj < inicio_temporada().date():
+            await responder_texto(
+                interaction, "❌ Esa fecha es anterior al inicio de la temporada actual.",
+                ephemeral=True,
+            )
+            return
 
         if fecha_obj > fecha_actual:
             await responder_texto(interaction, "❌ No podés registrar una fecha futura.",

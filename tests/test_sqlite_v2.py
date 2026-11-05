@@ -61,13 +61,18 @@ def test_combinar_remapea_padres_y_es_idempotente(tmp_path):
             env=entorno, capture_output=True, text=True,
         )
         assert resultado.returncode == 0, resultado.stderr
+    from core.temporada import inicio_temporada
+    inicio = inicio_temporada()
+    fecha = inicio.date().isoformat()
+    siguiente = (inicio.date() + timedelta(days=1)).isoformat()
+    fin = (inicio.date() + timedelta(days=29)).isoformat()
     with sqlite3.connect(origen) as db:
-        db.execute("INSERT INTO ssf_desafios VALUES (1,1,'origen','2026-09-01','2026-09-30',4,1)")
-        db.execute("INSERT INTO ssf_participantes (desafio_id,user_id,username,fecha_registro) VALUES (1,2,'Usuario','2026-09-01T00:00:00-03:00')")
-        db.execute("INSERT INTO ssf_registros VALUES (1,2,'2026-09-02','08:00')")
-        db.execute("INSERT INTO ssf_revisiones VALUES (1,'2026-09-02')")
+        db.execute("INSERT INTO ssf_desafios VALUES (1,1,'origen',?,?,4,1)", (fecha, fin))
+        db.execute("INSERT INTO ssf_participantes (desafio_id,user_id,username,fecha_registro) VALUES (1,2,'Usuario',?)", (inicio.isoformat(),))
+        db.execute("INSERT INTO ssf_registros VALUES (1,2,?,'08:00')", (siguiente,))
+        db.execute("INSERT INTO ssf_revisiones VALUES (1,?)", (siguiente,))
     with sqlite3.connect(destino) as db:
-        db.execute("INSERT INTO ssf_desafios VALUES (1,1,'existente','2026-09-01','2026-09-30',4,0)")
+        db.execute("INSERT INTO ssf_desafios VALUES (1,1,'existente',?,?,4,0)", (fecha, fin))
     entorno["DATABASE"] = str(destino)
     for _ in range(2):
         resultado = subprocess.run(

@@ -47,6 +47,23 @@ La persistencia usa consultas SQLite directas sin SQLAlchemy. El esquema está
 en `core/esquema.sql`; Madrugue, 420 y SeptSinFP usan `aiosqlite`, y las
 operaciones SQLite de Box se ejecutan fuera del event loop.
 
+### Temporada anual
+
+La temporada comienza cada **3 de octubre a las 00:00** de `TIMEZONE` (por
+defecto, Buenos Aires). Se eliminan los datos de temporadas anteriores de
+Madrugue, 420, SeptSinFP y Box; se conserva la configuración de los servidores.
+El corte se aplica con el bot encendido y también al arrancar después de haber
+estado desconectado. Las importaciones, cargas manuales y recuperación 420
+no aceptan fechas anteriores al corte. La herramienta de fusión rechaza copias
+de otra temporada o con registros anteriores.
+
+**Primera aplicación sobre una base existente:** se conservan los registros
+fechados de Madrugue y 420 desde el último 3 de octubre y los desafíos SSF
+iniciados desde esa fecha. El progreso de Box se elimina por completo porque no
+se puede determinar de qué temporada proviene (incluso si se obtuvo después del
+corte). No se crea un archivo histórico automático. Los respaldos ya existentes
+fuera de la base no se eliminan; gestionarlos es responsabilidad del servidor.
+
 ## Pruebas
 
 Las pruebas no necesitan token de Discord ni conexión: usan dobles de
@@ -112,6 +129,13 @@ Iniciar el bot:
 ```text
 python main.py
 ```
+
+Al conectarse, la consola muestra la versión, los sistemas cargados, el
+estado de sus tareas principales, la sincronización de comandos y los
+servidores conectados. Si faltan canales configurados también lo indica.
+La carga local no demuestra que cada comando o permiso funcione: para una
+revisión operativa más completa, usá `/admin test`. Las pruebas automatizadas
+se ejecutan aparte, no durante el arranque.
 
 ## Comandos generales
 
@@ -233,7 +257,7 @@ restricción de canal: pueden usar cualquier comando desde cualquier canal.
 
 | Comando | Parámetros | Descripción |
 | --- | --- | --- |
-| `/admin 420 importar` | `canal` (opcional), `desde` (opcional, `YYYY-MM-DD`) | Recorre el historial del canal 420 (por defecto los de `LAHORA_CANALES_ID`, desde el primer mensaje) y registra los 420 que ya estaban, con las mismas reglas que en vivo. Se puede correr varias veces sin duplicar. |
+| `/admin 420 importar` | `canal` (opcional), `desde` (opcional, `YYYY-MM-DD`) | Recorre el historial del canal 420 (por defecto los de `LAHORA_CANALES_ID`, desde el inicio de la temporada) y registra los 420 que ya estaban, con las mismas reglas que en vivo. Se puede correr varias veces sin duplicar. |
 | `/admin 420 sincronizar` | Ninguno | Repasa los canales 420 de **todos** los servidores donde está el bot y carga los 420 que se perdieron mientras estuvo offline. A diferencia de `importar`, no recorre todo el historial: solo lo nuevo desde el último chequeo. Se puede correr sin límite de veces. |
 | `/admin 420 manualadd` | `usuario`, `fecha`, `hora` (`HH:MM:SS` o `HH:MM`) | Registra a mano un 420. La hora tiene que caer en una ventana. |
 | `/admin 420 resetdia` | `usuario`, `fecha`, `ventana` (opcional) | Borra los 420 de un usuario en esa fecha (o solo en esa ventana). |
@@ -262,8 +286,8 @@ lo que se haya perdido, con las mismas reglas que el registro en vivo.
 `/admin 420 sincronizar` dispara manualmente esa misma recuperación sin
 esperar a un reinicio. Es más liviana que `importar`: por defecto empieza desde el primer
 chequeo y después revisa solo lo ocurrido desde el checkpoint. Si se configura
-`LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`, la primera revisión recorre todo el
-historial.
+`LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`, la primera revisión recorre el
+historial desde el inicio de la temporada actual.
 
 #### Límites de Discord y Cloudflare (HTTP 429)
 

@@ -424,8 +424,8 @@ async def test_sincronizar_carga_lo_perdido_en_todos_los_canales(cog, monkeypatc
 
     assert "2** 420" in interaccion.texto
     assert len(await obtener_top_lahora(GUILD)) == 2
-    # No recorre todo el canal de nuevo: solo lo que no se había chequeado.
-    assert canal.llamadas[0]["after"] is None
+    # Incluso la primera importación comienza al inicio de la temporada.
+    assert canal.llamadas[0]["after"] == datetime(2025, 10, 3, tzinfo=TIMEZONE)
 
 
 async def test_sincronizar_dos_veces_no_repite_lo_ya_visto(cog, monkeypatch):

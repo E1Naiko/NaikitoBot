@@ -8,6 +8,7 @@ from datetime import date
 
 from core.database import inicializar_db as _inicializar_db_base
 from core.sqlite import conectar
+from core.temporada import inicio_temporada
 
 
 async def inicializar_db():
@@ -179,6 +180,8 @@ async def importar_registros(guild_id, registros):
         await conexion.execute("BEGIN IMMEDIATE")
         for user_id, username, fecha, hora, base, multiplicador, puntos in registros:
             fecha = _fecha(fecha)
+            if fecha < inicio_temporada().date().isoformat():
+                raise ValueError(f"{fecha} es anterior al inicio de la temporada actual")
             async with conexion.execute(
                 "SELECT username, hora, puntos_base, multiplicador, puntos_finales "
                 "FROM registros WHERE guild_id = ? AND user_id = ? AND fecha = ?",
