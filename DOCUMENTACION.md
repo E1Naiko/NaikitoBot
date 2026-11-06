@@ -79,7 +79,7 @@ El bot sigue una arquitectura en capas clara:
     Copia `.env.example` a `.env` y completa:
     - `DISCORD_TOKEN`: Token de tu bot de Discord
     - `GUILD_ID`: ID del servidor donde se sincronizarán los comandos (opcional para desarrollo)
-    - `DATABASE`: ruta del archivo SQLite (por defecto `naikito-v2.db`)
+    - `DATABASE`: ruta del archivo SQLite (por defecto `naikito-v2.db`; las relativas se resuelven contra la raíz del proyecto)
     - IDs de canales y usuarios administradores
 
 3.  **Ejecutar el bot**
@@ -131,8 +131,13 @@ Comandos protegidos por ID de usuario para diagnóstico, mantenimiento, gestión
 ## 💾 Base de datos
 
 El bot usa **SQLite** sin ORM ni servidor externo. La ruta se configura con
-`DATABASE` (por defecto `naikito-v2.db`). El esquema está en `core/esquema.sql`
+`DATABASE` (por defecto `naikito-v2.db`, resuelta contra la raíz del proyecto si
+es relativa). El esquema está en `core/esquema.sql`
 y `core/database.py` crea las tablas faltantes al iniciar.
+
+Para desplegarlo en un servidor Ubuntu, con servicio systemd y respaldos
+automáticos, ver [`DESPLIEGUE.md`](DESPLIEGUE.md). El respaldo en caliente se
+hace con `python -m scripts.respaldar_db`.
 
 - `core/sqlite.py` abre conexiones cortas con tiempo de espera de 30 segundos.
 - Madrugue, 420 y SeptSinFP usan `aiosqlite`; Box ejecuta consultas SQLite

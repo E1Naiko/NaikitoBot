@@ -330,6 +330,17 @@ _comprobar(
     "vacía ni ser :memory:.",
 )
 
+# Una ruta relativa se resuelve contra la raíz del proyecto y no contra el
+# directorio de trabajo. En un servicio systemd el cwd depende de la unidad
+# (`WorkingDirectory`); sin esta normalización el bot podría abrir una base
+# distinta, o no poder crearla, sin ningún aviso. Las rutas absolutas y los
+# URI `file:` se dejan tal cual.
+if DATABASE and not DATABASE.startswith("file:"):
+    _RUTA_BASE = Path(DATABASE).expanduser()
+    if not _RUTA_BASE.is_absolute():
+        _RUTA_BASE = PROJECT_ROOT / _RUTA_BASE
+    DATABASE = str(_RUTA_BASE)
+
 
 # ============================================================
 # CONFIGURACIÓN DE MADRUGUE

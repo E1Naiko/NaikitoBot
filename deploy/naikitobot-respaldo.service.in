@@ -1,0 +1,29 @@
+[Unit]
+# Plantilla: deploy/instalar.sh genera el archivo definitivo.
+Description=Respaldo de la base SQLite de NaikitoBot
+Documentation=file://@APP_DIR@/DESPLIEGUE.md
+
+[Service]
+Type=oneshot
+User=@USUARIO@
+Group=@USUARIO@
+WorkingDirectory=@APP_DIR@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=@APP_DIR@/.venv/bin/python -m scripts.respaldar_db --conservar @CONSERVAR@
+StateDirectory=@DIRECTORIO_ESTADO@
+UMask=0077
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=@PROTEGER_HOME@
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
