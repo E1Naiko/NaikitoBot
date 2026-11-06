@@ -25,11 +25,33 @@ trae la base de datos de zonas horarias de IANA y `config/settings.py` construye
 ese paquete el bot falla al arrancar con
 `ZoneInfoNotFoundError: 'No time zone found with key America/Argentina/Buenos_Aires'`.
 
+En Linux, en cambio, hay que activar el venv con `source .venv/bin/activate`.
+
+## Despliegue en un servidor Ubuntu
+
+Para correrlo en un servidor propio hay una guía dedicada en
+[`DESPLIEGUE.md`](DESPLIEGUE.md): usuario de sistema, servicio systemd con
+reinicio automático, timer de respaldos y migración de la base.
+
+```text
+sudo apt install -y python3 python3-venv git
+sudo mkdir -p /opt/naikitobot
+sudo git clone <url-del-repositorio> /opt/naikitobot/app
+cd /opt/naikitobot/app && sudo deploy/instalar.sh
+```
+
+El instalador deja el `.env` con permisos `600` y `DATABASE` en
+`/var/lib/naikitobot/naikito-v2.db`, que es el único directorio escribible del
+servicio.
+
 ## Base de datos
 
 El bot usa un archivo **SQLite**. Por defecto es `naikito-v2.db`; podés
 cambiar la ruta con `DATABASE` en el `.env`. La ruta debe apuntar a un
-almacenamiento persistente y escribible. Se crea un esquema nuevo al iniciar;
+almacenamiento persistente y escribible. Si es relativa se resuelve contra la
+raíz del proyecto y no contra el directorio de trabajo, así el bot usa el mismo
+archivo aunque lo arranque systemd desde otra carpeta; en un servidor conviene
+igual una ruta absoluta (`/var/lib/naikitobot/naikito-v2.db`). Se crea un esquema nuevo al iniciar;
 no se importan automáticamente los datos anteriores. Si el archivo indicado
 ya existe, se reutiliza: elegí un archivo nuevo para empezar de cero.
 En una base nueva, la sincronización 420 empieza desde el primer chequeo y
@@ -41,7 +63,9 @@ Eliminá `DATABASE_URL` del panel y del `.env`: si tiene un valor, el bot se
 detendrá con un mensaje claro para evitar conectarse silenciosamente a una
 base distinta. Mantené respaldos del archivo SQLite y usá una sola instancia
 del bot con ese archivo. Detené el bot antes de copiar o restaurar la base;
-asegurate de que Wispbyte conserve el archivo entre reinicios y despliegues.
+asegurate de que el hosting conserve el archivo entre reinicios y despliegues.
+Para respaldar sin detenerlo, usá `python -m scripts.respaldar_db` (copia
+consistente con la API de SQLite y rotación de copias).
 
 La persistencia usa consultas SQLite directas sin SQLAlchemy. El esquema está
 en `core/esquema.sql`; Madrugue, 420 y SeptSinFP usan `aiosqlite`, y las

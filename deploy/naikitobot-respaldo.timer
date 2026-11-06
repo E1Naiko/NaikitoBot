@@ -1,0 +1,14 @@
+[Unit]
+Description=Respaldo diario de la base SQLite de NaikitoBot
+Documentation=file://@APP_DIR@/DESPLIEGUE.md
+
+[Timer]
+# Horario del servidor (TIMEZONE no afecta al timer). Persistent=true
+# recupera el respaldo si el servidor estaba apagado a esa hora.
+OnCalendar=*-*-* 04:30
+RandomizedDelaySec=15min
+Persistent=true
+Unit=naikitobot-respaldo.service
+
+[Install]
+WantedBy=timers.target

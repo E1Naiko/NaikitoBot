@@ -1,0 +1,49 @@
+[Unit]
+# Plantilla: deploy/instalar.sh genera /etc/systemd/system/naikitobot.service
+# reemplazando los valores entre @...@. No la copies a mano sin reemplazarlos.
+Description=NaikitoBot (bot de Discord)
+Documentation=file://@APP_DIR@/DESPLIEGUE.md
+After=network-online.target
+Wants=network-online.target
+# Corta los bucles de reinicio si la configuración es inválida: el bot sale
+# con error al arrancar y no tiene sentido reintentar cada 10 s para siempre.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=@USUARIO@
+Group=@USUARIO@
+WorkingDirectory=@APP_DIR@
+# Sin búfer: el log llega a journalctl a medida que se imprime.
+Environment=PYTHONUNBUFFERED=1
+# El código y el venv quedan de solo lectura (ProtectSystem=strict).
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=@APP_DIR@/.venv/bin/python main.py
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# /var/lib/<nombre> para la base y los respaldos: se crea con el dueño
+# correcto y es el único directorio escribible del servicio.
+StateDirectory=@DIRECTORIO_ESTADO@
+UMask=0077
+
+# Endurecimiento: el bot no necesita privilegios, ni la home, ni /tmp real.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=@PROTEGER_HOME@
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
