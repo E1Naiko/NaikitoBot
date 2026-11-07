@@ -9,6 +9,7 @@ from discord import app_commands
 import config
 from commands.admin.base import solo_admin, solo_servidor
 from core.discord_http import espera_restante, registrar_limite, resumir_error
+from core.lahora_logs import linea_podio, linea_registro
 from core.lahora_sync import candado_sincronizacion, sincronizar_lahora
 from core.mensajes import crear_embed, responder, responder_texto
 from core.temporada import inicio_temporada
@@ -547,6 +548,23 @@ class LaHoraAdminMixin:
                 ephemeral=True,
             )
             return
+
+        # El alta manual también cambia el ranking: queda en la terminal con
+        # la misma forma que un 420 en vivo, marcada como manual.
+        print(
+            linea_registro(
+                resultado,
+                usuario.display_name,
+                usuario.id,
+                manual=True,
+            ),
+            flush=True,
+        )
+
+        aviso_podio = linea_podio(resultado, usuario.display_name, usuario.id)
+
+        if aviso_podio:
+            print(aviso_podio, flush=True)
 
         await responder(
             interaction,

@@ -237,6 +237,30 @@ comas) y `LAHORA_DURACION_MINUTOS` (1 a 59). Ventanas repetidas, superpuestas
 o que cruzan la medianoche impiden arrancar con un error que nombra la
 variable culpable. La racha cuenta días consecutivos con al menos un 420.
 
+### Qué imprime el bot en la terminal
+
+Solo se registran las novedades del ranking: fuera de horario, repetidos y
+mensajes que no son 420 no dejan línea. Con los valores por defecto se ve así:
+
+```text
+[420] ✅ Tester (42) 05/09 16:20:03 ventana=16:20 segundos=3 posicion=1 puntos=20 mensaje=1234
+[420] 🥇 podio Tester (42) ventana=16:20 posicion=1 puntos=20
+[420] ✅ Otro (43) 05/09 16:20:08 ventana=16:20 segundos=8 posicion=2 puntos=17.9 mensaje=1235
+[420] 🥈 podio Otro (43) ventana=16:20 posicion=2 puntos=17.9
+[420] 📊 cierre 05/09 ventana=16:20 participantes=2 → 1. Tester 20 pts | 2. Otro 17.9 pts servidor=…
+[420] ⛔ sanción vigente Tramposo (44) mensaje=1236; 420 no registrado
+```
+
+- `✅` es un 420 que sumó; el podio (`🥇`, `🥈`, `🥉`) se imprime solo para los
+  tres primeros puestos de la ventana.
+- `📊 cierre` lo emite la tarea `resumir_ventanas` del cog, cada minuto: resume
+  la ventana que acaba de terminar, una sola vez por ventana y servidor.
+- `⛔ sanción vigente` avisa que el 420 se descartó por una sanción por trampa.
+- El alta manual (`/admin 420 manualadd`) usa la misma línea con `manual=true`.
+- Los puntos de la ventana ya están recalculados cuando se imprime la línea;
+  las importaciones y sincronizaciones siguen con sus propios resúmenes
+  (`[420] importación terminada …`, `[420] sincronización …`).
+
 ## Comandos de SeptSinFP
 
 | Comando | Descripción |

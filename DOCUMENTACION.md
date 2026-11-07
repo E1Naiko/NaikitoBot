@@ -120,6 +120,14 @@ un checkpoint por canal (`core/lahora_sync.py`, tabla
 reconexión. Un administrador puede disparar la misma recuperación a mano con
 `/admin 420 sincronizar`, sin esperar a un reinicio.
 
+En la terminal, el registro en vivo imprime una línea por cada 420 que suma
+(usuario, hora, ventana, segundos, posición y puntos), otra para el podio de la
+ventana y, al terminar cada ventana, un resumen con el top 3 y la cantidad de
+participantes (`commands/lahora/tareas.py`). Lo que no suma —fuera de
+horario, repetido o de un usuario sancionado— no se imprime, salvo el caso de
+la sanción, que deja una línea clara. Cuando la ventana se cierra, el resumen
+tarda a lo sumo un minuto y se emite una sola vez.
+
 ### 4. 📅 Sistema SeptSinFP (Septiembre Sin FP)
 Evento anual de septiembre donde los usuarios registran días consecutivos sin consumir contenido para adultos, acumulan puntos y siguen su racha.
 

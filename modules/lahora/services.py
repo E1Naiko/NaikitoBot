@@ -24,6 +24,7 @@ from modules.lahora.database import (
     obtener_registros_usuario,
     obtener_resumen_usuario,
     obtener_top,
+    obtener_ventana,
     obtener_ventanas_usuario,
     recalcular_ventana,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "obtener_hoy_lahora",
     "obtener_stats_lahora",
     "obtener_top_lahora",
+    "obtener_ventana_cerrada",
     "registrar_lahora",
     "texto_ventanas",
 ]
@@ -190,6 +192,16 @@ async def registrar_lahora(
         bonus_posicion=bonus,
         puntos_finales=finales,
     )
+
+
+async def obtener_ventana_cerrada(guild_id, fecha, ventana):
+    """Filas ``(user_id, username, segundos, puntos)`` de una ventana.
+
+    Alimenta el resumen que se imprime en la terminal cuando la ventana
+    termina: el ranking queda en el log sin tener que pedir un comando.
+    """
+
+    return await obtener_ventana(guild_id, fecha, ventana)
 
 
 async def obtener_stats_lahora(

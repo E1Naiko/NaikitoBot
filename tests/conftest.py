@@ -39,7 +39,8 @@ def _temporada_en_pruebas_historicas(request, monkeypatch):
     """
     archivos = {
         "test_admin_comandos.py", "test_admin_lahora.py", "test_admin_ssf_ampliado.py",
-        "test_core_lahora_sync.py", "test_lahora_comandos.py", "test_sqlite_configuracion.py",
+        "test_core_lahora_sync.py", "test_lahora_comandos.py",
+        "test_lahora_logs.py", "test_sqlite_configuracion.py",
     }
     if request.path.name not in archivos:
         return

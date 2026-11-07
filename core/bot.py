@@ -311,12 +311,14 @@ class NaikitoBot(commands.Bot):
 
         box = self.get_cog("Box")
         ssf = self.get_cog("Ssf")
+        lahora = self.get_cog("LaHora")
         print(
             "Tareas: "
             f"Box acciones={self._estado_tarea(box, 'comprobar_acciones')}, "
             f"lesiones={self._estado_tarea(box, 'reducir_probabilidad_lesion')}, "
             f"narración={self._estado_tarea(box, 'narrar_combates', habilitada=BOX_COMBATE_ACTIVO)}; "
-            f"SSF revisión={self._estado_tarea(ssf, 'procesar_ssf_automatico')}",
+            f"SSF revisión={self._estado_tarea(ssf, 'procesar_ssf_automatico')}; "
+            f"420 ventanas={self._estado_tarea(lahora, 'resumir_ventanas')}",
             flush=True,
         )
 
