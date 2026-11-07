@@ -79,6 +79,11 @@ ARBOL_ESPERADO = {
     "admin ssf ranking|Command",
     "admin ssf recalcular|Command",
     "admin ssf revivir|Command",
+    "admin sanciones|Group",
+    "admin sanciones aplicar|Command",
+    "admin sanciones levantar|Command",
+    "admin sanciones limpiar|Command",
+    "admin sanciones ver|Command",
 }
 
 

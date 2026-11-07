@@ -27,6 +27,10 @@ from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
 )
 
+from modules.sanciones.database import (
+    inicializar_db as inicializar_db_sanciones,
+)
+
 from modules.ssf.database import (
     inicializar_db as inicializar_db_ssf,
 )
@@ -215,6 +219,7 @@ class NaikitoBot(commands.Bot):
         self.setup_iniciado = True
         try:
             await inicializar_db_madrugue()
+            await inicializar_db_sanciones()
             await inicializar_db_ssf()
         except Exception as error:
             print(f"[INICIO] Error al inicializar SQLite: {type(error).__name__}", flush=True)
@@ -306,12 +311,14 @@ class NaikitoBot(commands.Bot):
 
         box = self.get_cog("Box")
         ssf = self.get_cog("Ssf")
+        lahora = self.get_cog("LaHora")
         print(
             "Tareas: "
             f"Box acciones={self._estado_tarea(box, 'comprobar_acciones')}, "
             f"lesiones={self._estado_tarea(box, 'reducir_probabilidad_lesion')}, "
             f"narración={self._estado_tarea(box, 'narrar_combates', habilitada=BOX_COMBATE_ACTIVO)}; "
-            f"SSF revisión={self._estado_tarea(ssf, 'procesar_ssf_automatico')}",
+            f"SSF revisión={self._estado_tarea(ssf, 'procesar_ssf_automatico')}; "
+            f"420 ventanas={self._estado_tarea(lahora, 'resumir_ventanas')}",
             flush=True,
         )
 

@@ -6,6 +6,7 @@ from discord import app_commands
 from commands.ssf.base import solo_servidor
 from core.mensajes import responder, responder_error
 from core.utils import ahora
+from modules.sanciones.services import revisar_sancion
 from modules.ssf.services import (
     registrar_sobrevivi,
     registrar_usuario,
@@ -21,6 +22,9 @@ class RegistroMixin:
     )
     async def registrar(self, interaction: discord.Interaction):
         if not await solo_servidor(interaction):
+            return
+
+        if not await revisar_sancion(interaction, "ssf"):
             return
 
         resultado = await registrar_usuario(
@@ -83,6 +87,9 @@ class RegistroMixin:
     )
     async def sobrevivi(self, interaction: discord.Interaction):
         if not await solo_servidor(interaction):
+            return
+
+        if not await revisar_sancion(interaction, "ssf"):
             return
 
         resultado = await registrar_sobrevivi(

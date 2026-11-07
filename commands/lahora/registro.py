@@ -9,11 +9,54 @@ from core.discord_http import (
     registrar_limite,
     resumir_error,
 )
+from core.lahora_logs import linea_podio, linea_registro
 from modules.lahora.services import es_mensaje_420, registrar_lahora
+from modules.sanciones.database import sancion_vigente
+from modules.sanciones.logic import texto_sancion_activa
 
 # Reacciones con las que el bot confirma un 420 válido.
 REACCION_REGISTRADO = "🌿"
 REACCION_PRIMERO = "🥇"
+
+
+async def _avisar_sancion(mensaje: discord.Message) -> None:
+    """Avisa en el canal que el 420 no se registró por la sanción vigente.
+
+    ``on_message`` no tiene interacción, así que se responde con un mensaje
+    normal. El temporizador se lee de la base en el momento del aviso.
+    """
+
+    if espera_restante() > 0:
+        return
+
+    sancion = await sancion_vigente(
+        mensaje.guild.id,
+        mensaje.author.id,
+        "lahora",
+    )
+
+    if sancion is None:
+        return
+
+    _, expiracion = sancion
+
+    responder_mensaje = getattr(mensaje, "reply", None)
+
+    if not callable(responder_mensaje):
+        return
+
+    try:
+        await responder_mensaje(
+            texto_sancion_activa("lahora", expiracion),
+            mention_author=False,
+        )
+    except (discord.HTTPException, discord.RateLimited) as error:
+        registrar_limite(error, contexto="420.sancion")
+        print(
+            f"[420] aviso de sanción omitido mensaje={mensaje.id} "
+            f"({type(error).__name__}): {resumir_error(error)}",
+            flush=True,
+        )
 
 
 class RegistroMixin:
@@ -46,16 +89,42 @@ class RegistroMixin:
             mensaje_id=message.id,
         )
 
-        print(
-            f"[420] {resultado.motivo} usuario={message.author.id} "
-            f"hora={resultado.momento.strftime('%H:%M:%S')} "
-            f"ventana={resultado.ventana} posicion={resultado.posicion} "
-            f"puntos={resultado.puntos_finales}",
-            flush=True,
-        )
+        # En la terminal solo se cuentan las novedades del ranking: los
+        # mensajes fuera de horario, repetidos o de sancionados no suman y
+        # llenarían el log sin decir nada nuevo.
+        if resultado.motivo == "sancionado":
+            print(
+                f"[420] ⛔ sanción vigente "
+                f"{message.author.display_name} ({message.author.id}) "
+                f"mensaje={message.id}; 420 no registrado",
+                flush=True,
+            )
+            # El canal es de mensajes, no de comandos: se contesta una sola
+            # vez por mensaje y con el temporizador del ban.
+            await _avisar_sancion(message)
+            return
 
         if not resultado.exitoso:
             return
+
+        print(
+            linea_registro(
+                resultado,
+                message.author.display_name,
+                message.author.id,
+                message.id,
+            ),
+            flush=True,
+        )
+
+        aviso_podio = linea_podio(
+            resultado,
+            message.author.display_name,
+            message.author.id,
+        )
+
+        if aviso_podio:
+            print(aviso_podio, flush=True)
 
         reacciones = [REACCION_REGISTRADO]
 

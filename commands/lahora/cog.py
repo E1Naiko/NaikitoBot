@@ -9,11 +9,13 @@ from discord.ext import commands
 
 from commands.lahora.info import InfoMixin
 from commands.lahora.registro import RegistroMixin
+from commands.lahora.tareas import ResumenVentanasMixin
 
 
 class LaHora(
     RegistroMixin,
     InfoMixin,
+    ResumenVentanasMixin,
     commands.Cog,
     name="LaHora",
 ):

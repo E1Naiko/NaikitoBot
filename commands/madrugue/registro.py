@@ -10,6 +10,7 @@ from modules.madrugue.services import (
     registrar_madrugue,
     texto_horario_valido,
 )
+from modules.sanciones.services import revisar_sancion
 
 
 class RegistroMixin:
@@ -26,6 +27,9 @@ class RegistroMixin:
         """Registra directamente una madrugada."""
 
         if not await solo_servidor(interaction):
+            return
+
+        if not await revisar_sancion(interaction, "madrugue"):
             return
 
         resultado = await registrar_madrugue(

@@ -24,6 +24,7 @@ from modules.lahora.database import (
     obtener_registros_usuario,
     obtener_resumen_usuario,
     obtener_top,
+    obtener_ventana,
     obtener_ventanas_usuario,
     recalcular_ventana,
 )
@@ -37,6 +38,7 @@ from modules.lahora.logic import (
     texto_ventanas,
     ventana_activa,
 )
+from modules.sanciones.database import sancion_vigente
 
 __all__ = [
     "ResultadoLaHora",
@@ -52,6 +54,7 @@ __all__ = [
     "obtener_hoy_lahora",
     "obtener_stats_lahora",
     "obtener_top_lahora",
+    "obtener_ventana_cerrada",
     "registrar_lahora",
     "texto_ventanas",
 ]
@@ -101,12 +104,23 @@ async def registrar_lahora(
     """Registra un 420 dicho en ``momento``.
 
     No depende de Discord. Motivos posibles del resultado:
-    ``fuera_de_horario``, ``ya_registrado`` y ``registrado``.
+    ``sancionado``, ``fuera_de_horario``, ``ya_registrado`` y ``registrado``.
+
+    La sanción se comprueba acá y no solo en el listener porque el historial
+    del canal también pasa por esta función: un 420 viejo de alguien que hoy
+    está sancionado no vuelve a entrar al ranking al importar.
     """
 
     momento = _a_hora_local(momento)
     fecha = momento.date()
     ventana = ventana_activa(momento.time())
+
+    if await sancion_vigente(guild_id, user_id, "lahora", momento) is not None:
+        return ResultadoLaHora(
+            exitoso=False,
+            motivo="sancionado",
+            momento=momento,
+        )
 
     if momento < inicio_temporada():
         return ResultadoLaHora(exitoso=False, motivo="temporada_anterior", momento=momento)
@@ -178,6 +192,16 @@ async def registrar_lahora(
         bonus_posicion=bonus,
         puntos_finales=finales,
     )
+
+
+async def obtener_ventana_cerrada(guild_id, fecha, ventana):
+    """Filas ``(user_id, username, segundos, puntos)`` de una ventana.
+
+    Alimenta el resumen que se imprime en la terminal cuando la ventana
+    termina: el ranking queda en el log sin tener que pedir un comando.
+    """
+
+    return await obtener_ventana(guild_id, fecha, ventana)
 
 
 async def obtener_stats_lahora(
@@ -337,6 +361,7 @@ class ResumenImportacion:
     fuera_de_horario: int = 0
     anteriores: int = 0
     editados: int = 0
+    sancionados: int = 0
     primero: datetime | None = None
     ultimo: datetime | None = None
     ventanas: set = field(default_factory=set)
@@ -422,15 +447,17 @@ async def importar_mensajes(
             resumen.anteriores += 1
             continue
 
-        # Aunque sea repetido, la ventana se reordena: puede haber un
-        # registro en vivo con posición calculada sin los mensajes viejos.
-        resumen.ventanas.add((momento.date(), resultado.ventana))
-
-        if resultado.exitoso:
+        if resultado.motivo == "sancionado":
+            resumen.sancionados += 1
+        elif resultado.exitoso:
+            # Aunque sea repetido, la ventana se reordena: puede haber un
+            # registro en vivo con posición calculada sin los mensajes viejos.
+            resumen.ventanas.add((momento.date(), resultado.ventana))
             resumen.importados += 1
             resumen.primero = min(filter(None, (resumen.primero, momento)))
             resumen.ultimo = max(filter(None, (resumen.ultimo, momento)))
         else:
+            resumen.ventanas.add((momento.date(), resultado.ventana))
             resumen.repetidos += 1
 
     await _recalcular(guild_id, resumen.ventanas)

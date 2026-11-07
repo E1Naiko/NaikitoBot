@@ -107,6 +107,20 @@ async def obtener_top(guild_id, limite=10):
     )
 
 
+async def obtener_ventana(guild_id, fecha, ventana):
+    """Registros de una ventana en orden de llegada.
+
+    Cada fila es ``(user_id, username, segundos, puntos_finales)``. Se usa
+    para el resumen que el bot imprime en la terminal al cerrar la ventana.
+    """
+
+    return await _todos(
+        "SELECT user_id, username, segundos, puntos_finales FROM lahora_registros "
+        "WHERE guild_id = ? AND fecha = ? AND ventana = ? ORDER BY posicion",
+        (guild_id, _fecha(fecha), ventana),
+    )
+
+
 async def obtener_registros_del_dia(guild_id, fecha):
     return await _todos(
         "SELECT ventana, posicion, username, segundos, puntos_finales FROM lahora_registros "
