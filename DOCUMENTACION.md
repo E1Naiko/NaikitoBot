@@ -1,6 +1,6 @@
 # Documentación de NaikitoBot
 
-Bot de Discord personalizado para servidores comunitarios hispanohablantes, con múltiples sistemas: boxeo (economía, combates, entrenamiento), recompensas por madrugar y el evento Septiembre Sin FP.
+Bot de Discord personalizado para servidores comunitarios hispanohablantes, con múltiples sistemas: boxeo (economía, combates, entrenamiento), recompensas por madrugar, el canal 420 y el evento Septiembre Sin FP, con sanciones por trampa por minijuego.
 
 ---
 
@@ -28,7 +28,7 @@ NaikitoBot/
 ├── core/                # Código central compartido
 ├── config/              # Carga y validación de configuración
 ├── commands/            # Cogs/comandos slash de Discord
-├── modules/             # Lógica de negocio de cada sistema
+├── modules/             # Lógica de negocio de cada sistema (incluye sanciones/)
 ├── migrations/          # Migraciones de base de datos
 ├── scripts/             # Scripts auxiliares
 └── tests/               # Pruebas automatizadas
@@ -126,6 +126,21 @@ Evento anual de septiembre donde los usuarios registran días consecutivos sin c
 ### 5. ⚙️ Comandos administrativos
 Comandos protegidos por ID de usuario para diagnóstico, mantenimiento, gestión de usuarios y configuración.
 
+### 6. ⛔ Sanciones por trampa
+Los administradores pueden bloquear a un usuario en un minijuego concreto
+(`/admin sanciones aplicar`) indicando motivo y temporizador (`30m`, `12h`,
+`7d`, `2d12h` o `permanente`, que es el valor por defecto). Cada sanción vive
+en la tabla `sanciones`, tiene su propio vencimiento y se puede levantar con
+`/admin sanciones levantar`; `/admin sanciones ver` muestra el tiempo restante
+y `/admin sanciones limpiar` borra las vencidas.
+
+El bloqueo se aplica en el punto donde cada minijuego entrega premios, no
+solo en la presentación: `/madrugue`, `/ssf registrar`, `/ssf sobrevivi`, los
+420 del canal (incluida la importación del historial), las acciones y desafíos
+de Box y las compras de la tienda. Consultar el ranking o el propio saldo
+sigue funcionando, y el saldo de Box muestra la sanción activa con su
+temporizador. Código en `commands/admin/sanciones.py` y `modules/sanciones/`.
+
 ---
 
 ## 💾 Base de datos
@@ -147,6 +162,7 @@ hace con `python -m scripts.respaldar_db`.
 - La primera sincronización 420 empieza desde el primer chequeo, salvo que se
   configure `LAHORA_IMPORTAR_HISTORIAL_INICIAL=1`. Tanto esa opción como la
   importación manual se limitan a la temporada actual.
+- Las sanciones por trampa (`sanciones`) no se borran en el corte anual.
 - Cada 3 de octubre a las 00:00 en `TIMEZONE` comienza una nueva temporada:
   se eliminan los datos anteriores de todos los sistemas y se conserva la
   configuración de cada servidor. La transición SQLite es transaccional y se

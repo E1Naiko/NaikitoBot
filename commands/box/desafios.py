@@ -44,6 +44,7 @@ from modules.box.services import (
     preparar_bot_para_desafio,
     registrar_mensaje_desafio,
 )
+from modules.sanciones.services import revisar_sancion
 
 VENTANA_DESAFIO = timedelta(hours=BOX_DESAFIO_VENTANA_HORAS)
 DURACION_DESAFIO = timedelta(hours=BOX_DESAFIO_DURACION_HORAS)
@@ -131,6 +132,11 @@ class ChallengeView(discord.ui.View):
                 "⚠️ No autorizado",
                 "Solo el contrincante puede aceptar este desafío.",
             )
+            return
+
+        # Aceptar es jugar: un sancionado no puede tomar el desafío aunque la
+        # solicitud se haya creado antes del ban.
+        if not await revisar_sancion(interaction, "box"):
             return
 
         # Igual que en el comando: la aceptación resuelve el plan completo
@@ -350,6 +356,9 @@ class DesafiosMixin:
         toque para que, si la base se demora, el comando tarde —y no
         reviente con 10062 "Unknown interaction".
         """
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         try:

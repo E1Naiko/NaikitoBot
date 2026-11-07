@@ -29,6 +29,7 @@ from modules.box.services import (
     reducir_probabilidad_lesion_inactivos,
     resolver_duracion,
 )
+from modules.sanciones.services import revisar_sancion
 
 MENSAJES_DURACION = {
     "ambas": "⚠️ Indica minutos o una hora de finalización, no ambas opciones.",
@@ -355,6 +356,9 @@ class AccionesMixin:
         minutos: int | None = None,
         hasta: str | None = None,
     ):
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         nivel = (
             await obtener_nivel_mejora(
                 interaction.guild.id,
@@ -388,6 +392,9 @@ class AccionesMixin:
         minutos: int | None = None,
         hasta: str | None = None,
     ):
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         nivel = (
             await obtener_nivel_mejora(
                 interaction.guild.id,
@@ -424,6 +431,9 @@ class AccionesMixin:
         minutos: int | None = None,
         hasta: str | None = None,
     ):
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         await self._comenzar_accion(
             interaction,
             minutos,
@@ -451,6 +461,9 @@ class AccionesMixin:
         hasta: str | None = None,
     ):
         """Inicia un descanso temporizado, incluso si el usuario está lesionado."""
+
+        if not await revisar_sancion(interaction, "box"):
+            return
 
         await self._comenzar_accion(
             interaction,

@@ -21,6 +21,7 @@ from commands.box.compras import (
 from config import BOX_CHANNEL_IDS
 from core.mensajes import crear_embed, responder, responder_error
 from core.permissions import es_admin
+from modules.sanciones.services import revisar_sancion
 from modules.box.services import (
     EQUIPAMIENTO,
     MEJORAS,
@@ -153,6 +154,9 @@ class BotonCompra(discord.ui.DynamicItem[discord.ui.Button], template=PLANTILLA_
             )
             return
 
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         # El suministro es una entrada genérica: primero se elige el tipo.
         if self.categoria == "suministro":
             await interaction.response.send_message(
@@ -231,6 +235,9 @@ class SelectorSuministro(discord.ui.Select):
                 "⚠️ Sin servidor",
                 "Este comando solo puede utilizarse dentro de un servidor.",
             )
+            return
+
+        if not await revisar_sancion(interaction, "box"):
             return
 
         # Se difiere antes de comprar para proteger la ventana de Discord. El
@@ -326,6 +333,9 @@ class TiendaMixin:
         if not await solo_servidor(interaction):
             return
 
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         # El catálogo consulta saldo, mejoras y equipo. Se difiere para que una
         # base lenta no haga expirar la interacción antes de mostrar la tienda.
         await interaction.response.defer()
@@ -360,6 +370,9 @@ class TiendaMixin:
         articulo: str,
     ):
         if not await solo_servidor(interaction):
+            return
+
+        if not await revisar_sancion(interaction, "box"):
             return
 
         resultado = await ejecutar_compra(
@@ -407,6 +420,9 @@ class TiendaMixin:
         if not await solo_servidor(interaction):
             return
 
+        if not await revisar_sancion(interaction, "box"):
+            return
+
         resultado = await ejecutar_compra(
             interaction.guild.id,
             interaction.user.id,
@@ -442,6 +458,9 @@ class TiendaMixin:
         tipo: app_commands.Choice[str],
     ):
         if not await solo_servidor(interaction):
+            return
+
+        if not await revisar_sancion(interaction, "box"):
             return
 
         resultado = await usar_suministro_resultado(

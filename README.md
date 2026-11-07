@@ -385,6 +385,49 @@ de Box.
 | `/admin ssf recalcular` | `usuario` | Recalcula las rachas desde los registros guardados. |
 | `/admin ssf cerrar` | `confirmar`: `SI` o `NO` | Cierra el desafío activo y lo deja listo para su ranking final. |
 
+### Sanciones por trampa
+
+| Comando | Parámetros | Descripción |
+| --- | --- | --- |
+| `/admin sanciones aplicar` | `usuario`, `minijuego`, `motivo`, `duracion` (opcional) | Bloquea al usuario en ese minijuego y guarda la sanción con su temporizador. Por defecto es **permanente**. |
+| `/admin sanciones levantar` | `usuario`, `minijuego` | Retira la sanción: el usuario vuelve a poder jugar en ese minijuego. |
+| `/admin sanciones ver` | `usuario` (opcional), `historicas` (opcional) | Lista las sanciones vigentes (o todas, con `historicas`), con el tiempo restante de cada una. |
+| `/admin sanciones limpiar` | Ninguno | Borra de la tabla las sanciones ya vencidas. Las permanentes no se tocan. |
+
+Cada sanción vale para **un minijuego** (`madrugue`, `lahora`, `ssf` o `box`) y
+tiene su propio temporizador: quien hizo trampa en Box puede seguir jugando
+Madrugue. El parámetro `duracion` acepta `30m`, `12h`, `7d`, `2d12h` o
+`permanente`; si se omite es permanente, así que solo un administrador la
+levanta.
+
+Qué se bloquea en cada minijuego:
+
+| Minijuego | Bloqueado | Sigue disponible |
+| --- | --- | --- |
+| Madrugue | `/madrugue` | Consultar rankings (`/madrugue_top`, `/madrugue_stats`). |
+| 420 | Escribir un 420 en el canal (no se registra ni se reacciona) y volver a importarlo con `/admin 420 importar`. | `/420_stats`, `/420_top`, `/420_hoy`. |
+| SeptSinFP | `/ssf registrar` y `/ssf sobrevivi`. | Consultar rankings y participantes. |
+| Box | Entrenar, trabajar, promoverse, descansar, desafiar, aceptar un desafío, comprar en la tienda y usar suministros. | `/box saldo` (muestra la sanción), `/box stats`, `/box equipo`, `/box topdesafios`. |
+
+Detalles de implementación:
+
+- Las sanciones viven en la tabla `sanciones`, una fila por usuario y
+  minijuego; una sanción nueva reemplaza a la anterior aunque estuviera
+  vencida o levantada.
+- El vencimiento se guarda con zona horaria (`expira_en`), así que un cambio
+  de reloj del servidor no estira ni acorta el ban. Las vencidas dejan de
+  bloquear solas, sin necesidad de un proceso en segundo plano.
+- El corte anual de temporada **no** borra las sanciones: quien hizo trampa
+  sigue bloqueado aunque empiece el año siguiente.
+- Al aplicar una sanción de Box se cancela la acción que el usuario tuviera en
+  marcha; si no, cobraba la recompensa al terminar.
+- Los usuarios de `ADMIN_USER_IDS` quedan exentos del bloqueo (son quienes
+  levantan una sanción equivocada). Para sancionar a un administrador hay que
+  sacarlo primero de esa lista.
+- El mensaje de sanción es efímero e incluye la fecha de fin y el tiempo
+  restante; en el canal 420, donde no hay interacción, el bot responde al
+  mensaje avisando de la sanción.
+
 ### Box
 
 | Comando | Parámetros | Descripción |

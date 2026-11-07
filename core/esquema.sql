@@ -205,6 +205,25 @@ CREATE TABLE IF NOT EXISTS ssf_revisiones (
 	FOREIGN KEY(desafio_id) REFERENCES ssf_desafios (id) ON DELETE CASCADE
 );
 
+-- Sanciones por trampa: una fila por usuario y minijuego. El temporizador vive
+-- en expira_en (NULL = permanente) y levantada_en marca las que un admin
+-- retiró a mano. No se borran en el corte de temporada: quien hizo trampa
+-- sigue bloqueado aunque cambie el año.
+CREATE TABLE IF NOT EXISTS sanciones (
+	id INTEGER NOT NULL,
+	guild_id BIGINT NOT NULL,
+	user_id BIGINT NOT NULL,
+	minijuego VARCHAR NOT NULL,
+	motivo VARCHAR NOT NULL,
+	creada_en VARCHAR NOT NULL,
+	expira_en VARCHAR,
+	levantada_en VARCHAR,
+	levantada_por BIGINT,
+	creada_por BIGINT,
+	PRIMARY KEY (id),
+	UNIQUE (guild_id, user_id, minijuego)
+);
+
 -- Solo se escribe después de completar atómicamente el corte de temporada.
 CREATE TABLE IF NOT EXISTS temporada (
     id INTEGER PRIMARY KEY CHECK (id = 1),

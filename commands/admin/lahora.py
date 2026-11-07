@@ -67,6 +67,7 @@ def _texto_resumen(resumen, errores, terminado: bool) -> str:
             f"🔁 Ya registrados o repetidos: **{resumen.repetidos}**",
             f"⏰ Fuera de horario: **{resumen.fuera_de_horario}**",
             f"✏️ Editados después de la ventana: **{resumen.editados}**",
+            f"⛔ Sancionados (no cuentan): **{resumen.sancionados}**",
         ]
 
         if resumen.primero and resumen.ultimo:
@@ -523,6 +524,16 @@ class LaHoraAdminMixin:
                 color_area="error",
                 ephemeral=True,
                 secciones_=[("⏰ Horarios válidos", texto_ventanas())],
+            )
+            return
+
+        if resultado.motivo == "sancionado":
+            await responder_texto(
+                interaction,
+                f"⛔ **{usuario.display_name}** tiene una sanción vigente en "
+                "el **420**: no se le puede cargar el registro hasta que se "
+                "levante con `/admin sanciones levantar`.",
+                ephemeral=True,
             )
             return
 

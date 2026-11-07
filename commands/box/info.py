@@ -5,6 +5,7 @@ from discord import app_commands
 
 from commands.box.base import solo_servidor
 from core.mensajes import crear_embed, responder, responder_error, responder_ok
+from modules.sanciones.services import sanciones_vigentes, texto_sancion_activa
 from modules.box.services import (
     EQUIPAMIENTO,
     TEXTO_AYUDA,
@@ -57,18 +58,33 @@ class InfoMixin:
         if not await solo_servidor(interaction):
             return
 
+        # Consultar el propio saldo no se bloquea: quien está sancionado
+        # necesita ver la fecha de fin de su ban sin adivinar.
+        sanciones = await sanciones_vigentes(
+            interaction.guild.id,
+            interaction.user.id,
+        )
+
         experiencia, dinero = await obtener_saldo(
             interaction.guild.id,
             interaction.user.id,
         )
+        secciones = [
+            ("⭐ Experiencia", f"**{experiencia}**"),
+            ("💰 Dinero", f"**{dinero}$**"),
+        ]
+
+        for _minijuego, expiracion in sanciones:
+            secciones.append((
+                "⛔ Sanción activa",
+                texto_sancion_activa("box", expiracion),
+            ))
+
         await responder(
             interaction,
             f"📊 Saldo de {interaction.user.display_name}",
             color_area="box",
-            secciones_=[
-                ("⭐ Experiencia", f"**{experiencia}**"),
-                ("💰 Dinero", f"**{dinero}$**"),
-            ],
+            secciones_=secciones,
         )
 
     @app_commands.command(

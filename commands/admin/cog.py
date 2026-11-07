@@ -11,6 +11,7 @@ from commands.admin.box import BoxAdminMixin
 from commands.admin.diagnostico import DiagnosticoMixin
 from commands.admin.lahora import LaHoraAdminMixin
 from commands.admin.madrugue import MadrugueAdminMixin
+from commands.admin.sanciones import SancionAdminMixin
 from commands.admin.sistema import SistemaMixin
 from commands.admin.ssf import SsfAdminMixin
 
@@ -20,6 +21,7 @@ class Admin(
     DiagnosticoMixin,
     LaHoraAdminMixin,
     MadrugueAdminMixin,
+    SancionAdminMixin,
     SistemaMixin,
     SsfAdminMixin,
     commands.GroupCog,

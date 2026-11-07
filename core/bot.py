@@ -27,6 +27,10 @@ from modules.madrugue.database import (
     inicializar_db as inicializar_db_madrugue,
 )
 
+from modules.sanciones.database import (
+    inicializar_db as inicializar_db_sanciones,
+)
+
 from modules.ssf.database import (
     inicializar_db as inicializar_db_ssf,
 )
@@ -215,6 +219,7 @@ class NaikitoBot(commands.Bot):
         self.setup_iniciado = True
         try:
             await inicializar_db_madrugue()
+            await inicializar_db_sanciones()
             await inicializar_db_ssf()
         except Exception as error:
             print(f"[INICIO] Error al inicializar SQLite: {type(error).__name__}", flush=True)
