@@ -42,3 +42,23 @@ async def test_altas_administrativas(base_datos_limpia, monkeypatch):
     assert "M2" not in await invocar(cog, "siguientes", 42)
     await invocar(cog, "aprobar", 42, "M1")
     assert "M2" in await invocar(cog, "siguientes", 42)
+
+
+@pytest.mark.asyncio
+async def test_plan_informatica_2027(base_datos_limpia):
+    cog = Correlativas()
+    assert 'informatica-2027' in await invocar(cog, 'planes', 41)
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    assert 'SI106' not in await invocar(cog, 'siguientes', 41)
+    await invocar(cog, 'aprobar', 41, 'CNE')
+    assert 'SI106' in await invocar(cog, 'siguientes', 41)
+
+    for codigo in ('CNP', 'CNM', 'SI106', 'SI108', 'SI101', 'SI107', 'SI109',
+                   'SI102', 'SI211', 'SI203', 'SI207', 'SI212', 'SI202', 'SI206', 'SI204'):
+        await invocar(cog, 'aprobar', 41, codigo)
+    assert '0I503' not in await invocar(cog, 'siguientes', 41)
+    await invocar(cog, 'aprobar', 41, 'SI208')
+    await invocar(cog, 'aprobar', 41, 'SI308')
+    assert '0I503' not in await invocar(cog, 'siguientes', 41)
+    await invocar(cog, 'aprobar', 41, 'SI302')
+    assert '0I503' in await invocar(cog, 'siguientes', 41)

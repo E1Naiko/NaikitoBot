@@ -815,7 +815,7 @@ sale sola del último commit del repositorio.
 
 ## Correlativas
 
-Consultá el plan **Computación 2024** y registrá tu progreso desde Discord:
+Consultá los planes **Computación 2024** e **Informática 2027** y registrá tu progreso desde Discord:
 
 - `/correlativas planes`: lista los planes disponibles.
 - `/correlativas unirse plan:computacion-2024`: selecciona tu plan activo.
@@ -830,3 +830,11 @@ calcula requisitos separados para rendir finales.
 Los administradores del bot pueden usar `/correlativas agregar_plan` y
 `/correlativas agregar_materia`; las previas de una materia nueva son códigos del
 mismo plan separados por comas y se deben cumplir todas.
+
+Para el [plan de Licenciatura en Informática 2027 (UNLP)](https://www.info.unlp.edu.ar/wp-content/uploads/2026/11/Plan-de-estudio-2027_LI.pdf),
+usá `/correlativas unirse plan:informatica-2027`. El ingreso se lista junto a
+primer año. Para habilitar la tesina, el bot pide que estén registradas todas
+las aprobaciones de primero y segundo y dos adicionales de años superiores.
+El PDF repite `0I412`: el bot conserva ese código para Inteligencia Artificial
+y usa `0I412-UX` como identificador interno para Diseño de Experiencia de Usuario.
+La optativa, que no tiene código en el PDF, se registra como `OPTATIVA-LI`.
