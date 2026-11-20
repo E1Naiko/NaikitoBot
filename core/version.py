@@ -24,7 +24,7 @@ __all__ = ["version_bot"]
 
 # Subir a mano con cada función/sistema nuevo importante (y resetear
 # VERSION_REVISION a 0 al subir este número).
-VERSION_FUNCION = 1
+VERSION_FUNCION = 2
 
 # Subir a mano con cada ajuste menor sobre la última función.
 VERSION_REVISION = 0

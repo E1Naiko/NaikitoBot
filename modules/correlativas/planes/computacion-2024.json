@@ -1,0 +1,1141 @@
+{
+  "D1001": {
+    "nombre": "Matemática para Ingeniería",
+    "anio": 1,
+    "previas": []
+  },
+  "I1001": {
+    "nombre": "Introducción a la Informática",
+    "anio": 1,
+    "previas": []
+  },
+  "F1301": {
+    "nombre": "Matemática A",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "D1001"
+        }
+      ]
+    ]
+  },
+  "I1101": {
+    "nombre": "Programación I",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1001"
+        }
+      ]
+    ]
+  },
+  "I1166": {
+    "nombre": "Fundamentos de Arquitectura de Computadoras",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1001"
+        }
+      ]
+    ]
+  },
+  "F1302": {
+    "nombre": "Matemática B",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "D1001"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1301"
+        }
+      ]
+    ]
+  },
+  "I1102": {
+    "nombre": "Programación II",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1001"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1101"
+        }
+      ]
+    ]
+  },
+  "F1303": {
+    "nombre": "Física I",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "D1001"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1301"
+        }
+      ]
+    ]
+  },
+  "F1304": {
+    "nombre": "Matemática C",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1301"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1302"
+        }
+      ]
+    ]
+  },
+  "I1103": {
+    "nombre": "Programación III",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1101"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1102"
+        }
+      ]
+    ]
+  },
+  "I1105": {
+    "nombre": "Arquitectura de Computadoras",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1001"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1166"
+        }
+      ]
+    ]
+  },
+  "I1104": {
+    "nombre": "Taller de Lenguajes I",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1101"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1102"
+        }
+      ]
+    ]
+  },
+  "F1306": {
+    "nombre": "Matemática D",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1304"
+        }
+      ]
+    ]
+  },
+  "F1305": {
+    "nombre": "Física II",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1301"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1303"
+        }
+      ]
+    ]
+  },
+  "I1106": {
+    "nombre": "Conceptos de Sistemas Operativos",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1101"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1166"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1105"
+        }
+      ]
+    ]
+  },
+  "I1107": {
+    "nombre": "Taller de Lenguajes II",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1104"
+        }
+      ]
+    ]
+  },
+  "F1315": {
+    "nombre": "Probabilidades y Estadística",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1301"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1302"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1282": {
+    "nombre": "Electrotecnia y Electrónica",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1303"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1305"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1108": {
+    "nombre": "Conceptos de Bases de Datos",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1101"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1301": {
+    "nombre": "Introducción al Diseño Lógico",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1166"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1105"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1302": {
+    "nombre": "Introducción al Procesamiento de Señales",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1306"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1109": {
+    "nombre": "Taller de Arquitectura",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1105"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1301"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1110": {
+    "nombre": "Ingeniería de Software",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1101"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1303": {
+    "nombre": "Redes de Datos I",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1105"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1106"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1111": {
+    "nombre": "Concurrencia y Paralelismo",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1104"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1107"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1105"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1106"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1304": {
+    "nombre": "Instrumentación y Control",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1305"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1282"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1306"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1302"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1305": {
+    "nombre": "Circuitos Digitales y Microcontroladores",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "E1301"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1109"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1113": {
+    "nombre": "Economía y Emprendedorismo",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1114": {
+    "nombre": "Redes de Datos II",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1106"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1303"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1115": {
+    "nombre": "Sistemas de Tiempo Real",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1107"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1106"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1111"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1306": {
+    "nombre": "Taller de Proyecto I",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1109"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1305"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1112": {
+    "nombre": "Bases de Datos",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1108"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1116": {
+    "nombre": "Sistemas Distribuidos y Paralelos",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1107"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1106"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1111"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1117": {
+    "nombre": "Aspectos Legales de Ingeniería Informática",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1113"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1307": {
+    "nombre": "Introducción a la Arquitectura de Computadoras Cuánticas",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1110"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "E1305"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1306"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1118": {
+    "nombre": "Taller de Proyecto II",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1167": {
+    "nombre": "Introducción a la Programación Cuántica",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1166"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1105"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "EI100": {
+    "nombre": "Práctica Profesional Supervisada",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "aprobadas",
+          "especial": "Tener 20 actividades"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "I1158": {
+    "nombre": "Aprendizaje Automático Profundo (Deep Learning)",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1103"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "F1315"
+        }
+      ]
+    ]
+  },
+  "I1143": {
+    "nombre": "Desarrollo Seguro de Aplicaciones",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        }
+      ],
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1114"
+        }
+      ]
+    ]
+  },
+  "I1149": {
+    "nombre": "Diseño de Experiencia de Usuario",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        }
+      ]
+    ]
+  },
+  "I1161": {
+    "nombre": "Internet de las Cosas",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1107"
+        }
+      ],
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1114"
+        }
+      ]
+    ]
+  },
+  "I1128": {
+    "nombre": "Java y Aplicaciones Avanzadas sobre Internet",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1107"
+        }
+      ],
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        }
+      ]
+    ]
+  },
+  "I1133": {
+    "nombre": "Minería de Datos Usando Sistemas Inteligentes",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1103"
+        }
+      ],
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "F1315"
+        }
+      ]
+    ]
+  },
+  "I1163": {
+    "nombre": "Procesamiento de Imágenes Digitales",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1302"
+        }
+      ]
+    ]
+  },
+  "I1145": {
+    "nombre": "Taller de Lenguaje .NET",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1107"
+        }
+      ],
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1103"
+        }
+      ]
+    ]
+  },
+  "I1144": {
+    "nombre": "Taller de Lenguaje PHP",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1107"
+        }
+      ],
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "I1103"
+        }
+      ]
+    ]
+  },
+  "I1121": {
+    "nombre": "CALIDAD EN SISTEMAS DE SOFTWARE",
+    "anio": null,
+    "previas": [
+      [
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1110"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1113"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1318": {
+    "nombre": "Dispositivos Electrónicos",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1282"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1305"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1310": {
+    "nombre": "Electrónica II",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1282"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1305"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1603": {
+    "nombre": "Teoría de la Información y Codificación",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1303"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1306"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1106"
+        }
+      ]
+    ]
+  },
+  "E1309": {
+    "nombre": "Arquitectura Avanzada de Procesadores",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1301"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1105"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "E1305"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1109"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1311": {
+    "nombre": "Comunicaciones",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1302"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "F1306"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "E1505": {
+    "nombre": "Introducción a la Robótica",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "Regularizada",
+          "codigo": "E1304"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "E1282"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "E1302"
+        },
+        {
+          "estado": "Regularizada",
+          "codigo": "I1103"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "I1102"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "S1001": {
+    "nombre": "Humanística A: Metodología de las Ciencias",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "aprobadas",
+          "especial": "Tener 15 actividades"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "S1002": {
+    "nombre": "Humanística B: Seminario de Redacción de Textos Profesionales",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "estado": "aprobadas",
+          "especial": "Tener 15 actividades"
+        },
+        {
+          "estado": "Aprobada",
+          "codigo": "INFIN"
+        }
+      ]
+    ]
+  },
+  "1B010": {
+    "nombre": "AFC1 - Actividad Libre 10p",
+    "anio": null,
+    "previas": []
+  },
+  "2B010": {
+    "nombre": "AFC2 - Actividad Libre 10p",
+    "anio": 4,
+    "previas": []
+  },
+  "3B010": {
+    "nombre": "AFC3 - Actividad Libre 10p",
+    "anio": null,
+    "previas": []
+  },
+  "4B010": {
+    "nombre": "AFC4 - Actividad Libre 10p",
+    "anio": null,
+    "previas": []
+  },
+  "INFIN": {
+    "nombre": "Prueba de Suficiencia de Inglés",
+    "anio": null,
+    "previas": []
+  }
+}
