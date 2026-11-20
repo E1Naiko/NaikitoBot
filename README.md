@@ -190,6 +190,11 @@ Horarios de puntuación (valores por defecto; se configuran en `.env`):
 - 09:00 a 09:59: 5 puntos.
 - Desde las 10:00: fuera de horario.
 
+El primer mensaje de cada persona dentro del horario válido en un canal
+configurado en `MADRUGUE_CHANNEL_IDS` registra su madrugada automáticamente,
+sin enviar avisos al canal. `/madrugue` sigue disponible; ambos métodos
+comparten el mismo registro diario. No se repasa el historial al reconectar.
+
 La puntuación de Madrugue se configura con variables de entorno: las ventanas
 con `MADRUGUE_INICIO_100`, `MADRUGUE_INICIO_25`, `MADRUGUE_INICIO_5` y
 `MADRUGUE_FIN` (horas en formato `HH:MM`); los puntos de cada ventana con
@@ -877,3 +882,7 @@ En Ciencia de Datos, la PPS pide 13 asignaturas aprobadas. El PDF repite
   Se usa el semestre dentro del año (por ejemplo, el tercero de la carrera
   es el primero de segundo año). **Ambos** también incluye el ingreso y
   actividades sin semestre indicado, en una sección separada.
+
+Los listados largos de Correlativas se muestran en un único mensaje privado
+con botones **Anterior** y **Siguiente**. El bot solo envía la primera página
+al ejecutar el comando; al navegar, edita ese mismo mensaje.

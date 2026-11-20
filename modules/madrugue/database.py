@@ -54,11 +54,12 @@ async def tiene_registro(guild_id, user_id, fecha):
 
 async def guardar_registro(
     guild_id, user_id, username, fecha, hora, puntos_base, multiplicador,
-    puntos_finales,
+    puntos_finales, *, ignorar_repetido=False,
 ):
-    await _escribir(
+    conflicto = " ON CONFLICT(guild_id, user_id, fecha) DO NOTHING" if ignorar_repetido else ""
+    return await _escribir(
         "INSERT INTO registros (guild_id, user_id, username, fecha, hora, "
-        "puntos_base, multiplicador, puntos_finales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "puntos_base, multiplicador, puntos_finales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)" + conflicto,
         (guild_id, user_id, username, _fecha(fecha), hora, puntos_base,
          multiplicador, puntos_finales),
     )

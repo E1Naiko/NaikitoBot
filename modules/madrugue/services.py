@@ -247,7 +247,7 @@ async def registrar_madrugue(
     # GUARDAR
     # ========================================================
 
-    await guardar_registro(
+    insertado = await guardar_registro(
         guild_id=guild_id,
         user_id=user_id,
         username=username,
@@ -256,7 +256,15 @@ async def registrar_madrugue(
         puntos_base=puntos_base,
         multiplicador=multiplicador,
         puntos_finales=puntos_finales,
+        ignorar_repetido=True,
     )
+    if not insertado:
+        registro = await obtener_registro_del_dia(guild_id, user_id, fecha)
+        hora_anterior, puntos_anterior = registro or (ahora.strftime("%H:%M"), 0)
+        return ResultadoMadrugue(
+            exitoso=False, motivo="ya_registrado", hora=ahora,
+            hora_anterior=hora_anterior, puntos_anterior=puntos_anterior,
+        )
 
     # ========================================================
     # TOTAL

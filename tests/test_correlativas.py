@@ -174,3 +174,52 @@ async def test_autocompletar_aprobar_sugiere_pendientes_habilitadas(base_datos_l
     assert await sugerencias('si106') == {'SI106': 'SI106 · Conceptos de Algoritmos, Datos y Programas'}
     assert 'SI106' in await sugerencias('algoritmos')
     assert 'CNE' not in await sugerencias()
+
+
+async def test_listado_largo_envia_una_pagina_y_edita_al_avanzar(base_datos_limpia, monkeypatch):
+    import commands.correlativas as modulo
+
+    monkeypatch.setattr(modulo, 'ejecutar', lambda *_: '\n'.join(['A' * 100] * 40 + ['última materia']))
+    cog = Correlativas()
+    interaccion = InteraccionFalsa(user_id=41)
+    await type(cog).siguientes.callback(cog, interaccion)
+    assert len(interaccion.respuestas) == 1
+    respuesta = interaccion.respuestas[0].kwargs
+    assert respuesta['ephemeral']
+    assert 'última materia' not in respuesta['embed'].description
+    vista = respuesta['view']
+    assert vista.anterior.disabled and not vista.siguiente.disabled
+    assert not await vista.interaction_check(InteraccionFalsa(user_id=42))
+    clic = InteraccionFalsa(user_id=41)
+    assert await vista.interaction_check(clic)
+    await vista.siguiente.callback(clic)
+    assert len(clic.respuestas) == 1
+    assert 'última materia' in clic.respuestas[0].kwargs['embed'].description
+    assert vista.siguiente.disabled and not vista.anterior.disabled
+
+
+async def test_correlativas_respeta_pausa_tras_429(base_datos_limpia, monkeypatch):
+    import commands.correlativas as modulo
+    from tests.harness import error_http
+
+    pausa = []
+    intentos = []
+
+    def registrar(error, *, contexto):
+        assert error.status == 429
+        pausa.append(contexto)
+        return 300
+
+    async def rechazar(**kwargs):
+        intentos.append(kwargs)
+        raise error_http(429, '<html>bloqueo</html>')
+
+    monkeypatch.setattr(modulo, 'registrar_limite', registrar)
+    monkeypatch.setattr(modulo, 'espera_restante', lambda: 300 if pausa else 0)
+    cog = Correlativas()
+    interaccion = InteraccionFalsa(user_id=41)
+    monkeypatch.setattr(interaccion.response, 'send_message', rechazar)
+    for _ in range(2):
+        await type(cog).planes.callback(cog, interaccion)
+    assert len(intentos) == 1
+    assert pausa == ['respuesta de correlativas']
