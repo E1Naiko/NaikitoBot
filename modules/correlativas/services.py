@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from core.sqlite import conectar_sync
-from modules.correlativas.logic import cumple, listado
+from modules.correlativas.logic import habilitada, listado
 
 
 class Bot:
@@ -114,8 +114,7 @@ class Bot:
             return ('Aprobada: ' if alta else 'Ya estaba aprobada: ') + materias[codigo]['nombre']
         hechas = {k for k, in self.db.execute('SELECT codigo FROM correlativas_aprobadas WHERE usuario=? AND plan=?',
                                               (usuario, plan))}
-        return listado(materias, lambda k, m: k not in hechas and (not m['previas'] or any(
-            all(cumple(r, hechas) for r in opcion) for opcion in m['previas'])))
+        return listado(materias, lambda k, m: k not in hechas and habilitada(m, hechas))
 
 
 def ejecutar(usuario, mensaje, administrador=False):

@@ -1,0 +1,453 @@
+{
+  "CNE": {
+    "nombre": "Expresión de Problemas y Algoritmos",
+    "anio": 1,
+    "previas": []
+  },
+  "CNC": {
+    "nombre": "Conceptos de Organización de Computadoras",
+    "anio": 1,
+    "previas": []
+  },
+  "CNM": {
+    "nombre": "Matemática 0",
+    "anio": 1,
+    "previas": []
+  },
+  "SI106": {
+    "nombre": "Conceptos de Algoritmos, Datos y Programas",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "codigo": "CNE"
+        },
+        {
+          "codigo": "CNC"
+        },
+        {
+          "codigo": "CNM"
+        }
+      ]
+    ]
+  },
+  "SI104": {
+    "nombre": "Organización de Computadoras",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "codigo": "CNE"
+        },
+        {
+          "codigo": "CNC"
+        },
+        {
+          "codigo": "CNM"
+        }
+      ]
+    ]
+  },
+  "SI101": {
+    "nombre": "Matemática 1",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "codigo": "CNE"
+        },
+        {
+          "codigo": "CNC"
+        },
+        {
+          "codigo": "CNM"
+        }
+      ]
+    ]
+  },
+  "SI107": {
+    "nombre": "Taller de Programación",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "codigo": "SI106"
+        }
+      ]
+    ]
+  },
+  "SI105": {
+    "nombre": "Arquitectura de Computadoras",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "codigo": "SI104"
+        }
+      ]
+    ]
+  },
+  "SI102": {
+    "nombre": "Matemática 2",
+    "anio": 1,
+    "previas": [
+      [
+        {
+          "codigo": "SI101"
+        }
+      ]
+    ]
+  },
+  "SI209": {
+    "nombre": "Fundamentos de Organización de Datos",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI107"
+        }
+      ]
+    ]
+  },
+  "SI203": {
+    "nombre": "Algoritmos y Estructuras de Datos",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI102"
+        },
+        {
+          "codigo": "SI107"
+        }
+      ]
+    ]
+  },
+  "SI207": {
+    "nombre": "Seminario de Lenguajes",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI107"
+        }
+      ]
+    ]
+  },
+  "SI210": {
+    "nombre": "Diseño de Bases de Datos",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI209"
+        }
+      ]
+    ]
+  },
+  "SI202": {
+    "nombre": "Ingeniería de Software 1",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI107"
+        }
+      ]
+    ]
+  },
+  "SI206": {
+    "nombre": "Orientación a Objetos 1",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI107"
+        }
+      ]
+    ]
+  },
+  "SI204": {
+    "nombre": "Introducción a los Sistemas Operativos",
+    "anio": 2,
+    "previas": [
+      [
+        {
+          "codigo": "SI107"
+        },
+        {
+          "codigo": "SI105"
+        }
+      ]
+    ]
+  },
+  "SI208": {
+    "nombre": "Taller de lecto-comprensión y Traducción en Inglés",
+    "anio": 2,
+    "previas": []
+  },
+  "SI308": {
+    "nombre": "Matemática 3",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI102"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "SI302": {
+    "nombre": "Ingeniería de Software 2",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI202"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "SI306": {
+    "nombre": "Conceptos y Paradigmas de Lenguajes de Programación",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI203"
+        },
+        {
+          "codigo": "SI207"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "SI307": {
+    "nombre": "Orientación a Objetos 2",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI206"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "SI304": {
+    "nombre": "Redes y Comunicaciones",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI102"
+        },
+        {
+          "codigo": "SI204"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "SI301": {
+    "nombre": "Programación Concurrente",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI204"
+        },
+        {
+          "codigo": "SI207"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "SI305": {
+    "nombre": "Proyecto de Software",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI210"
+        },
+        {
+          "codigo": "SI202"
+        },
+        {
+          "codigo": "SI203"
+        },
+        {
+          "codigo": "SI207"
+        },
+        {
+          "codigo": "SI208"
+        },
+        {
+          "codigo": "SI206"
+        }
+      ]
+    ]
+  },
+  "0I309": {
+    "nombre": "Computabilidad y Complejidad",
+    "anio": 3,
+    "previas": [
+      [
+        {
+          "codigo": "SI203"
+        },
+        {
+          "codigo": "SI308"
+        },
+        {
+          "codigo": "SI208"
+        }
+      ]
+    ]
+  },
+  "0I401": {
+    "nombre": "Teoría de la computación y verificación de programas",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI308"
+        },
+        {
+          "codigo": "SI306"
+        }
+      ]
+    ]
+  },
+  "SI403": {
+    "nombre": "Sistemas Operativos",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI304"
+        }
+      ]
+    ]
+  },
+  "SI404": {
+    "nombre": "Sistemas Paralelos",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI301"
+        }
+      ]
+    ]
+  },
+  "OPTATIVA-1-LI": {
+    "nombre": "Optativa 1 LI",
+    "anio": 4,
+    "previas": []
+  },
+  "0I406": {
+    "nombre": "Lógica e Inteligencia Artificial",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI102"
+        },
+        {
+          "codigo": "SI306"
+        }
+      ]
+    ]
+  },
+  "SI409": {
+    "nombre": "Matemática 4",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI308"
+        }
+      ]
+    ]
+  },
+  "0I402": {
+    "nombre": "Laboratorio de Software",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI305"
+        }
+      ]
+    ]
+  },
+  "0I405": {
+    "nombre": "Programación Distribuida y Tiempo Real",
+    "anio": 4,
+    "previas": [
+      [
+        {
+          "codigo": "SI306"
+        },
+        {
+          "codigo": "SI304"
+        }
+      ]
+    ]
+  },
+  "0I502": {
+    "nombre": "Diseño de Experiencia de Usuario",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "codigo": "SI302"
+        },
+        {
+          "codigo": "0I402"
+        }
+      ]
+    ]
+  },
+  "SI504": {
+    "nombre": "Aspectos Sociales y Profesionales de Informática",
+    "anio": 5,
+    "previas": [
+      [
+        {
+          "codigo": "SI305"
+        }
+      ]
+    ]
+  },
+  "SI505": {
+    "nombre": "Aspectos Éticos, Sociales y Profesionales Avanzados de Informática",
+    "anio": 5,
+    "previas": []
+  },
+  "0I503": {
+    "nombre": "Tesina de Licenciatura en Informática",
+    "anio": 5,
+    "previas": [],
+    "nota": "El PDF no especifica los requisitos de tesina",
+    "requiere_consulta": true
+  }
+}

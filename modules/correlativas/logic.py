@@ -11,5 +11,21 @@ def cumple(requisito, hechas):
     return bool(cantidad and len(hechas) >= int(cantidad[1]))
 
 
+def habilitada(materia, hechas):
+    """No da por cumplidas condiciones que la fuente no permite evaluar."""
+    return not materia.get('requiere_consulta') and (
+        not materia['previas'] or any(
+            all(cumple(r, hechas) for r in opcion) for opcion in materia['previas']
+        )
+    )
+
+
 def listado(materias, incluir):
-    return '\n'.join(f"{k} · {m['nombre']}" for k, m in materias.items() if incluir(k, m)) or 'No hay materias.'
+    lineas = []
+    for codigo, materia in materias.items():
+        if incluir(codigo, materia):
+            nota = ' (elegir una asignatura del grupo)' if materia.get('elegir_una') else ''
+            if materia.get("nota"):
+                nota += f" ({materia['nota']})"
+            lineas.append(f"{codigo} · {materia['nombre']}{nota}")
+    return '\n'.join(lineas) or 'No hay materias.'

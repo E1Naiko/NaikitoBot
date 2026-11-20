@@ -62,3 +62,52 @@ async def test_plan_informatica_2027(base_datos_limpia):
     assert '0I503' not in await invocar(cog, 'siguientes', 41)
     await invocar(cog, 'aprobar', 41, 'SI302')
     assert '0I503' in await invocar(cog, 'siguientes', 41)
+
+
+@pytest.mark.asyncio
+async def test_plan_apu_2027(base_datos_limpia):
+    cog = Correlativas()
+    assert 'apu-2027' in await invocar(cog, 'planes', 41)
+    await invocar(cog, 'unirse', 41, 'apu-2027')
+    tercero = await invocar(cog, 'materias', 41, 'apu-2027', 3)
+    assert tercero.count('elegir una asignatura del grupo') == 4
+    assert 'SO303 · Bases de Datos 1' in tercero
+    assert 'SO410 · Sistemas y Organizaciones' in tercero
+    assert '07301' not in await invocar(cog, 'siguientes', 41)
+    for codigo in ('SI212', 'SI203', 'SI204', 'SI206', 'SI208'):
+        await invocar(cog, 'aprobar', 41, codigo)
+    assert '07301' not in await invocar(cog, 'siguientes', 41)
+    await invocar(cog, 'aprobar', 41, 'SI302')
+    siguientes = await invocar(cog, 'siguientes', 41)
+    assert '07301' in siguientes
+    assert 'SO303 · Bases de Datos 1 (elegir una asignatura del grupo)' in siguientes
+
+
+@pytest.mark.parametrize('plan, codigo', [
+    ('informatica-2023', 'SI308'), ('sistemas-2023', 'SI308'),
+    ('apu-2023', 'SI308'), ('atic-2023', 'PPS'),
+])
+async def test_ingles_para_tercero_en_planes_2023(base_datos_limpia, plan, codigo):
+    cog = Correlativas()
+    assert plan in await invocar(cog, 'planes', 41)
+    await invocar(cog, 'unirse', 41, plan)
+    previas = ('SI210', 'SI203', 'SI204', 'SI206', 'SI302') if codigo == 'PPS' else ('SI102',)
+    for previa in previas:
+        await invocar(cog, 'aprobar', 41, previa)
+    assert codigo not in await invocar(cog, 'siguientes', 41)
+    await invocar(cog, 'aprobar', 41, 'SI208')
+    assert codigo in await invocar(cog, 'siguientes', 41)
+
+
+async def test_pps_y_codigo_repetido_en_ciencia_de_datos(base_datos_limpia):
+    cog = Correlativas()
+    await invocar(cog, 'unirse', 41, 'ciencia-de-datos-2024')
+    assert 'I101-BD' in await invocar(cog, 'materias', 41, 'ciencia-de-datos-2024', 2)
+    for codigo in ('I101', 'X102', 'E103', 'I104', 'X105', 'E106', 'I201',
+                   'I202', 'E203', 'X204', 'E206', 'X207'):
+        await invocar(cog, 'aprobar', 41, codigo)
+    pendientes = await invocar(cog, 'siguientes', 41)
+    assert 'O408' not in pendientes and 'O407' not in pendientes
+    assert 'I101-BD' in pendientes
+    await invocar(cog, 'aprobar', 41, 'I101-BD')
+    assert 'O408' in await invocar(cog, 'siguientes', 41)
