@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from core.sqlite import conectar_sync
-from modules.correlativas.logic import habilitada, listado
+from modules.correlativas.logic import habilitada, listado_por_semestre, progreso
 
 
 class Bot:
@@ -86,15 +86,17 @@ class Bot:
             self.db.execute('INSERT OR REPLACE INTO correlativas_usuarios VALUES (?, ?)', (usuario, plan))
             self.db.commit()
             return 'Plan activo: ' + plan
-        if palabras[:2] in (['mostrar', 'anio'], ['mostrar', 'año']) and len(palabras) == 4:
-            plan, anio = palabras[2:]
+        if palabras[:2] in (['mostrar', 'anio'], ['mostrar', 'año']) and len(palabras) in (4, 5):
+            plan, anio = palabras[2:4]
+            semestre = int(palabras[4]) if palabras[4:] in (["1"], ["2"]) else None
             if plan not in catalogo:
                 return planes
             if not re.fullmatch('[1-9][0-9]*', anio):
                 return 'Ingresá un año positivo.'
-            return listado(catalogo[plan], lambda k, m: str(m['anio']) == anio)
+            return listado_por_semestre(catalogo[plan], lambda k, m: str(m['anio']) == anio, semestre)
         aprobar = palabras[:2] == ['aprobar', 'materia'] and len(palabras) >= 3
-        if not aprobar and palabras != ['materias', 'quiensigue']:
+        siguientes = palabras[:2] == ['materias', 'quiensigue']
+        if not aprobar and not siguientes and palabras != ['progreso']:
             return ('unirse <plan> | aprobar materia <código o nombre> | mostrar anio <plan> <número> '
                     '| materias quiensigue\n' + planes)
         fila = self.db.execute('SELECT plan FROM correlativas_usuarios WHERE usuario=?', (usuario,)).fetchone()
@@ -117,14 +119,21 @@ class Bot:
             hechas = self._aprobadas(usuario, plan)
             self.db.commit()
             antes = hechas - {codigo}
-            nuevas = listado(
+            nuevas = listado_por_semestre(
                 materias,
                 lambda k, m: k not in hechas and habilitada(m, hechas) and not habilitada(m, antes),
                 vacio='No se habilitaron materias nuevas.',
             )
             return f'Aprobada: {nombre}\n\n**Materias recién habilitadas**\n{nuevas}'
         hechas = self._aprobadas(usuario, plan)
-        return listado(materias, lambda k, m: k not in hechas and habilitada(m, hechas))
+        if palabras == ['progreso']:
+            cantidad, total = progreso(materias, hechas)
+            if not total:
+                return f'El plan {plan} todavía no tiene requisitos para contar.'
+            porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
+            return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados).'
+        semestre = int(palabras[2]) if palabras[2:] in (["1"], ["2"]) else None
+        return listado_por_semestre(materias, lambda k, m: k not in hechas and habilitada(m, hechas), semestre)
 
     def _aprobadas(self, usuario, plan):
         return {codigo for codigo, in self.db.execute(
@@ -137,3 +146,26 @@ def ejecutar(usuario, mensaje, administrador=False):
     """Ejecuta una operación de correlativas fuera del bucle de Discord."""
     with conectar_sync() as db:
         return Bot(db, admins=(usuario,) if administrador else ()).responder(str(usuario), mensaje)
+
+
+def sugerir_aprobacion(usuario, consulta):
+    """Busca hasta 25 materias pendientes y habilitadas del plan activo."""
+    consulta = consulta.strip().casefold()
+    with conectar_sync() as db:
+        usuario = str(usuario)
+        fila = db.execute('SELECT plan FROM correlativas_usuarios WHERE usuario=?', (usuario,)).fetchone()
+        if not fila:
+            return []
+        plan, = fila
+        bot = Bot(db)
+        hechas = bot._aprobadas(usuario, plan)
+        opciones = []
+        for codigo, materia in bot.catalogo().get(plan, {}).items():
+            nombre = materia['nombre']
+            if codigo in hechas or not habilitada(materia, hechas):
+                continue
+            if consulta in codigo.casefold() or consulta in nombre.casefold():
+                opciones.append((codigo, nombre))
+        return sorted(opciones, key=lambda opcion: (
+            not opcion[0].casefold().startswith(consulta), opcion[0]
+        ))[:25]

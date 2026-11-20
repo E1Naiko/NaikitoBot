@@ -24,10 +24,10 @@ __all__ = ["version_bot"]
 
 # Subir a mano con cada función/sistema nuevo importante (y resetear
 # VERSION_REVISION a 0 al subir este número).
-VERSION_FUNCION = 2
+VERSION_FUNCION = 3
 
 # Subir a mano con cada ajuste menor sobre la última función.
-VERSION_REVISION = 1
+VERSION_REVISION = 0
 
 _VERSION_MAYOR = 2
 _RAIZ_PROYECTO = Path(__file__).resolve().parent.parent

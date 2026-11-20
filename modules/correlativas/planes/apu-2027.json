@@ -2,17 +2,20 @@
   "CNE": {
     "nombre": "Expresión de Problemas y Algoritmos",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "CNP": {
     "nombre": "Conceptos de Procesadores e Inteligencia Artificial",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "CNM": {
     "nombre": "Matemática 0",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "SI106": {
     "nombre": "Conceptos de Algoritmos, Datos y Programas",
@@ -23,7 +26,8 @@
           "codigo": "CNE"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI108": {
     "nombre": "Arquitectura de Computadoras I",
@@ -34,7 +38,8 @@
           "codigo": "CNP"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI101": {
     "nombre": "Matemática 1",
@@ -45,7 +50,8 @@
           "codigo": "CNM"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI107": {
     "nombre": "Taller de Programación",
@@ -56,7 +62,8 @@
           "codigo": "SI106"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI109": {
     "nombre": "Arquitectura de Computadoras II",
@@ -67,7 +74,8 @@
           "codigo": "SI108"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI102": {
     "nombre": "Matemática 2",
@@ -78,7 +86,8 @@
           "codigo": "SI101"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI211": {
     "nombre": "Modelado de Datos",
@@ -89,7 +98,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI203": {
     "nombre": "Algoritmos y Estructuras de Datos",
@@ -103,7 +113,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI207": {
     "nombre": "Seminario de Lenguajes (Android+Kotlin, PHP-React y API Rest, .NET, Python, Javascript, Go, Rust)",
@@ -114,7 +125,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI212": {
     "nombre": "Gestión y Análisis de Bases de Datos",
@@ -125,7 +137,8 @@
           "codigo": "SI211"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI202": {
     "nombre": "Ingeniería de Software 1",
@@ -136,7 +149,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI206": {
     "nombre": "Orientación a Objetos 1",
@@ -147,7 +161,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI204": {
     "nombre": "Introducción a los Sistemas Operativos",
@@ -161,12 +176,14 @@
           "codigo": "SI109"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI208": {
     "nombre": "Taller de lecto-comprensión y Traducción en Inglés",
     "anio": 2,
-    "previas": []
+    "previas": [],
+    "semestre": 2
   },
   "SI308": {
     "nombre": "Matemática 3",
@@ -177,7 +194,8 @@
           "codigo": "SI102"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI302": {
     "nombre": "Ingeniería de Software 2",
@@ -191,7 +209,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI307": {
     "nombre": "Orientación a Objetos 2",
@@ -205,7 +224,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI301": {
     "nombre": "Programación Concurrente",
@@ -222,7 +242,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI305": {
     "nombre": "Proyecto de Software",
@@ -248,7 +269,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "07301": {
     "nombre": "Taller de Tecnologías de Producción de Software (opciones A, B, C, D y E)",
@@ -274,7 +296,8 @@
           "codigo": "SI302"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI306": {
     "nombre": "Conceptos y Paradigmas de Lenguajes de Programación",
@@ -292,7 +315,8 @@
         }
       ]
     ],
-    "elegir_una": true
+    "elegir_una": true,
+    "semestre": 1
   },
   "SI304": {
     "nombre": "Redes y Comunicaciones",
@@ -310,7 +334,8 @@
         }
       ]
     ],
-    "elegir_una": true
+    "elegir_una": true,
+    "semestre": 2
   },
   "SO303": {
     "nombre": "Bases de Datos 1",
@@ -325,7 +350,8 @@
         }
       ]
     ],
-    "elegir_una": true
+    "elegir_una": true,
+    "semestre": 2
   },
   "SO410": {
     "nombre": "Sistemas y Organizaciones",
@@ -343,6 +369,7 @@
         }
       ]
     ],
-    "elegir_una": true
+    "elegir_una": true,
+    "semestre": 2
   }
 }

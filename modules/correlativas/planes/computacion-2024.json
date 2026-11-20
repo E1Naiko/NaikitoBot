@@ -2,12 +2,14 @@
   "D1001": {
     "nombre": "Matemática para Ingeniería",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "I1001": {
     "nombre": "Introducción a la Informática",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "F1301": {
     "nombre": "Matemática A",
@@ -19,7 +21,8 @@
           "codigo": "D1001"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1101": {
     "nombre": "Programación I",
@@ -31,7 +34,8 @@
           "codigo": "I1001"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1166": {
     "nombre": "Fundamentos de Arquitectura de Computadoras",
@@ -43,7 +47,8 @@
           "codigo": "I1001"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "F1302": {
     "nombre": "Matemática B",
@@ -59,7 +64,8 @@
           "codigo": "F1301"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1102": {
     "nombre": "Programación II",
@@ -75,7 +81,8 @@
           "codigo": "I1101"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "F1303": {
     "nombre": "Física I",
@@ -91,7 +98,8 @@
           "codigo": "F1301"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "F1304": {
     "nombre": "Matemática C",
@@ -107,7 +115,8 @@
           "codigo": "F1302"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1103": {
     "nombre": "Programación III",
@@ -123,7 +132,8 @@
           "codigo": "I1102"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1105": {
     "nombre": "Arquitectura de Computadoras",
@@ -139,7 +149,8 @@
           "codigo": "I1166"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1104": {
     "nombre": "Taller de Lenguajes I",
@@ -155,7 +166,8 @@
           "codigo": "I1102"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "F1306": {
     "nombre": "Matemática D",
@@ -171,7 +183,8 @@
           "codigo": "F1304"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "F1305": {
     "nombre": "Física II",
@@ -191,7 +204,8 @@
           "codigo": "F1303"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1106": {
     "nombre": "Conceptos de Sistemas Operativos",
@@ -215,7 +229,8 @@
           "codigo": "I1105"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1107": {
     "nombre": "Taller de Lenguajes II",
@@ -231,7 +246,8 @@
           "codigo": "I1104"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "F1315": {
     "nombre": "Probabilidades y Estadística",
@@ -251,7 +267,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E1282": {
     "nombre": "Electrotecnia y Electrónica",
@@ -279,7 +296,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1108": {
     "nombre": "Conceptos de Bases de Datos",
@@ -299,7 +317,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E1301": {
     "nombre": "Introducción al Diseño Lógico",
@@ -319,7 +338,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E1302": {
     "nombre": "Introducción al Procesamiento de Señales",
@@ -339,7 +359,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1109": {
     "nombre": "Taller de Arquitectura",
@@ -359,7 +380,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1110": {
     "nombre": "Ingeniería de Software",
@@ -379,7 +401,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "E1303": {
     "nombre": "Redes de Datos I",
@@ -403,7 +426,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1111": {
     "nombre": "Concurrencia y Paralelismo",
@@ -435,7 +459,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E1304": {
     "nombre": "Instrumentación y Control",
@@ -467,7 +492,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E1305": {
     "nombre": "Circuitos Digitales y Microcontroladores",
@@ -487,7 +513,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1113": {
     "nombre": "Economía y Emprendedorismo",
@@ -507,7 +534,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1114": {
     "nombre": "Redes de Datos II",
@@ -527,7 +555,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1115": {
     "nombre": "Sistemas de Tiempo Real",
@@ -559,7 +588,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "E1306": {
     "nombre": "Taller de Proyecto I",
@@ -587,7 +617,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1112": {
     "nombre": "Bases de Datos",
@@ -607,7 +638,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1116": {
     "nombre": "Sistemas Distribuidos y Paralelos",
@@ -631,7 +663,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1117": {
     "nombre": "Aspectos Legales de Ingeniería Informática",
@@ -651,7 +684,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E1307": {
     "nombre": "Introducción a la Arquitectura de Computadoras Cuánticas",
@@ -675,7 +709,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I1118": {
     "nombre": "Taller de Proyecto II",
@@ -695,7 +730,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I1167": {
     "nombre": "Introducción a la Programación Cuántica",
@@ -723,7 +759,8 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "EI100": {
     "nombre": "Práctica Profesional Supervisada",
@@ -763,7 +800,9 @@
           "codigo": "F1315"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1143": {
     "nombre": "Desarrollo Seguro de Aplicaciones",
@@ -781,7 +820,9 @@
           "codigo": "I1114"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1149": {
     "nombre": "Diseño de Experiencia de Usuario",
@@ -793,7 +834,9 @@
           "codigo": "I1110"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1161": {
     "nombre": "Internet de las Cosas",
@@ -811,7 +854,9 @@
           "codigo": "I1114"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1128": {
     "nombre": "Java y Aplicaciones Avanzadas sobre Internet",
@@ -829,7 +874,9 @@
           "codigo": "I1110"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1133": {
     "nombre": "Minería de Datos Usando Sistemas Inteligentes",
@@ -847,7 +894,9 @@
           "codigo": "F1315"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1163": {
     "nombre": "Procesamiento de Imágenes Digitales",
@@ -859,7 +908,9 @@
           "codigo": "E1302"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1145": {
     "nombre": "Taller de Lenguaje .NET",
@@ -877,7 +928,9 @@
           "codigo": "I1103"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1144": {
     "nombre": "Taller de Lenguaje PHP",
@@ -895,7 +948,9 @@
           "codigo": "I1103"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "I1121": {
     "nombre": "CALIDAD EN SISTEMAS DE SOFTWARE",
@@ -923,7 +978,9 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "E1318": {
     "nombre": "Dispositivos Electrónicos",
@@ -947,7 +1004,9 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "E1310": {
     "nombre": "Electrónica II",
@@ -971,7 +1030,9 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "E1603": {
     "nombre": "Teoría de la Información y Codificación",
@@ -999,7 +1060,9 @@
           "codigo": "I1106"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "E1309": {
     "nombre": "Arquitectura Avanzada de Procesadores",
@@ -1027,7 +1090,9 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "E1311": {
     "nombre": "Comunicaciones",
@@ -1047,7 +1112,9 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "E1505": {
     "nombre": "Introducción a la Robótica",
@@ -1079,7 +1146,9 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "I1158",
+    "cupo_progreso": 2
   },
   "S1001": {
     "nombre": "Humanística A: Metodología de las Ciencias",
@@ -1095,7 +1164,10 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "S1001",
+    "cupo_progreso": 1,
+    "semestre": 2
   },
   "S1002": {
     "nombre": "Humanística B: Seminario de Redacción de Textos Profesionales",
@@ -1111,27 +1183,34 @@
           "codigo": "INFIN"
         }
       ]
-    ]
+    ],
+    "grupo_progreso": "S1001",
+    "cupo_progreso": 1,
+    "semestre": 2
   },
   "1B010": {
     "nombre": "AFC1 - Actividad Libre 10p",
     "anio": null,
-    "previas": []
+    "previas": [],
+    "semestre": 1
   },
   "2B010": {
     "nombre": "AFC2 - Actividad Libre 10p",
     "anio": 4,
-    "previas": []
+    "previas": [],
+    "semestre": 2
   },
   "3B010": {
     "nombre": "AFC3 - Actividad Libre 10p",
     "anio": null,
-    "previas": []
+    "previas": [],
+    "semestre": 1
   },
   "4B010": {
     "nombre": "AFC4 - Actividad Libre 10p",
     "anio": null,
-    "previas": []
+    "previas": [],
+    "semestre": 2
   },
   "INFIN": {
     "nombre": "Prueba de Suficiencia de Inglés",
