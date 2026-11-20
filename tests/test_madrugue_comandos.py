@@ -205,3 +205,42 @@ async def test_ayuda_muestra_los_comandos(cog):
 
     assert embed.title == "🌅 Ayuda de Madrugue"
     assert "/madrugue" in embed.fields[0].name
+
+
+async def test_registro_automatico_solo_en_canal_madrugue(cog, monkeypatch):
+    from datetime import timedelta, timezone
+    from types import SimpleNamespace
+
+    import config
+    from core.utils import ahora
+    from modules.madrugue.database import obtener_registro_del_dia
+
+    monkeypatch.setattr(config, 'MADRUGUE_CHANNEL_IDS', {99})
+    momento = datetime.combine(ahora().date(), config.MADRUGUE_INICIO_100, config.TIMEZONE)
+    mensaje = SimpleNamespace(
+        guild=SimpleNamespace(id=GUILD), author=SimpleNamespace(id=USUARIO, bot=False, display_name='Tester'),
+        channel=SimpleNamespace(id=98), webhook_id=None, is_system=lambda: False,
+        created_at=momento.astimezone(timezone.utc),
+    )
+    await cog.on_message(mensaje)
+    assert await obtener_registro_del_dia(GUILD, USUARIO, momento.date()) is None
+    mensaje.channel.id = 99
+    await cog.on_message(mensaje)
+    registro = await obtener_registro_del_dia(GUILD, USUARIO, momento.date())
+    assert registro[0] == momento.strftime('%H:%M')
+    mensaje.created_at += timedelta(minutes=1)
+    await cog.on_message(mensaje)
+    assert await obtener_registro_del_dia(GUILD, USUARIO, momento.date()) == registro
+    resultado = await registrar_madrugue(GUILD, USUARIO, 'Tester', momento)
+    assert resultado.motivo == 'ya_registrado'
+
+
+async def test_registro_simultaneo_no_duplica_puntos(cog):
+    import asyncio
+
+    import config
+    from core.utils import ahora
+
+    momento = datetime.combine(ahora().date(), config.MADRUGUE_INICIO_100, config.TIMEZONE)
+    resultados = await asyncio.gather(*(registrar_madrugue(GUILD, USUARIO, 'Tester', momento) for _ in range(2)))
+    assert sorted(r.motivo for r in resultados) == ['registrado', 'ya_registrado']
