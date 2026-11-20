@@ -111,3 +111,20 @@ async def test_pps_y_codigo_repetido_en_ciencia_de_datos(base_datos_limpia):
     assert 'I101-BD' in pendientes
     await invocar(cog, 'aprobar', 41, 'I101-BD')
     assert 'O408' in await invocar(cog, 'siguientes', 41)
+
+
+async def test_aprobar_muestra_solo_materias_recien_habilitadas(base_datos_limpia):
+    cog = Correlativas()
+    await invocar(cog, 'unirse', 41, 'informatica-2023')
+    for codigo in ('CNE', 'CNC'):
+        respuesta = await invocar(cog, 'aprobar', 41, codigo)
+        assert 'No se habilitaron materias nuevas' in respuesta
+    respuesta = await invocar(cog, 'aprobar', 41, 'CNM')
+    assert 'Materias recién habilitadas' in respuesta
+    for codigo in ('SI106', 'SI104', 'SI101'):
+        assert codigo in respuesta
+    assert 'SI208' not in respuesta  # Ya estaba habilitada antes.
+    assert 'SI107' not in respuesta  # Sigue requiriendo SI106.
+    assert 'SI208' in await invocar(cog, 'siguientes', 41)
+    repetida = await invocar(cog, 'aprobar', 41, 'CNM')
+    assert 'Ya estaba aprobada' in repetida and 'SI106' not in repetida

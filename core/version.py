@@ -27,7 +27,7 @@ __all__ = ["version_bot"]
 VERSION_FUNCION = 2
 
 # Subir a mano con cada ajuste menor sobre la última función.
-VERSION_REVISION = 0
+VERSION_REVISION = 1
 
 _VERSION_MAYOR = 2
 _RAIZ_PROYECTO = Path(__file__).resolve().parent.parent
