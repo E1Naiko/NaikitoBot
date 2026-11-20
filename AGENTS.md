@@ -174,7 +174,7 @@ Discord → commands/(cog o view) → modules/<area>/services.py
 
 - `/correlativas` no tiene restricción de canal y sus respuestas son efímeras.
   Las altas de planes y materias requieren `core.permissions.es_admin()`.
-- El catálogo incluido (Computación 2024 e Informática 2027) vive en `modules/correlativas/planes/`.
+- El catálogo de planes incluido vive en `modules/correlativas/planes/`.
   Las altas administrativas se guardan en SQLite, sin modificar esos archivos.
 - El plan activo se guarda por usuario de Discord; las aprobaciones, por usuario
   y plan. Cambiar de plan no borra el progreso anterior.

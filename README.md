@@ -815,7 +815,7 @@ sale sola del último commit del repositorio.
 
 ## Correlativas
 
-Consultá los planes **Computación 2024** e **Informática 2027** y registrá tu progreso desde Discord:
+Consultá los planes disponibles y registrá tu progreso desde Discord:
 
 - `/correlativas planes`: lista los planes disponibles.
 - `/correlativas unirse plan:computacion-2024`: selecciona tu plan activo.
@@ -838,3 +838,29 @@ las aprobaciones de primero y segundo y dos adicionales de años superiores.
 El PDF repite `0I412`: el bot conserva ese código para Inteligencia Artificial
 y usa `0I412-UX` como identificador interno para Diseño de Experiencia de Usuario.
 La optativa, que no tiene código en el PDF, se registra como `OPTATIVA-LI`.
+
+Para el [plan de Analista Programador Universitario 2027 (UNLP)](https://www.info.unlp.edu.ar/wp-content/uploads/2026/11/Plan-de-estudio-2027_APU.pdf),
+usá `/correlativas unirse plan:apu-2027`. El ingreso se lista junto a primer
+año. En tercero, el bot marca las cuatro asignaturas del grupo del que el
+plan pide elegir una; muestra las que podés cursar según sus propias
+correlativas y no te obliga a elegir desde Discord.
+
+También están disponibles estos planes (el año del identificador corresponde
+al año de publicación del PDF enlazado):
+
+| Plan | Identificador |
+| --- | --- |
+| [Licenciatura en Informática](https://www.info.unlp.edu.ar/wp-content/uploads/2023/09/Planes-de-estudios-Lic.-en-Informatica.pdf) | `informatica-2023` |
+| [Licenciatura en Sistemas](https://www.info.unlp.edu.ar/wp-content/uploads/2023/09/Planes-de-estudios-Lic.-en-Sitemas.pdf) | `sistemas-2023` |
+| [Analista Programador Universitario](https://www.info.unlp.edu.ar/wp-content/uploads/2023/09/Planes-de-estudios-APU.pdf) | `apu-2023` |
+| [Analista en Tecnologías de la Información y la Comunicación](https://www.info.unlp.edu.ar/wp-content/uploads/2023/09/Planes-de-estudios-ATIC.pdf) | `atic-2023` |
+| [Ciencia de Datos en Organizaciones](https://www.info.unlp.edu.ar/wp-content/uploads/2024/10/Plan-de-estudios_Ciencia-de-Datos-en-Organizaciones.pdf) | `ciencia-de-datos-2024` |
+| [Ingeniería en Computación](https://www.info.unlp.edu.ar/wp-content/uploads/2024/09/Planes-de-estudios-IC-2024.pdf) | `computacion-2024` (catálogo existente, conservado sin cambios) |
+
+En los planes de 2023 se tiene en cuenta el requisito de Inglés para cursar
+tercero. Las tesinas de Informática y Sistemas 2023 y las optativas por
+orientación de ATIC aparecen en el listado del año, pero no se marcan como
+habilitadas porque los PDF no permiten determinar sus requisitos completos.
+En Ciencia de Datos, la PPS pide 13 asignaturas aprobadas. El PDF repite
+`I101`; en el bot, Base de Datos se registra como `I101-BD`. La optativa
+`O407` se lista, pero sus correlativas dependen de la asignatura elegida.
