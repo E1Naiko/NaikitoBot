@@ -8,7 +8,7 @@ conviene corregir este archivo en el mismo cambio.
 ## Qué es este proyecto
 
 NaikitoBot es un bot de Discord en **Python** (`discord.py` 2.7) con cuatro
-minijuegos y una capa administrativa, todo persistido en un único archivo
+minijuegos, un módulo académico y una capa administrativa, todo persistido en un único archivo
 **SQLite**:
 
 | Sistema | Clave interna | Código |
@@ -17,6 +17,7 @@ minijuegos y una capa administrativa, todo persistido en un único archivo
 | Canal 420 (`laHora`) | `lahora` | `modules/lahora`, `commands/lahora` |
 | SeptSinFP (desafío de rachas) | `ssf` | `modules/ssf`, `commands/ssf` |
 | Box (boxeo, economía, combates) | `box` | `modules/box`, `commands/box` |
+| Correlativas (planes de estudio y progreso académico) | `correlativas` | `modules/correlativas`, `commands/correlativas` |
 | Administración | — | `commands/admin` |
 | Sanciones por trampa | — | `modules/sanciones`, `commands/admin/sanciones.py` |
 
@@ -45,7 +46,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m scripts.respaldar_db
 ```
 
-Estado esperado al empezar: `pytest` en verde (hoy ~864 pruebas, ~90 s). Si algo
+Estado esperado al empezar: `pytest` en verde. Si algo
 falla antes de tocar código, resolvelo o avisá; no lo tapes con `xfail`.
 
 `pyflakes` tiene **3 avisos preexistentes** (`commands/madrugue/registro.py`,
@@ -124,7 +125,7 @@ Discord → commands/(cog o view) → modules/<area>/services.py
   `modules/<area>/database.inicializar_db()` (todos delegan en
   `core/database.inicializar_db`). Un sistema nuevo debe sumarse ahí.
 - `core/temporada.py` borra datos de todos los sistemas cada 3 de octubre.
-  Excepción deliberada: `sanciones` **no** se borra.
+  Excepciones deliberadas: `sanciones` y las tablas `correlativas_*` **no** se borran.
 - **Nunca** reintroduzcas `DATABASE_URL`: el proyecto usa solo `DATABASE`
   (archivo persistente) y falla al arrancar si aparece la variable vieja.
 
@@ -144,9 +145,9 @@ Discord → commands/(cog o view) → modules/<area>/services.py
   lista o usá `core.utils.ahora()` como base.
 - Las tareas periódicas se parchean con `monkeypatch.setattr(tasks.Loop, "start", ...)`;
   no las dejes correr de verdad en pruebas.
-- Si tocás comandos, actualizá los manifiestos que fallan a propósito:
-  `tests/test_admin_comandos.py::ARBOL_ESPERADO` y
-  `commands/admin/diagnostico.py::COMANDOS_ESPERADOS`.
+- Si tocás comandos, actualizá el manifiesto general
+  `commands/admin/diagnostico.py::COMANDOS_ESPERADOS`. Para cambios bajo
+  `/admin`, actualizá también `tests/test_admin_comandos.py::ARBOL_ESPERADO`.
 - `tests/test_descripciones_discord.py` valida que toda descripción enviada a
   Discord tenga 1–100 caracteres: cuidá el largo al redactar comandos y opciones.
 - Cada bug corregido y cada función nueva debería traer su prueba. Las pruebas
@@ -168,6 +169,23 @@ Discord → commands/(cog o view) → modules/<area>/services.py
 - Toda llamada a Discord puede dar 429: usá `espera_restante()`/`registrar_limite()`
   de `core/discord_http.py` y nunca imprimas HTML ni el token en los errores
   (usá `resumir_error()`).
+
+## Correlativas
+
+- `/correlativas` no tiene restricción de canal y sus respuestas son efímeras.
+  Las altas de planes y materias requieren `core.permissions.es_admin()`.
+- El catálogo inicial (Computación 2024) vive en `modules/correlativas/planes/`.
+  Las altas administrativas se guardan en SQLite, sin modificar esos archivos.
+- El plan activo se guarda por usuario de Discord; las aprobaciones, por usuario
+  y plan. Cambiar de plan no borra el progreso anterior.
+- `logic.py` evalúa requisitos para **cursar**, no para rendir finales.
+  El catálogo puede incluir alternativas: alcanza con cumplir todos los
+  requisitos de una de ellas. Las previas cargadas por Discord forman un único
+  conjunto de requisitos obligatorios.
+- `services.py` usa `core.sqlite.conectar_sync()` y se ejecuta fuera del bucle de
+  Discord con `asyncio.to_thread()`. Las tablas se inicializan con el esquema
+  compartido en el arranque. No apliques sanciones de minijuegos al progreso
+  académico. Los flujos de Discord se prueban en `tests/test_correlativas.py`.
 
 ## Tareas en segundo plano
 

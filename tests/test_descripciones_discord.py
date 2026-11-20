@@ -8,6 +8,7 @@ from discord.ext import commands, tasks
 EXTENSIONES = (
     "commands.general", "commands.madrugue", "commands.lahora",
     "commands.admin", "commands.ssf", "commands.box",
+    "commands.correlativas",
 )
 
 

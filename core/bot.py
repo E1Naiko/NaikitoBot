@@ -35,7 +35,7 @@ from modules.ssf.database import (
     inicializar_db as inicializar_db_ssf,
 )
 
-# Área, extensión, cog, comando raíz y canales habilitados (None para admin).
+# Área, extensión, cog, comando raíz y canales habilitados (None sin restricción).
 _SISTEMAS = (
     ("General", "commands.general", "General", "ping", GENERAL_CHANNEL_IDS),
     ("Madrugue", "commands.madrugue", "Madrugue", "madrugue", MADRUGUE_CHANNEL_IDS),
@@ -43,6 +43,7 @@ _SISTEMAS = (
     ("Administración", "commands.admin", "Admin", "admin", None),
     ("SeptSinFP", "commands.ssf", "Ssf", "ssf", SSF_CANALES_ID),
     ("Box", "commands.box", "Box", "box", BOX_CHANNEL_IDS),
+    ("Correlativas", "commands.correlativas", "Correlativas", "correlativas", None),
 )
 
 
@@ -80,6 +81,10 @@ class RestrictedCommandTree(app_commands.CommandTree):
             # Los administradores no tienen la restricción de canal.
             permitido = True
             zona = "administración"
+            canales = set()
+        elif command_name == "correlativas":
+            permitido = True
+            zona = "Correlativas"
             canales = set()
         elif command_name == "admin":
             # El chequeo de administrador se hace de nuevo en cada comando

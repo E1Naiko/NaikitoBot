@@ -50,6 +50,13 @@ PERMISOS_POR_AREA = {
 COMANDOS_ESPERADOS = frozenset(
     {
         "ping",
+        "correlativas planes",
+        "correlativas unirse",
+        "correlativas materias",
+        "correlativas aprobar",
+        "correlativas siguientes",
+        "correlativas agregar_plan",
+        "correlativas agregar_materia",
         "madrugue",
         "madrugue_stats",
         "madrugue_top",

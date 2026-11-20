@@ -182,6 +182,7 @@ async def test_manifiesto_coincide_con_el_arbol_real(
 
     from commands.admin.cog import Admin
     from commands.box.cog import Box
+    from commands.correlativas import Correlativas
     from commands.general import General
     from commands.lahora.cog import LaHora
     from commands.madrugue.cog import Madrugue
@@ -197,6 +198,7 @@ async def test_manifiesto_coincide_con_el_arbol_real(
         for clase in (General, Madrugue, LaHora, Admin, Ssf, Box):
             await bot.add_cog(clase(bot))
 
+        await bot.add_cog(Correlativas())
         resultado = bot.get_cog("Admin")._diagnosticar_arbol()
         assert resultado.estado == ESTADO_OK, resultado.detalle
     finally:

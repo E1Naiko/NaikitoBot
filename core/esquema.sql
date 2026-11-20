@@ -229,3 +229,29 @@ CREATE TABLE IF NOT EXISTS temporada (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     inicio DATE NOT NULL
 );
+
+-- Catálogo y progreso académico: no se reinician con la temporada.
+CREATE TABLE IF NOT EXISTS correlativas_planes (
+    plan TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS correlativas_materias (
+    plan TEXT NOT NULL,
+    codigo TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    anio INTEGER NOT NULL,
+    previas TEXT NOT NULL,
+    PRIMARY KEY (plan, codigo)
+);
+
+CREATE TABLE IF NOT EXISTS correlativas_usuarios (
+    usuario TEXT PRIMARY KEY,
+    plan TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS correlativas_aprobadas (
+    usuario TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    codigo TEXT NOT NULL,
+    PRIMARY KEY (usuario, plan, codigo)
+);

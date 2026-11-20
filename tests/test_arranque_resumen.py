@@ -33,7 +33,7 @@ async def test_setup_y_resumen_de_arranque(base_datos_limpia, monkeypatch, capsy
         assert "NaikitoBot2.0.1.prueba" in salida
         assert "Base de datos: inicializada" in salida
         assert "Funciones (estado de carga local)" in salida
-        for nombre in ("General", "Madrugue", "420", "Administración", "SeptSinFP", "Box"):
+        for nombre in ("General", "Madrugue", "420", "Administración", "SeptSinFP", "Box", "Correlativas"):
             assert f"{nombre}: cargado" in salida
         assert "Box acciones=activa" in salida
         assert "SSF revisión=activa" in salida

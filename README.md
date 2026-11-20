@@ -812,3 +812,21 @@ NaikitoBot<mayor>.<función>.<revisión>.<YYYYMMDD>
 (`VERSION_FUNCION` sube con cada sistema/función nueva importante,
 `VERSION_REVISION` con ajustes menores sobre esa misma función). La fecha
 sale sola del último commit del repositorio.
+
+## Correlativas
+
+Consultá el plan **Computación 2024** y registrá tu progreso desde Discord:
+
+- `/correlativas planes`: lista los planes disponibles.
+- `/correlativas unirse plan:computacion-2024`: selecciona tu plan activo.
+- `/correlativas materias plan:computacion-2024 anio:1`: lista materias de un año.
+- `/correlativas aprobar materia:D1001`: registra una aprobación por código o nombre exacto.
+- `/correlativas siguientes`: lista materias no aprobadas cuyos requisitos para cursar ya cumplís.
+
+Las respuestas son privadas. El progreso es por usuario de Discord y por plan;
+si cambiás de plan, se conservan tus aprobaciones anteriores. El sistema no
+calcula requisitos separados para rendir finales.
+
+Los administradores del bot pueden usar `/correlativas agregar_plan` y
+`/correlativas agregar_materia`; las previas de una materia nueva son códigos del
+mismo plan separados por comas y se deben cumplir todas.

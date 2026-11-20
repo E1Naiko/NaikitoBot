@@ -267,3 +267,13 @@ Código en `core/version.py`.
 4.  Añade la restricción de canal correspondiente en `RestrictedCommandTree.interaction_check()`
 5.  Añade el color del nuevo sistema en `core/mensajes.py` si lo necesitas
 6.  Configura las variables de entorno nuevas en `config/settings.py`
+
+## Correlativas
+
+`commands/correlativas` expone el catálogo y el progreso con respuestas efímeras
+sin restricción de canal. Delega las operaciones bloqueantes a un hilo; se usa
+el mismo SQLite que el resto del bot. Las tablas `correlativas_*` están en
+`core/esquema.sql` y quedan fuera del reinicio anual. El catálogo incluido se
+carga desde `modules/correlativas/planes/`; las altas administrativas se guardan
+aparte, sin modificar los archivos del plan. Las reglas y el catálogo inicial
+provienen de [E1Naiko/E1Naiko#1](https://github.com/E1Naiko/E1Naiko/pull/1).
