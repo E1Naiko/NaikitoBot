@@ -20,7 +20,7 @@ def habilitada(materia, hechas):
     )
 
 
-def listado(materias, incluir):
+def listado(materias, incluir, vacio='No hay materias.'):
     lineas = []
     for codigo, materia in materias.items():
         if incluir(codigo, materia):
@@ -28,4 +28,4 @@ def listado(materias, incluir):
             if materia.get("nota"):
                 nota += f" ({materia['nota']})"
             lineas.append(f"{codigo} · {materia['nombre']}{nota}")
-    return '\n'.join(lineas) or 'No hay materias.'
+    return '\n'.join(lineas) or vacio

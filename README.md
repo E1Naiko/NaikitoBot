@@ -821,6 +821,7 @@ Consultá los planes disponibles y registrá tu progreso desde Discord:
 - `/correlativas unirse plan:computacion-2024`: selecciona tu plan activo.
 - `/correlativas materias plan:computacion-2024 anio:1`: lista materias de un año.
 - `/correlativas aprobar materia:D1001`: registra una aprobación por código o nombre exacto.
+  La respuesta privada también indica qué materias se habilitaron con esa aprobación.
 - `/correlativas siguientes`: lista materias no aprobadas cuyos requisitos para cursar ya cumplís.
 
 Las respuestas son privadas. El progreso es por usuario de Discord y por plan;

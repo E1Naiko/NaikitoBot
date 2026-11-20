@@ -110,11 +110,27 @@ class Bot:
             codigo, = opciones
             alta = self.db.execute('INSERT OR IGNORE INTO correlativas_aprobadas VALUES (?, ?, ?)',
                                    (usuario, plan, codigo)).rowcount
+            nombre = materias[codigo]['nombre']
+            if not alta:
+                self.db.commit()
+                return 'Ya estaba aprobada: ' + nombre
+            hechas = self._aprobadas(usuario, plan)
             self.db.commit()
-            return ('Aprobada: ' if alta else 'Ya estaba aprobada: ') + materias[codigo]['nombre']
-        hechas = {k for k, in self.db.execute('SELECT codigo FROM correlativas_aprobadas WHERE usuario=? AND plan=?',
-                                              (usuario, plan))}
+            antes = hechas - {codigo}
+            nuevas = listado(
+                materias,
+                lambda k, m: k not in hechas and habilitada(m, hechas) and not habilitada(m, antes),
+                vacio='No se habilitaron materias nuevas.',
+            )
+            return f'Aprobada: {nombre}\n\n**Materias recién habilitadas**\n{nuevas}'
+        hechas = self._aprobadas(usuario, plan)
         return listado(materias, lambda k, m: k not in hechas and habilitada(m, hechas))
+
+    def _aprobadas(self, usuario, plan):
+        return {codigo for codigo, in self.db.execute(
+            'SELECT codigo FROM correlativas_aprobadas WHERE usuario=? AND plan=?', (usuario, plan)
+        )}
+
 
 
 def ejecutar(usuario, mensaje, administrador=False):
