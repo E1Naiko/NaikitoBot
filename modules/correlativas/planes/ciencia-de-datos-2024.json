@@ -2,17 +2,20 @@
   "I101": {
     "nombre": "Algoritmos y Programación I",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "semestre": 1
   },
   "X102": {
     "nombre": "Matemática A",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "semestre": 1
   },
   "E103": {
     "nombre": "Gestión de las organizaciones",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "semestre": 1
   },
   "I104": {
     "nombre": "Algoritmos y Programación II",
@@ -23,7 +26,8 @@
           "codigo": "I101"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "X105": {
     "nombre": "Matemática B",
@@ -34,7 +38,8 @@
           "codigo": "X102"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "E106": {
     "nombre": "Economía y medición económica",
@@ -48,7 +53,8 @@
           "codigo": "E103"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I201": {
     "nombre": "Taller de lenguajes",
@@ -59,7 +65,8 @@
           "codigo": "I104"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I202": {
     "nombre": "Introducción a Base de Datos",
@@ -70,7 +77,8 @@
           "codigo": "I104"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E203": {
     "nombre": "Contabilidad e interpretación de estados contables",
@@ -81,7 +89,8 @@
           "codigo": "E106"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "X204": {
     "nombre": "Matemática C",
@@ -92,7 +101,8 @@
           "codigo": "X105"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I101-BD": {
     "nombre": "Base de Datos",
@@ -103,7 +113,8 @@
           "codigo": "I202"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "E206": {
     "nombre": "Procesos de negocio",
@@ -114,7 +125,8 @@
           "codigo": "E203"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "X207": {
     "nombre": "Matemática D",
@@ -125,7 +137,8 @@
           "codigo": "X204"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "O208": {
     "nombre": "Inglés (Prueba lecto-comprensión y traducción)",
@@ -144,7 +157,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I302": {
     "nombre": "Ingeniería de Software",
@@ -158,7 +172,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E303": {
     "nombre": "Costos e información para la gestión",
@@ -175,7 +190,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E304": {
     "nombre": "Gestión de personas y equipos",
@@ -192,7 +208,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I305": {
     "nombre": "Visualización de grandes volúmenes de datos",
@@ -206,7 +223,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I306": {
     "nombre": "Minería de Datos y Aprendizaje Automático",
@@ -223,7 +241,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "E307": {
     "nombre": "Tecnologías para la Gestión",
@@ -240,7 +259,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "I401": {
     "nombre": "Conceptos y aplicaciones en Big Data",
@@ -257,7 +277,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E402": {
     "nombre": "Finanzas de empresas",
@@ -271,7 +292,8 @@
           "codigo": "E303"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E403": {
     "nombre": "Estrategia de tecnología y gestión de proyectos",
@@ -288,7 +310,8 @@
           "codigo": "O208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "E404": {
     "nombre": "Marketing estratégico y operativo",
@@ -308,7 +331,8 @@
           "codigo": "E304"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "I405": {
     "nombre": "Aplicaciones de Inteligencia de Datos en organizaciones",
@@ -319,7 +343,8 @@
           "codigo": "I306"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "E406": {
     "nombre": "Dirección general",
@@ -339,14 +364,16 @@
           "codigo": "E307"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "O407": {
     "nombre": "Optativa",
     "anio": 4,
     "previas": [],
     "nota": "Correlativas según la optativa",
-    "requiere_consulta": true
+    "requiere_consulta": true,
+    "semestre": 2
   },
   "O408": {
     "nombre": "Práctica Profesional Supervisada (PPS)",
@@ -387,6 +414,7 @@
           ]
         }
       ]
-    ]
+    ],
+    "semestre": 2
   }
 }

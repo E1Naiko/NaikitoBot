@@ -822,6 +822,8 @@ Consultá los planes disponibles y registrá tu progreso desde Discord:
 - `/correlativas materias plan:computacion-2024 anio:1`: lista materias de un año.
 - `/correlativas aprobar materia:D1001`: registra una aprobación por código o nombre exacto.
   La respuesta privada también indica qué materias se habilitaron con esa aprobación.
+  El campo `materia` sugiere materias pendientes y habilitadas del plan activo.
+  Podés buscar por código o nombre, o escribir una materia manualmente.
 - `/correlativas siguientes`: lista materias no aprobadas cuyos requisitos para cursar ya cumplís.
 
 Las respuestas son privadas. El progreso es por usuario de Discord y por plan;
@@ -865,3 +867,13 @@ habilitadas porque los PDF no permiten determinar sus requisitos completos.
 En Ciencia de Datos, la PPS pide 13 asignaturas aprobadas. El PDF repite
 `I101`; en el bot, Base de Datos se registra como `I101-BD`. La optativa
 `O407` se lista, pero sus correlativas dependen de la asignatura elegida.
+
+- `/correlativas progreso` muestra el avance estimado del plan activo como
+  porcentaje y cantidad de requisitos aprobados. No cuenta el ingreso; las
+  optativas por grupo cuentan solo hasta el cupo exigido. No es un cálculo
+  oficial de créditos ni una verificación de condiciones de graduación.
+- `/correlativas materias` y `/correlativas siguientes` aceptan el filtro
+  `semestre`: **1er Semestre**, **2do Semestre** o **Ambos** (predeterminado).
+  Se usa el semestre dentro del año (por ejemplo, el tercero de la carrera
+  es el primero de segundo año). **Ambos** también incluye el ingreso y
+  actividades sin semestre indicado, en una sección separada.

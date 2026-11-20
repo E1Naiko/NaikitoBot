@@ -2,17 +2,20 @@
   "CNE": {
     "nombre": "Expresión de Problemas y Algoritmos",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "CNC": {
     "nombre": "Conceptos de Organización de Computadoras",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "CNM": {
     "nombre": "Matemática 0",
     "anio": 1,
-    "previas": []
+    "previas": [],
+    "ingreso": true
   },
   "SI106": {
     "nombre": "Conceptos de Algoritmos, Datos y Programas",
@@ -29,7 +32,8 @@
           "codigo": "CNM"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI104": {
     "nombre": "Organización de Computadoras",
@@ -46,7 +50,8 @@
           "codigo": "CNM"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI101": {
     "nombre": "Matemática 1",
@@ -63,7 +68,8 @@
           "codigo": "CNM"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI107": {
     "nombre": "Taller de Programación",
@@ -74,7 +80,8 @@
           "codigo": "SI106"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI105": {
     "nombre": "Arquitectura de Computadoras",
@@ -85,7 +92,8 @@
           "codigo": "SI104"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI102": {
     "nombre": "Matemática 2",
@@ -96,7 +104,8 @@
           "codigo": "SI101"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI209": {
     "nombre": "Fundamentos de Organización de Datos",
@@ -107,7 +116,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI203": {
     "nombre": "Algoritmos y Estructuras de Datos",
@@ -121,7 +131,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI207": {
     "nombre": "Seminario de Lenguajes",
@@ -132,7 +143,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI210": {
     "nombre": "Diseño de Bases de Datos",
@@ -143,7 +155,8 @@
           "codigo": "SI209"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI202": {
     "nombre": "Ingeniería de Software 1",
@@ -154,7 +167,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI206": {
     "nombre": "Orientación a Objetos 1",
@@ -165,7 +179,8 @@
           "codigo": "SI107"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI204": {
     "nombre": "Introducción a los Sistemas Operativos",
@@ -179,7 +194,8 @@
           "codigo": "SI105"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI208": {
     "nombre": "Taller de lecto-comprensión y Traducción en Inglés",
@@ -198,7 +214,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI302": {
     "nombre": "Ingeniería de Software 2",
@@ -212,7 +229,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI306": {
     "nombre": "Conceptos y Paradigmas de Lenguajes de Programación",
@@ -229,7 +247,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI307": {
     "nombre": "Orientación a Objetos 2",
@@ -243,7 +262,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI304": {
     "nombre": "Redes y Comunicaciones",
@@ -260,7 +280,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI301": {
     "nombre": "Programación Concurrente",
@@ -277,7 +298,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI305": {
     "nombre": "Proyecto de Software",
@@ -303,7 +325,8 @@
           "codigo": "SI206"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "S0303": {
     "nombre": "Bases de Datos 1",
@@ -317,7 +340,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "S0407": {
     "nombre": "Fundamentos de la Teoría de la Computación",
@@ -331,7 +355,8 @@
           "codigo": "SI306"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI403": {
     "nombre": "Sistemas Operativos",
@@ -342,7 +367,8 @@
           "codigo": "SI304"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "S0405": {
     "nombre": "Bases de Datos 2",
@@ -353,7 +379,8 @@
           "codigo": "S0303"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "S0406": {
     "nombre": "Ingeniería de Software 3",
@@ -367,7 +394,8 @@
           "codigo": "SI202"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "S0410": {
     "nombre": "Sistemas y Organizaciones",
@@ -384,7 +412,8 @@
           "codigo": "SI208"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "SI409": {
     "nombre": "Matemática 4",
@@ -395,7 +424,8 @@
           "codigo": "SI308"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "S0408": {
     "nombre": "Desarrollo de software en Sistemas Distribuidos",
@@ -412,7 +442,8 @@
           "codigo": "SI304"
         }
       ]
-    ]
+    ],
+    "semestre": 2
   },
   "OPTATIVA-1-LS": {
     "nombre": "Optativa 1 LS",
@@ -428,12 +459,14 @@
           "codigo": "SI305"
         }
       ]
-    ]
+    ],
+    "semestre": 1
   },
   "SI505": {
     "nombre": "Aspectos Éticos, Sociales y Profesionales Avanzados de Informática",
     "anio": 5,
-    "previas": []
+    "previas": [],
+    "semestre": 1
   },
   "OPTATIVA-2-LS": {
     "nombre": "Optativa 2 LS",
@@ -445,6 +478,7 @@
     "anio": 5,
     "previas": [],
     "nota": "El PDF no especifica los requisitos de tesina",
-    "requiere_consulta": true
+    "requiere_consulta": true,
+    "semestre": 1
   }
 }

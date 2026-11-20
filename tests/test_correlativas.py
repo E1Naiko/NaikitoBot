@@ -128,3 +128,49 @@ async def test_aprobar_muestra_solo_materias_recien_habilitadas(base_datos_limpi
     assert 'SI208' in await invocar(cog, 'siguientes', 41)
     repetida = await invocar(cog, 'aprobar', 41, 'CNM')
     assert 'Ya estaba aprobada' in repetida and 'SI106' not in repetida
+
+
+async def test_filtros_de_semestre(base_datos_limpia):
+    cog = Correlativas()
+    args = ('informatica-2023', 1)
+    primero = await invocar(cog, 'materias', 41, *args, '1er Semestre')
+    segundo = await invocar(cog, 'materias', 41, *args, '2do Semestre')
+    ambos = await invocar(cog, 'materias', 41, *args, 'Ambos')
+    assert 'SI106 ·' in primero and 'SI107 ·' not in primero
+    assert 'SI107 ·' in segundo and 'SI106 ·' not in segundo
+    assert 'SI106 ·' in ambos and 'SI107 ·' in ambos and 'CNE ·' in ambos
+    await invocar(cog, 'unirse', 41, 'informatica-2023')
+    assert 'CNE ·' not in await invocar(cog, 'siguientes', 41, '1er Semestre')
+    assert 'CNE ·' in await invocar(cog, 'siguientes', 41, 'Ambos')
+
+
+async def test_progreso_apu_cuenta_un_cupo_y_excluye_ingreso(base_datos_limpia):
+    cog = Correlativas()
+    assert 'unirse' in await invocar(cog, 'progreso', 41)
+    await invocar(cog, 'unirse', 41, 'apu-2027')
+    assert '0,0%' in await invocar(cog, 'progreso', 41)
+    for materia in ('CNE', 'SI306', 'SI304'):
+        await invocar(cog, 'aprobar', 41, materia)
+    respuesta = await invocar(cog, 'progreso', 41)
+    assert 'apu-2027' in respuesta and '1 de 21' in respuesta and '4,8%' in respuesta
+    assert '0,0%' not in respuesta
+
+
+async def test_autocompletar_aprobar_sugiere_pendientes_habilitadas(base_datos_limpia):
+    cog = Correlativas()
+    interaccion = InteraccionFalsa(user_id=41)
+
+    async def sugerencias(texto=''):
+        assert cog.aprobar.get_parameter('materia').autocomplete
+        callback = cog.autocompletar_materia
+        return {opcion.value: opcion.name for opcion in await callback(interaccion, texto)}
+
+    assert await sugerencias() == {}
+    await invocar(cog, 'unirse', 41, 'informatica-2023')
+    iniciales = await sugerencias()
+    assert 'CNE' in iniciales and 'SI106' not in iniciales
+    for codigo in ('CNE', 'CNC', 'CNM'):
+        await invocar(cog, 'aprobar', 41, codigo)
+    assert await sugerencias('si106') == {'SI106': 'SI106 · Conceptos de Algoritmos, Datos y Programas'}
+    assert 'SI106' in await sugerencias('algoritmos')
+    assert 'CNE' not in await sugerencias()

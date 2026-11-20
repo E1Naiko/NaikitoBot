@@ -55,6 +55,7 @@ COMANDOS_ESPERADOS = frozenset(
         "correlativas materias",
         "correlativas aprobar",
         "correlativas siguientes",
+        "correlativas progreso",
         "correlativas agregar_plan",
         "correlativas agregar_materia",
         "madrugue",

@@ -29,3 +29,35 @@ def listado(materias, incluir, vacio='No hay materias.'):
                 nota += f" ({materia['nota']})"
             lineas.append(f"{codigo} · {materia['nombre']}{nota}")
     return '\n'.join(lineas) or vacio
+
+
+def listado_por_semestre(materias, incluir, semestre=None, vacio="No hay materias."):
+    """Agrupa por semestre sin inventar fechas para actividades sin dato."""
+    secciones = []
+    grupos = ((1, '1er Semestre'), (2, '2do Semestre'), (None, 'Ingreso o sin semestre indicado'))
+    for numero, titulo in grupos:
+        if semestre is not None and numero != semestre:
+            continue
+        lineas = listado(materias, lambda k, m: incluir(k, m) and m.get('semestre') == numero, vacio='')
+        if lineas:
+            secciones.append(f'**{titulo}**\n{lineas}')
+    return '\n\n'.join(secciones) or vacio
+
+
+def progreso(materias, aprobadas):
+    """Cuenta cada requisito una vez, con cupos para grupos de elección."""
+    hechas = total = 0
+    grupos = {}
+    for codigo, materia in materias.items():
+        if materia.get('ingreso'):
+            continue
+        grupo = materia.get('grupo_progreso', 'elegir_una' if materia.get('elegir_una') else None)
+        if grupo is None:
+            total += 1
+            hechas += codigo in aprobadas
+        else:
+            cupo, cantidad = grupos.get(grupo, (materia.get('cupo_progreso', 1), 0))
+            grupos[grupo] = cupo, cantidad + (codigo in aprobadas)
+    return hechas + sum(min(cupo, cantidad) for cupo, cantidad in grupos.values()), total + sum(
+        cupo for cupo, _ in grupos.values()
+    )
