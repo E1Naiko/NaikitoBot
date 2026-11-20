@@ -5,6 +5,8 @@ import re
 def cumple(requisito, hechas):
     if 'codigo' in requisito:
         return requisito['codigo'] in hechas
+    if 'minimo_de' in requisito:
+        return len(hechas.intersection(requisito['codigos'])) >= requisito['minimo_de']
     cantidad = re.fullmatch(r'Tener (\d+) actividades', requisito.get('especial', ''))
     return bool(cantidad and len(hechas) >= int(cantidad[1]))
 
