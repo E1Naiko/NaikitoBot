@@ -20,25 +20,28 @@ def habilitada(materia, hechas):
     )
 
 
-def listado(materias, incluir, vacio='No hay materias.'):
+def listado(materias, incluir, vacio='No hay materias.', mostrar_anio=False):
     lineas = []
     for codigo, materia in materias.items():
         if incluir(codigo, materia):
             nota = ' (elegir una asignatura del grupo)' if materia.get('elegir_una') else ''
+            if mostrar_anio and materia.get('anio') is not None:
+                nota += f" ({materia['anio']}° año)"
             if materia.get("nota"):
                 nota += f" ({materia['nota']})"
             lineas.append(f"{codigo} · {materia['nombre']}{nota}")
     return '\n'.join(lineas) or vacio
 
 
-def listado_por_semestre(materias, incluir, semestre=None, vacio="No hay materias."):
+def listado_por_semestre(materias, incluir, semestre=None, vacio="No hay materias.", mostrar_anio=False):
     """Agrupa por semestre sin inventar fechas para actividades sin dato."""
     secciones = []
     grupos = ((1, '1er Semestre'), (2, '2do Semestre'), (None, 'Ingreso o sin semestre indicado'))
     for numero, titulo in grupos:
         if semestre is not None and numero != semestre:
             continue
-        lineas = listado(materias, lambda k, m: incluir(k, m) and m.get('semestre') == numero, vacio='')
+        lineas = listado(materias, lambda k, m: incluir(k, m) and m.get('semestre') == numero,
+                         vacio='', mostrar_anio=mostrar_anio)
         if lineas:
             secciones.append(f'**{titulo}**\n{lineas}')
     return '\n\n'.join(secciones) or vacio

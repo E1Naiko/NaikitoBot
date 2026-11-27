@@ -25,6 +25,7 @@ async def test_progreso_independiente(base_datos_limpia):
     assert "Ya estaba" in await invocar(cog, "aprobar", 41, "D1001")
     siguientes = await invocar(Correlativas(), "siguientes", 41)
     assert "F1301" in siguientes and "D1001" not in siguientes
+    assert "(1° año)" in siguientes
     assert "F1301" not in await invocar(cog, "siguientes", 42)
 
 
