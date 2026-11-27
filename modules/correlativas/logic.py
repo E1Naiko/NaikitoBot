@@ -25,8 +25,9 @@ def listado(materias, incluir, vacio='No hay materias.', mostrar_anio=False):
     for codigo, materia in materias.items():
         if incluir(codigo, materia):
             nota = ' (elegir una asignatura del grupo)' if materia.get('elegir_una') else ''
-            if mostrar_anio and materia.get('anio') is not None:
-                nota += f" ({materia['anio']}° año)"
+            if mostrar_anio:
+                anio = materia.get('anio')
+                nota += f" ({anio}° año)" if anio is not None else " (optativa, sin año fijo)"
             if materia.get("nota"):
                 nota += f" ({materia['nota']})"
             lineas.append(f"{codigo} · {materia['nombre']}{nota}")

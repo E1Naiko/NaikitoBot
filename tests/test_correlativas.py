@@ -3,7 +3,18 @@
 import pytest
 
 from commands.correlativas import Correlativas
+from modules.correlativas.logic import listado
 from tests.harness import InteraccionFalsa
+
+
+def test_listado_siguientes_indica_optativas_sin_anio():
+    materias = {
+        'I1103': {'nombre': 'Programación III', 'anio': 2},
+        'I1161': {'nombre': 'Internet de las Cosas', 'anio': None},
+    }
+    salida = listado(materias, lambda _codigo, _materia: True, mostrar_anio=True)
+    assert 'I1103 · Programación III (2° año)' in salida
+    assert 'I1161 · Internet de las Cosas (optativa, sin año fijo)' in salida
 
 
 async def invocar(cog, comando, usuario, *args):
