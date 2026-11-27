@@ -96,9 +96,10 @@ class Bot:
             return listado_por_semestre(catalogo[plan], lambda k, m: str(m['anio']) == anio, semestre)
         aprobar = palabras[:2] == ['aprobar', 'materia'] and len(palabras) >= 3
         siguientes = palabras[:2] == ['materias', 'quiensigue']
-        if not aprobar and not siguientes and palabras != ['progreso']:
+        faltantes = palabras == ['faltantes']
+        if not aprobar and not siguientes and not faltantes and palabras != ['progreso']:
             return ('unirse <plan> | aprobar materia <código o nombre> | mostrar anio <plan> <número> '
-                    '| materias quiensigue\n' + planes)
+                    '| materias quiensigue | faltantes\n' + planes)
         fila = self.db.execute('SELECT plan FROM correlativas_usuarios WHERE usuario=?', (usuario,)).fetchone()
         if not fila:
             return 'Primero usá /correlativas unirse. ' + planes
@@ -150,6 +151,13 @@ class Bot:
                 return f'El plan {plan} todavía no tiene requisitos para contar.'
             porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
             return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados).'
+        if faltantes:
+            pendientes = listado_por_semestre(
+                materias, lambda k, m: k not in hechas,
+                vacio='¡Felicitaciones! No te faltan materias aprobadas en este plan.',
+                mostrar_anio=True,
+            )
+            return f'**Materias pendientes del plan {plan}**\n{pendientes}'
         semestre = int(palabras[2]) if palabras[2:] in (["1"], ["2"]) else None
         return listado_por_semestre(
             materias, lambda k, m: k not in hechas and habilitada(m, hechas), semestre,

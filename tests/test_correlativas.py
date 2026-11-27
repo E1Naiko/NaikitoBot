@@ -57,6 +57,18 @@ async def test_altas_administrativas(base_datos_limpia, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_faltantes_lista_todo_lo_no_aprobado_del_plan(base_datos_limpia):
+    cog = Correlativas()
+    assert 'unirse' in await invocar(cog, 'faltantes', 41)
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    await invocar(cog, 'aprobar', 41, 'CNE')
+    pendientes = await invocar(cog, 'faltantes', 41)
+    assert 'Materias pendientes del plan informatica-2027' in pendientes
+    assert 'CNE ·' not in pendientes
+    assert 'CNP ·' in pendientes
+    assert '(1° año)' in pendientes
+
+
 async def test_aprobar_varias_materias_separadas_por_comas(base_datos_limpia):
     cog = Correlativas()
     await invocar(cog, 'unirse', 41, 'informatica-2027')
