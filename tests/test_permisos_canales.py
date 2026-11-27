@@ -119,6 +119,13 @@ async def test_box_admin_exento_de_canal(config_canales):
 # El resto de los comandos sigue restringido
 # ============================================================
 
+async def test_ayuda_disponible_en_cualquier_canal(config_canales):
+    data = {"name": "ayuda", "options": []}
+    for canal in (GENERAL, MADRUGUE, LAHORA, OTRO):
+        permitido, _ = await comprobar(arbol(), data, canal, USUARIO)
+        assert permitido
+
+
 async def test_ping_solo_en_general(config_canales):
     data = {"name": "ping", "options": []}
 
