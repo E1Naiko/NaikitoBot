@@ -57,6 +57,15 @@ async def test_altas_administrativas(base_datos_limpia, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_aprobar_varias_materias_separadas_por_comas(base_datos_limpia):
+    cog = Correlativas()
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    respuesta = await invocar(cog, 'aprobar', 41, 'CNE, CNP')
+    assert 'Aprobadas:' in respuesta
+    assert 'Expresión de Problemas y Algoritmos' in respuesta
+    assert 'Conceptos de Procesadores e Inteligencia Artificial' in respuesta
+
+
 async def test_plan_informatica_2027(base_datos_limpia):
     cog = Correlativas()
     assert 'informatica-2027' in await invocar(cog, 'planes', 41)

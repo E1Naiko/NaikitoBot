@@ -105,27 +105,44 @@ class Bot:
         plan, = fila
         materias = catalogo[plan]
         if aprobar:
-            consulta = ' '.join(palabras[2:])
-            opciones = [k for k, m in materias.items() if consulta in (k.casefold(), ' '.join(m['nombre'].casefold().split()))]
-            if len(opciones) != 1:
-                return 'No se identificó una materia única. Usá el código del plan.'
-            codigo, = opciones
-            alta = self.db.execute('INSERT OR IGNORE INTO correlativas_aprobadas VALUES (?, ?, ?)',
-                                   (usuario, plan, codigo)).rowcount
-            nombre = materias[codigo]['nombre']
-            if not alta:
-                self.db.commit()
-                return 'Ya estaba aprobada: ' + nombre
+            consultas = [consulta.strip() for consulta in ' '.join(palabras[2:]).split(',')]
+            if not consultas or any(not consulta for consulta in consultas):
+                return 'Ingresá códigos o nombres separados por comas.'
+            codigos = []
+            for consulta in consultas:
+                normalizada = ' '.join(consulta.casefold().split())
+                opciones = [k for k, m in materias.items()
+                            if normalizada in (k.casefold(), ' '.join(m['nombre'].casefold().split()))]
+                if len(opciones) != 1:
+                    return f'No se identificó una materia única: {consulta}. Usá el código del plan.'
+                if opciones[0] not in codigos:
+                    codigos.append(opciones[0])
+            antes = self._aprobadas(usuario, plan)
+            nuevas_aprobadas = [codigo for codigo in codigos if codigo not in antes]
+            for codigo in nuevas_aprobadas:
+                self.db.execute('INSERT OR IGNORE INTO correlativas_aprobadas VALUES (?, ?, ?)',
+                                (usuario, plan, codigo))
             hechas = self._aprobadas(usuario, plan)
             self.db.commit()
-            antes = hechas - {codigo}
+            if not nuevas_aprobadas:
+                nombres = ', '.join(materias[codigo]['nombre'] for codigo in codigos)
+                return 'Ya estaba aprobada: ' + nombres
+            if len(codigos) == 1:
+                encabezado = f'Aprobada: {materias[codigos[0]]["nombre"]}'
+            else:
+                aprobadas = ', '.join(materias[codigo]['nombre'] for codigo in nuevas_aprobadas)
+                encabezado = f'Aprobadas: {aprobadas}'
+                repetidas = [codigo for codigo in codigos if codigo in antes]
+                if repetidas:
+                    nombres = ', '.join(materias[codigo]['nombre'] for codigo in repetidas)
+                    encabezado += f'\\nYa estaban aprobadas: {nombres}'
             nuevas = listado_por_semestre(
                 materias,
                 lambda k, m: k not in hechas and habilitada(m, hechas) and not habilitada(m, antes),
                 vacio='No se habilitaron materias nuevas.',
                 mostrar_anio=True,
             )
-            return f'Aprobada: {nombre}\n\n**Materias recién habilitadas**\n{nuevas}'
+            return f'{encabezado}\\n\\n**Materias recién habilitadas**\\n{nuevas}'
         hechas = self._aprobadas(usuario, plan)
         if palabras == ['progreso']:
             cantidad, total = progreso(materias, hechas)

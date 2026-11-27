@@ -116,7 +116,8 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
                        semestre: Semestre = "Ambos"):
         await self._ejecutar(interaccion, f"mostrar anio {plan} {anio}{_filtro(semestre)}")
 
-    @app_commands.command(description="Registra una materia aprobada de tu plan activo.")
+    @app_commands.command(description="Registra una o varias materias aprobadas de tu plan activo.")
+    @app_commands.describe(materia="Ingresá códigos o nombres; separá varias materias con comas.")
     async def aprobar(self, interaccion, materia: app_commands.Range[str, 1, 150]):
         await self._ejecutar(interaccion, f"aprobar materia {materia}")
 
