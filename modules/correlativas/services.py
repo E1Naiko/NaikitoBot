@@ -97,9 +97,10 @@ class Bot:
                 return 'Ingresá un año positivo.'
             return listado_por_semestre(catalogo[plan], lambda k, m: str(m['anio']) == anio, semestre)
         aprobar = palabras[:2] == ['aprobar', 'materia'] and len(palabras) >= 3
+        cursando = palabras[:2] == ['cursando', 'materia'] and len(palabras) >= 3
         siguientes = palabras[:2] == ['materias', 'quiensigue']
         faltantes = palabras == ['faltantes']
-        if not aprobar and not siguientes and not faltantes and palabras != ['progreso']:
+        if not aprobar and not cursando and not siguientes and not faltantes and palabras != ['progreso']:
             return ('unirse <plan> | aprobar materia <código o nombre> | mostrar anio <plan> <número> '
                     '| materias quiensigue | faltantes\n' + planes)
         planes_usuario = self._planes_usuario(usuario)
@@ -109,6 +110,29 @@ class Bot:
             return self._responder_varios_planes(usuario, palabras, planes_usuario, catalogo)
         plan = planes_usuario[0]
         materias = catalogo[plan]
+        if cursando:
+            consultas = [consulta.strip() for consulta in ' '.join(palabras[2:]).split(',')]
+            if not consultas or any(not consulta for consulta in consultas):
+                return 'Ingresá códigos o nombres separados por comas.'
+            codigos = []
+            for consulta in consultas:
+                normalizada = ' '.join(consulta.casefold().split())
+                opciones = [k for k, m in materias.items()
+                            if normalizada in (k.casefold(), ' '.join(m['nombre'].casefold().split()))]
+                if len(opciones) != 1:
+                    return f'No se identificó una materia única: {consulta}. Usá el código del plan.'
+                if opciones[0] not in codigos:
+                    codigos.append(opciones[0])
+            estados = self._estados(usuario, plan)
+            cambios = [codigo for codigo in codigos
+                       if estados.get(codigo) not in ('aprobada', 'cursando')]
+            for codigo in cambios:
+                self._guardar_estado(usuario, plan, codigo, 'cursando')
+            self.db.commit()
+            if cambios:
+                nombres = ', '.join(materias[codigo]['nombre'] for codigo in cambios)
+                return 'Marcadas como cursando: ' + nombres
+            return 'Las materias indicadas ya estaban aprobadas o cursándose.'
         if aprobar:
             consultas = [consulta.strip() for consulta in ' '.join(palabras[2:]).split(',')]
             if not consultas or any(not consulta for consulta in consultas):
@@ -123,10 +147,10 @@ class Bot:
                 if opciones[0] not in codigos:
                     codigos.append(opciones[0])
             antes = self._aprobadas(usuario, plan)
+            cursando_antes = self._cursando(usuario, plan)
             nuevas_aprobadas = [codigo for codigo in codigos if codigo not in antes]
             for codigo in nuevas_aprobadas:
-                self.db.execute('INSERT OR IGNORE INTO correlativas_aprobadas VALUES (?, ?, ?)',
-                                (usuario, plan, codigo))
+                self._guardar_estado(usuario, plan, codigo, 'aprobada')
             hechas = self._aprobadas(usuario, plan)
             self.db.commit()
             if not nuevas_aprobadas:
@@ -143,28 +167,31 @@ class Bot:
                     encabezado += f'\\nYa estaban aprobadas: {nombres}'
             nuevas = listado_por_semestre(
                 materias,
-                lambda k, m: k not in hechas and habilitada(m, hechas) and not habilitada(m, antes),
+                lambda k, m: k not in hechas and k not in cursando_antes and
+                habilitada(m, hechas) and not habilitada(m, antes),
                 vacio='No se habilitaron materias nuevas.',
                 mostrar_anio=True,
             )
             return f'{encabezado}\\n\\n**Materias recién habilitadas**\\n{nuevas}'
         hechas = self._aprobadas(usuario, plan)
         if palabras == ['progreso']:
-            cantidad, total = progreso(materias, hechas)
+            cantidad, total = progreso(materias, hechas, self._cursando(usuario, plan))
             if not total:
                 return f'El plan {plan} todavía no tiene requisitos para contar.'
             porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
-            return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados).'
+            return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados o cursando).'
+        cursando_set = self._cursando(usuario, plan)
         if faltantes:
             pendientes = listado_por_semestre(
                 materias, lambda k, m: k not in hechas,
                 vacio='¡Felicitaciones! No te faltan materias aprobadas en este plan.',
                 mostrar_anio=True,
+                estados={codigo: 'cursando' for codigo in cursando_set},
             )
             return f'**Materias pendientes del plan {plan}**\n{pendientes}'
         semestre = int(palabras[2]) if palabras[2:] in (["1"], ["2"]) else None
         return listado_por_semestre(
-            materias, lambda k, m: k not in hechas and habilitada(m, hechas), semestre,
+            materias, lambda k, m: k not in hechas and k not in cursando_set and habilitada(m, hechas), semestre,
             mostrar_anio=True,
         )
 
@@ -175,14 +202,17 @@ class Bot:
 
     def _responder_varios_planes(self, usuario, palabras, planes, catalogo):
         hechas_por_plan = {plan: self._aprobadas(usuario, plan) for plan in planes}
+        cursando_por_plan = {plan: self._cursando(usuario, plan) for plan in planes}
         if palabras == ['progreso']:
             resultados = []
             for plan in planes:
-                cantidad, total = progreso(catalogo[plan], hechas_por_plan[plan])
+                cantidad, total = progreso(
+                    catalogo[plan], hechas_por_plan[plan], cursando_por_plan[plan]
+                )
                 if total:
                     porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
                     resultados.append(
-                        f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados).'
+                        f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados o cursando).'
                     )
                 else:
                     resultados.append(f'**{plan}**\nTodavía no tiene requisitos para contar.')
@@ -193,6 +223,7 @@ class Bot:
                 listado = listado_por_semestre(
                     catalogo[plan], lambda k, m: k not in hechas_por_plan[plan],
                     vacio='¡Plan completado! No te faltan materias aprobadas.', mostrar_anio=True,
+                    estados={codigo: 'cursando' for codigo in cursando_por_plan[plan]},
                 )
                 resultados.append(f'**Materias pendientes — {plan}**\n{listado}')
             return '\n\n'.join(resultados)
@@ -201,10 +232,13 @@ class Bot:
             return '\n\n'.join(
                 f'**Siguientes — {plan}**\n' + listado_por_semestre(
                     catalogo[plan], lambda k, m: k not in hechas_por_plan[plan] and
-                    habilitada(m, hechas_por_plan[plan]), semestre, mostrar_anio=True,
+                    k not in cursando_por_plan[plan] and habilitada(m, hechas_por_plan[plan]),
+                    semestre, mostrar_anio=True,
                 ) for plan in planes
             )
-        if palabras[:2] == ['aprobar', 'materia'] and len(palabras) >= 3:
+        es_aprobacion = palabras[:2] == ['aprobar', 'materia']
+        es_cursando = palabras[:2] == ['cursando', 'materia']
+        if (es_aprobacion or es_cursando) and len(palabras) >= 3:
             consultas = [consulta.strip() for consulta in ' '.join(palabras[2:]).split(',')]
             if not consultas or any(not consulta for consulta in consultas):
                 return 'Ingresá códigos o nombres separados por comas.'
@@ -226,29 +260,55 @@ class Bot:
                 if not codigos:
                     continue
                 antes = hechas_por_plan[plan]
-                aprobadas = [codigo for codigo in codigos if codigo not in antes]
-                for codigo in aprobadas:
-                    self.db.execute(
-                        'INSERT OR IGNORE INTO correlativas_aprobadas VALUES (?, ?, ?)',
-                        (usuario, plan, codigo),
+                estado_deseado = 'cursando' if es_cursando else 'aprobada'
+                estados_actuales = self._estados(usuario, plan)
+                cambios = [codigo for codigo in codigos
+                           if estados_actuales.get(codigo) != estado_deseado and
+                           not (es_cursando and estados_actuales.get(codigo) == 'aprobada')]
+                for codigo in cambios:
+                    self._guardar_estado(usuario, plan, codigo, estado_deseado)
+                nombres = ', '.join(catalogo[plan][codigo]['nombre'] for codigo in cambios)
+                if cambios:
+                    encabezado = f'En cursada: {nombres}' if es_cursando else f'Aprobadas: {nombres}'
+                else:
+                    encabezado = 'Las materias indicadas ya estaban aprobadas o cursándose.'
+                if es_aprobacion and cambios:
+                    hechas = self._aprobadas(usuario, plan)
+                    nuevas = listado_por_semestre(
+                        catalogo[plan],
+                        lambda k, m: k not in hechas and k not in cursando_por_plan[plan] and
+                        habilitada(m, hechas) and not habilitada(m, antes),
+                        vacio='No se habilitaron materias nuevas.', mostrar_anio=True,
                     )
-                hechas = self._aprobadas(usuario, plan)
-                nuevas = listado_por_semestre(
-                    catalogo[plan],
-                    lambda k, m: k not in hechas and habilitada(m, hechas) and not habilitada(m, antes),
-                    vacio='No se habilitaron materias nuevas.', mostrar_anio=True,
-                ) if aprobadas else 'No hubo aprobaciones nuevas.'
-                nombres = ', '.join(catalogo[plan][codigo]['nombre'] for codigo in aprobadas)
-                encabezado = f'Aprobadas: {nombres}' if aprobadas else 'Las materias indicadas ya estaban aprobadas.'
-                resultados.append(f'**{plan}**\n{encabezado}\n{nuevas}')
+                    resultados.append(f'**{plan}**\n{encabezado}\n{nuevas}')
+                else:
+                    resultados.append(f'**{plan}**\n{encabezado}')
             self.db.commit()
             return '\n\n'.join(resultados)
-        return 'Elegí una operación: aprobar, siguientes, faltantes o progreso.'
+        return 'Elegí una operación: aprobar, cursando, siguientes, faltantes o progreso.'
+
+    def _estados(self, usuario, plan):
+        estados = {codigo: estado for codigo, estado in self.db.execute(
+            'SELECT codigo, estado FROM correlativas_estados WHERE usuario=? AND plan=?', (usuario, plan)
+        )}
+        for codigo, in self.db.execute(
+            'SELECT codigo FROM correlativas_aprobadas WHERE usuario=? AND plan=?', (usuario, plan)
+        ):
+            estados.setdefault(codigo, 'aprobada')
+        return estados
 
     def _aprobadas(self, usuario, plan):
-        return {codigo for codigo, in self.db.execute(
-            'SELECT codigo FROM correlativas_aprobadas WHERE usuario=? AND plan=?', (usuario, plan)
-        )}
+        return {codigo for codigo, estado in self._estados(usuario, plan).items() if estado == 'aprobada'}
+
+    def _cursando(self, usuario, plan):
+        return {codigo for codigo, estado in self._estados(usuario, plan).items() if estado == 'cursando'}
+
+    def _guardar_estado(self, usuario, plan, codigo, estado):
+        self.db.execute(
+            'INSERT INTO correlativas_estados VALUES (?, ?, ?, ?) '
+            'ON CONFLICT(usuario, plan, codigo) DO UPDATE SET estado=excluded.estado',
+            (usuario, plan, codigo, estado),
+        )
 
 
 
