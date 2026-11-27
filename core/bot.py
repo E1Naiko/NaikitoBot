@@ -82,6 +82,11 @@ class RestrictedCommandTree(app_commands.CommandTree):
             permitido = True
             zona = "administración"
             canales = set()
+        elif command_name == "ayuda":
+            # La guía general se puede consultar desde cualquier canal.
+            permitido = True
+            zona = "ayuda general"
+            canales = set()
         elif command_name == "correlativas":
             permitido = True
             zona = "Correlativas"

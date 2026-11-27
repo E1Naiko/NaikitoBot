@@ -163,8 +163,8 @@ se ejecutan aparte, no durante el arranque.
 
 ## Comandos generales
 
-Los comandos están separados por canales: `GENERAL_CHANNEL_ID` permite los
-comandos generales; `BOX_CHANNEL_ID` permite los comandos de Box;
+Los comandos están separados por canales: `/ayuda` está disponible en cualquier
+canal; `GENERAL_CHANNEL_ID` permite los comandos generales; `BOX_CHANNEL_ID` permite los comandos de Box;
 `MADRUGUE_CHANNEL_ID` permite solo Madrugue; `LAHORA_CANALES_ID` permite solo
 los comandos del canal 420; y `SSF_CANALES_ID` permite solo SeptSinFP. Los IDs pueden separarse por comas. Los usuarios incluidos en
 `ADMIN_USER_IDS` quedan exentos de la restricción de canal: pueden usar
@@ -172,6 +172,7 @@ cualquier comando desde cualquier canal.
 
 | Comando | Descripción |
 | --- | --- |
+| `/ayuda` | Muestra una guía general de los comandos principales y dónde encontrar la ayuda específica de cada sistema. |
 | `/ping` | Comprueba que el bot está funcionando y muestra su latencia. |
 
 ## Comandos de Madrugue

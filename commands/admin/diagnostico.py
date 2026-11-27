@@ -50,6 +50,7 @@ PERMISOS_POR_AREA = {
 COMANDOS_ESPERADOS = frozenset(
     {
         "ping",
+        "ayuda",
         "correlativas planes",
         "correlativas unirse",
         "correlativas materias",
