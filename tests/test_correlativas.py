@@ -57,6 +57,20 @@ async def test_altas_administrativas(base_datos_limpia, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_varios_planes_se_muestran_y_mantienen_aprobaciones_separadas(base_datos_limpia):
+    cog = Correlativas()
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    await invocar(cog, 'unirse', 41, 'apu-2027')
+    progreso = await invocar(cog, 'progreso', 41)
+    assert '**apu-2027**' in progreso and '**informatica-2027**' in progreso
+    respuesta = await invocar(cog, 'aprobar', 41, 'CNE')
+    assert '**apu-2027**' in respuesta and '**informatica-2027**' in respuesta
+    faltantes = await invocar(cog, 'faltantes', 41)
+    assert '**Materias pendientes — apu-2027**' in faltantes
+    assert '**Materias pendientes — informatica-2027**' in faltantes
+    assert 'CNE ·' not in faltantes
+
+
 async def test_faltantes_lista_todo_lo_no_aprobado_del_plan(base_datos_limpia):
     cog = Correlativas()
     assert 'unirse' in await invocar(cog, 'faltantes', 41)

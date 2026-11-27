@@ -249,6 +249,15 @@ CREATE TABLE IF NOT EXISTS correlativas_usuarios (
     plan TEXT NOT NULL
 );
 
+-- Asociación múltiple de planes; la tabla anterior se conserva para migrar usuarios existentes.
+CREATE TABLE IF NOT EXISTS correlativas_usuarios_planes (
+    usuario TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    PRIMARY KEY (usuario, plan)
+);
+INSERT OR IGNORE INTO correlativas_usuarios_planes (usuario, plan)
+SELECT usuario, plan FROM correlativas_usuarios;
+
 CREATE TABLE IF NOT EXISTS correlativas_aprobadas (
     usuario TEXT NOT NULL,
     plan TEXT NOT NULL,

@@ -107,7 +107,7 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
     async def planes(self, interaccion):
         await self._ejecutar(interaccion, "planes")
 
-    @app_commands.command(description="Selecciona tu plan de estudio activo.")
+    @app_commands.command(description="Agrega un plan de estudio a tus planes activos.")
     async def unirse(self, interaccion, plan: app_commands.Range[str, 1, 64]):
         await self._ejecutar(interaccion, f"unirse {plan}")
 
