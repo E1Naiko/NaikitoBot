@@ -123,6 +123,7 @@ class Bot:
                 materias,
                 lambda k, m: k not in hechas and habilitada(m, hechas) and not habilitada(m, antes),
                 vacio='No se habilitaron materias nuevas.',
+                mostrar_anio=True,
             )
             return f'Aprobada: {nombre}\n\n**Materias recién habilitadas**\n{nuevas}'
         hechas = self._aprobadas(usuario, plan)
@@ -133,7 +134,10 @@ class Bot:
             porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
             return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados).'
         semestre = int(palabras[2]) if palabras[2:] in (["1"], ["2"]) else None
-        return listado_por_semestre(materias, lambda k, m: k not in hechas and habilitada(m, hechas), semestre)
+        return listado_por_semestre(
+            materias, lambda k, m: k not in hechas and habilitada(m, hechas), semestre,
+            mostrar_anio=True,
+        )
 
     def _aprobadas(self, usuario, plan):
         return {codigo for codigo, in self.db.execute(
