@@ -830,7 +830,8 @@ Consultá los planes disponibles y registrá tu progreso desde Discord:
   La respuesta privada también indica qué materias se habilitaron con esa aprobación.
   El campo `materia` sugiere materias pendientes y habilitadas del plan activo.
   Podés buscar por código o nombre, o escribir una materia manualmente.
-- `/correlativas siguientes`: lista materias no aprobadas cuyos requisitos para cursar ya cumplís.
+- `/correlativas siguientes`: lista materias disponibles según tus aprobaciones e incluye las que ya marcaste como cursando.
+- `/correlativas en_curso`: muestra solo las materias marcadas como cursando.
 - `/correlativas faltantes`: lista todas las materias aún no aprobadas del plan activo, agrupadas por semestre y año cuando el plan lo indica.
 
 Las respuestas son privadas. El progreso es por usuario de Discord y por plan;

@@ -154,6 +154,10 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
     async def faltantes(self, interaccion):
         await self._ejecutar(interaccion, "faltantes")
 
+    @app_commands.command(description="Lista solo las materias que tenés marcadas como cursando.")
+    async def en_curso(self, interaccion):
+        await self._ejecutar(interaccion, "en curso")
+
     @app_commands.command(description="Agrega un plan de estudio (solo administradores del bot).")
     async def agregar_plan(self, interaccion, plan: app_commands.Range[str, 1, 64]):
         await self._ejecutar(interaccion, f"admin agregar plan {plan}", administrador=True)
