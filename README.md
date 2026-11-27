@@ -830,7 +830,8 @@ Consultá los planes disponibles y registrá tu progreso desde Discord:
   La respuesta privada también indica qué materias se habilitaron con esa aprobación.
   El campo `materia` sugiere materias pendientes y habilitadas del plan activo.
   Podés buscar por código o nombre, o escribir una materia manualmente.
-- `/correlativas siguientes`: lista materias no aprobadas cuyos requisitos para cursar ya cumplís.
+- `/correlativas siguientes`: lista materias disponibles según tus aprobaciones e incluye las que ya marcaste como cursando.
+- `/correlativas en_curso`: muestra solo las materias marcadas como cursando.
 - `/correlativas faltantes`: lista todas las materias aún no aprobadas del plan activo, agrupadas por semestre y año cuando el plan lo indica.
 
 Las respuestas son privadas. El progreso es por usuario de Discord y por plan;
@@ -875,8 +876,8 @@ En Ciencia de Datos, la PPS pide 13 asignaturas aprobadas. El PDF repite
 `I101`; en el bot, Base de Datos se registra como `I101-BD`. La optativa
 `O407` se lista, pero sus correlativas dependen de la asignatura elegida.
 
-- `/correlativas progreso` muestra el avance estimado del plan activo como
-  porcentaje y cantidad de requisitos aprobados. No cuenta el ingreso; las
+- `/correlativas progreso` muestra dos avances: contando solo materias aprobadas
+  y contando aprobadas más cursadas. No cuenta el ingreso; las
   optativas por grupo cuentan solo hasta el cupo exigido. No es un cálculo
   oficial de créditos ni una verificación de condiciones de graduación.
 - `/correlativas materias` y `/correlativas siguientes` aceptan el filtro

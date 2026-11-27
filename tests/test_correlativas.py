@@ -63,13 +63,18 @@ async def test_estado_cursando_suma_al_progreso_pero_no_habilita_ni_completa(bas
     respuesta = await invocar(cog, 'cursando', 41, 'CNE, SI208')
     assert 'Marcadas como cursando' in respuesta
     siguientes = await invocar(cog, 'siguientes', 41)
-    assert 'CNE ·' not in siguientes and 'SI208 ·' not in siguientes
+    assert 'CNE · Expresión de Problemas y Algoritmos' in siguientes
+    assert 'SI208 · Taller de lecto-comprensión y Traducción en Inglés' in siguientes
+    assert '(cursando)' in siguientes
     assert 'SI106 ·' not in siguientes  # Cursar CNE no satisface su correlativa.
+    solo_cursando = await invocar(cog, 'en_curso', 41)
+    assert 'CNE ·' in solo_cursando and 'SI208 ·' in solo_cursando
+    assert 'SI106 ·' not in solo_cursando
     faltantes = await invocar(cog, 'faltantes', 41)
     assert 'SI208 · Taller de lecto-comprensión y Traducción en Inglés (2° año) (cursando)' in faltantes
     avance = await invocar(cog, 'progreso', 41)
-    assert '1 de 34 requisitos aprobados o cursando' in avance
-    assert '2,9%' in avance
+    assert '\nSolo aprobadas: **0,0%** (0 de 34)' in avance
+    assert '\nContando cursadas: **2,9%** (1 de 34)' in avance
     assert 'Aprobadas:' in await invocar(cog, 'aprobar', 41, 'CNE, SI208')
     assert 'SI106 ·' in await invocar(cog, 'siguientes', 41)
     assert 'SI208 ·' not in await invocar(cog, 'faltantes', 41)
@@ -79,6 +84,11 @@ async def test_varios_planes_se_muestran_y_mantienen_aprobaciones_separadas(base
     cog = Correlativas()
     await invocar(cog, 'unirse', 41, 'informatica-2027')
     await invocar(cog, 'unirse', 41, 'apu-2027')
+    await invocar(cog, 'cursando', 41, 'SI208')
+    en_curso = await invocar(cog, 'en_curso', 41)
+    assert '**Materias en curso — apu-2027**' in en_curso
+    assert '**Materias en curso — informatica-2027**' in en_curso
+    assert 'SI208 ·' in await invocar(cog, 'siguientes', 41)
     progreso = await invocar(cog, 'progreso', 41)
     assert '**apu-2027**' in progreso and '**informatica-2027**' in progreso
     respuesta = await invocar(cog, 'aprobar', 41, 'CNE')

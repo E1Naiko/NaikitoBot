@@ -100,9 +100,10 @@ class Bot:
         cursando = palabras[:2] == ['cursando', 'materia'] and len(palabras) >= 3
         siguientes = palabras[:2] == ['materias', 'quiensigue']
         faltantes = palabras == ['faltantes']
-        if not aprobar and not cursando and not siguientes and not faltantes and palabras != ['progreso']:
+        en_curso = palabras == ['en', 'curso']
+        if not aprobar and not cursando and not siguientes and not faltantes and not en_curso and palabras != ['progreso']:
             return ('unirse <plan> | aprobar materia <código o nombre> | mostrar anio <plan> <número> '
-                    '| materias quiensigue | faltantes\n' + planes)
+                    '| materias quiensigue | faltantes | en curso\n' + planes)
         planes_usuario = self._planes_usuario(usuario)
         if not planes_usuario:
             return 'Primero usá /correlativas unirse. ' + planes
@@ -175,12 +176,23 @@ class Bot:
             return f'{encabezado}\\n\\n**Materias recién habilitadas**\\n{nuevas}'
         hechas = self._aprobadas(usuario, plan)
         if palabras == ['progreso']:
-            cantidad, total = progreso(materias, hechas, self._cursando(usuario, plan))
+            cantidad_aprobada, total = progreso(materias, hechas)
+            cantidad_en_curso, _ = progreso(materias, hechas, self._cursando(usuario, plan))
             if not total:
                 return f'El plan {plan} todavía no tiene requisitos para contar.'
-            porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
-            return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados o cursando).'
+            porcentaje_aprobado = f'{cantidad_aprobada / total:.1%}'.replace('.', ',')
+            porcentaje_en_curso = f'{cantidad_en_curso / total:.1%}'.replace('.', ',')
+            return (f'**{plan}**\n'
+                    f'Solo aprobadas: **{porcentaje_aprobado}** ({cantidad_aprobada} de {total}).\n'
+                    f'Contando cursadas: **{porcentaje_en_curso}** ({cantidad_en_curso} de {total}).')
         cursando_set = self._cursando(usuario, plan)
+        if en_curso:
+            return listado_por_semestre(
+                materias, lambda k, m: k in cursando_set,
+                vacio='No tenés materias marcadas como cursando en este plan.',
+                mostrar_anio=True,
+                estados={codigo: 'cursando' for codigo in cursando_set},
+            )
         if faltantes:
             pendientes = listado_por_semestre(
                 materias, lambda k, m: k not in hechas,
@@ -191,8 +203,9 @@ class Bot:
             return f'**Materias pendientes del plan {plan}**\n{pendientes}'
         semestre = int(palabras[2]) if palabras[2:] in (["1"], ["2"]) else None
         return listado_por_semestre(
-            materias, lambda k, m: k not in hechas and k not in cursando_set and habilitada(m, hechas), semestre,
+            materias, lambda k, m: k not in hechas and (k in cursando_set or habilitada(m, hechas)), semestre,
             mostrar_anio=True,
+            estados={codigo: 'cursando' for codigo in cursando_set},
         )
 
     def _planes_usuario(self, usuario):
@@ -206,16 +219,31 @@ class Bot:
         if palabras == ['progreso']:
             resultados = []
             for plan in planes:
-                cantidad, total = progreso(
+                cantidad_aprobada, total = progreso(catalogo[plan], hechas_por_plan[plan])
+                cantidad_en_curso, _ = progreso(
                     catalogo[plan], hechas_por_plan[plan], cursando_por_plan[plan]
                 )
                 if total:
-                    porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
+                    porcentaje_aprobado = f'{cantidad_aprobada / total:.1%}'.replace('.', ',')
+                    porcentaje_en_curso = f'{cantidad_en_curso / total:.1%}'.replace('.', ',')
                     resultados.append(
-                        f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados o cursando).'
+                        f'**{plan}**\n'
+                        f'Solo aprobadas: **{porcentaje_aprobado}** ({cantidad_aprobada} de {total}).\n'
+                        f'Contando cursadas: **{porcentaje_en_curso}** ({cantidad_en_curso} de {total}).'
                     )
                 else:
                     resultados.append(f'**{plan}**\nTodavía no tiene requisitos para contar.')
+            return '\n\n'.join(resultados)
+        if palabras == ['en', 'curso']:
+            resultados = []
+            for plan in planes:
+                lista = listado_por_semestre(
+                    catalogo[plan], lambda k, m: k in cursando_por_plan[plan],
+                    vacio='No tenés materias marcadas como cursando en este plan.',
+                    mostrar_anio=True,
+                    estados={codigo: 'cursando' for codigo in cursando_por_plan[plan]},
+                )
+                resultados.append(f'**Materias en curso — {plan}**\n{lista}')
             return '\n\n'.join(resultados)
         if palabras == ['faltantes']:
             resultados = []
@@ -232,8 +260,9 @@ class Bot:
             return '\n\n'.join(
                 f'**Siguientes — {plan}**\n' + listado_por_semestre(
                     catalogo[plan], lambda k, m: k not in hechas_por_plan[plan] and
-                    k not in cursando_por_plan[plan] and habilitada(m, hechas_por_plan[plan]),
+                    (k in cursando_por_plan[plan] or habilitada(m, hechas_por_plan[plan])),
                     semestre, mostrar_anio=True,
+                    estados={codigo: 'cursando' for codigo in cursando_por_plan[plan]},
                 ) for plan in planes
             )
         es_aprobacion = palabras[:2] == ['aprobar', 'materia']
