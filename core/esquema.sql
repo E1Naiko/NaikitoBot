@@ -264,3 +264,13 @@ CREATE TABLE IF NOT EXISTS correlativas_aprobadas (
     codigo TEXT NOT NULL,
     PRIMARY KEY (usuario, plan, codigo)
 );
+
+CREATE TABLE IF NOT EXISTS correlativas_estados (
+    usuario TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    codigo TEXT NOT NULL,
+    estado TEXT NOT NULL CHECK (estado IN ('aprobada', 'cursando')),
+    PRIMARY KEY (usuario, plan, codigo)
+);
+INSERT OR IGNORE INTO correlativas_estados (usuario, plan, codigo, estado)
+SELECT usuario, plan, codigo, 'aprobada' FROM correlativas_aprobadas;

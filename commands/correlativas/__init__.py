@@ -81,7 +81,7 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
                 await responder_error(interaccion, "Correlativas", "Comando reservado a administradores.", ephemeral=True)
                 return
             usuario = interaccion.user.id
-            if mensaje.startswith(("aprobar ", "unirse ", "admin ")):
+            if mensaje.startswith(("aprobar ", "cursando ", "unirse ", "admin ")):
                 # No modificar el progreso si Discord no acepta la interacción.
                 await interaccion.response.defer(ephemeral=True)
                 resultado = await asyncio.to_thread(ejecutar, usuario, mensaje, administrador)
@@ -120,6 +120,19 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
     @app_commands.describe(materia="Ingresá códigos o nombres; separá varias materias con comas.")
     async def aprobar(self, interaccion, materia: app_commands.Range[str, 1, 150]):
         await self._ejecutar(interaccion, f"aprobar materia {materia}")
+
+    @app_commands.command(description="Marca una o varias materias como cursando en tus planes activos.")
+    @app_commands.describe(materia="Ingresá códigos o nombres; separá varias materias con comas.")
+    async def cursando(self, interaccion, materia: app_commands.Range[str, 1, 150]):
+        await self._ejecutar(interaccion, f"cursando materia {materia}")
+
+    @cursando.autocomplete("materia")
+    async def autocompletar_cursando(self, interaccion, actual: str) -> list[app_commands.Choice[str]]:
+        if espera_restante() > 0:
+            return []
+        opciones = await asyncio.to_thread(sugerir_aprobacion, interaccion.user.id, actual)
+        return [app_commands.Choice(name=f"{codigo} · {nombre}"[:100], value=codigo)
+                for codigo, nombre in opciones]
 
     @aprobar.autocomplete("materia")
     async def autocompletar_materia(self, interaccion, actual: str) -> list[app_commands.Choice[str]]:
