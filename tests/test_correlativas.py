@@ -68,8 +68,8 @@ async def test_estado_cursando_suma_al_progreso_pero_no_habilita_ni_completa(bas
     faltantes = await invocar(cog, 'faltantes', 41)
     assert 'SI208 · Taller de lecto-comprensión y Traducción en Inglés (2° año) (cursando)' in faltantes
     avance = await invocar(cog, 'progreso', 41)
-    assert '1 de 34 requisitos aprobados o cursando' in avance
-    assert '2,9%' in avance
+    assert '\nSolo aprobadas: **0,0%** (0 de 34)' in avance
+    assert '\nContando cursadas: **2,9%** (1 de 34)' in avance
     assert 'Aprobadas:' in await invocar(cog, 'aprobar', 41, 'CNE, SI208')
     assert 'SI106 ·' in await invocar(cog, 'siguientes', 41)
     assert 'SI208 ·' not in await invocar(cog, 'faltantes', 41)

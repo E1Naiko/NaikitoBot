@@ -875,8 +875,8 @@ En Ciencia de Datos, la PPS pide 13 asignaturas aprobadas. El PDF repite
 `I101`; en el bot, Base de Datos se registra como `I101-BD`. La optativa
 `O407` se lista, pero sus correlativas dependen de la asignatura elegida.
 
-- `/correlativas progreso` muestra el avance estimado del plan activo como
-  porcentaje y cantidad de requisitos aprobados. No cuenta el ingreso; las
+- `/correlativas progreso` muestra dos avances: contando solo materias aprobadas
+  y contando aprobadas más cursadas. No cuenta el ingreso; las
   optativas por grupo cuentan solo hasta el cupo exigido. No es un cálculo
   oficial de créditos ni una verificación de condiciones de graduación.
 - `/correlativas materias` y `/correlativas siguientes` aceptan el filtro

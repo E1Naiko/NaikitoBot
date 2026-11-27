@@ -175,11 +175,15 @@ class Bot:
             return f'{encabezado}\\n\\n**Materias recién habilitadas**\\n{nuevas}'
         hechas = self._aprobadas(usuario, plan)
         if palabras == ['progreso']:
-            cantidad, total = progreso(materias, hechas, self._cursando(usuario, plan))
+            cantidad_aprobada, total = progreso(materias, hechas)
+            cantidad_en_curso, _ = progreso(materias, hechas, self._cursando(usuario, plan))
             if not total:
                 return f'El plan {plan} todavía no tiene requisitos para contar.'
-            porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
-            return f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados o cursando).'
+            porcentaje_aprobado = f'{cantidad_aprobada / total:.1%}'.replace('.', ',')
+            porcentaje_en_curso = f'{cantidad_en_curso / total:.1%}'.replace('.', ',')
+            return (f'**{plan}**\n'
+                    f'Solo aprobadas: **{porcentaje_aprobado}** ({cantidad_aprobada} de {total}).\n'
+                    f'Contando cursadas: **{porcentaje_en_curso}** ({cantidad_en_curso} de {total}).')
         cursando_set = self._cursando(usuario, plan)
         if faltantes:
             pendientes = listado_por_semestre(
@@ -206,13 +210,17 @@ class Bot:
         if palabras == ['progreso']:
             resultados = []
             for plan in planes:
-                cantidad, total = progreso(
+                cantidad_aprobada, total = progreso(catalogo[plan], hechas_por_plan[plan])
+                cantidad_en_curso, _ = progreso(
                     catalogo[plan], hechas_por_plan[plan], cursando_por_plan[plan]
                 )
                 if total:
-                    porcentaje = f'{cantidad / total:.1%}'.replace('.', ',')
+                    porcentaje_aprobado = f'{cantidad_aprobada / total:.1%}'.replace('.', ',')
+                    porcentaje_en_curso = f'{cantidad_en_curso / total:.1%}'.replace('.', ',')
                     resultados.append(
-                        f'**{plan}**\nAvance estimado: **{porcentaje}** ({cantidad} de {total} requisitos aprobados o cursando).'
+                        f'**{plan}**\n'
+                        f'Solo aprobadas: **{porcentaje_aprobado}** ({cantidad_aprobada} de {total}).\n'
+                        f'Contando cursadas: **{porcentaje_en_curso}** ({cantidad_en_curso} de {total}).'
                     )
                 else:
                     resultados.append(f'**{plan}**\nTodavía no tiene requisitos para contar.')
