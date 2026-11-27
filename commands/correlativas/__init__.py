@@ -107,7 +107,7 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
     async def planes(self, interaccion):
         await self._ejecutar(interaccion, "planes")
 
-    @app_commands.command(description="Selecciona tu plan de estudio activo.")
+    @app_commands.command(description="Agrega un plan de estudio a tus planes activos.")
     async def unirse(self, interaccion, plan: app_commands.Range[str, 1, 64]):
         await self._ejecutar(interaccion, f"unirse {plan}")
 
@@ -116,7 +116,8 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
                        semestre: Semestre = "Ambos"):
         await self._ejecutar(interaccion, f"mostrar anio {plan} {anio}{_filtro(semestre)}")
 
-    @app_commands.command(description="Registra una materia aprobada de tu plan activo.")
+    @app_commands.command(description="Registra una o varias materias aprobadas de tu plan activo.")
+    @app_commands.describe(materia="Ingresá códigos o nombres; separá varias materias con comas.")
     async def aprobar(self, interaccion, materia: app_commands.Range[str, 1, 150]):
         await self._ejecutar(interaccion, f"aprobar materia {materia}")
 
@@ -135,6 +136,10 @@ class Correlativas(commands.GroupCog, group_name="correlativas"):
     @app_commands.command(description="Calcula el porcentaje de avance de tu plan activo.")
     async def progreso(self, interaccion):
         await self._ejecutar(interaccion, "progreso")
+
+    @app_commands.command(description="Lista las materias del plan activo que todavía no aprobaste.")
+    async def faltantes(self, interaccion):
+        await self._ejecutar(interaccion, "faltantes")
 
     @app_commands.command(description="Agrega un plan de estudio (solo administradores del bot).")
     async def agregar_plan(self, interaccion, plan: app_commands.Range[str, 1, 64]):

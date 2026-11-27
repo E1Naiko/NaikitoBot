@@ -57,6 +57,41 @@ async def test_altas_administrativas(base_datos_limpia, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_varios_planes_se_muestran_y_mantienen_aprobaciones_separadas(base_datos_limpia):
+    cog = Correlativas()
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    await invocar(cog, 'unirse', 41, 'apu-2027')
+    progreso = await invocar(cog, 'progreso', 41)
+    assert '**apu-2027**' in progreso and '**informatica-2027**' in progreso
+    respuesta = await invocar(cog, 'aprobar', 41, 'CNE')
+    assert '**apu-2027**' in respuesta and '**informatica-2027**' in respuesta
+    faltantes = await invocar(cog, 'faltantes', 41)
+    assert '**Materias pendientes — apu-2027**' in faltantes
+    assert '**Materias pendientes — informatica-2027**' in faltantes
+    assert 'CNE ·' not in faltantes
+
+
+async def test_faltantes_lista_todo_lo_no_aprobado_del_plan(base_datos_limpia):
+    cog = Correlativas()
+    assert 'unirse' in await invocar(cog, 'faltantes', 41)
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    await invocar(cog, 'aprobar', 41, 'CNE')
+    pendientes = await invocar(cog, 'faltantes', 41)
+    assert 'Materias pendientes del plan informatica-2027' in pendientes
+    assert 'CNE ·' not in pendientes
+    assert 'CNP ·' in pendientes
+    assert '(1° año)' in pendientes
+
+
+async def test_aprobar_varias_materias_separadas_por_comas(base_datos_limpia):
+    cog = Correlativas()
+    await invocar(cog, 'unirse', 41, 'informatica-2027')
+    respuesta = await invocar(cog, 'aprobar', 41, 'CNE, CNP')
+    assert 'Aprobadas:' in respuesta
+    assert 'Expresión de Problemas y Algoritmos' in respuesta
+    assert 'Conceptos de Procesadores e Inteligencia Artificial' in respuesta
+
+
 async def test_plan_informatica_2027(base_datos_limpia):
     cog = Correlativas()
     assert 'informatica-2027' in await invocar(cog, 'planes', 41)
